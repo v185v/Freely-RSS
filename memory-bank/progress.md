@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-- 阶段：已进入阶段 1，仓库目录骨架已初始化，尚未进入工作区与工具链初始化
+- 阶段：已进入阶段 1，仓库目录骨架、工作区清单与代码规范基础设施已初始化，下一步是变更集与版本管理流程
 - 最后更新：2026-04-06
-- 风险状态：已从“仅文档基线”推进到“工程骨架开始落地”，当前主要风险转为工作区与工具链尚未接线
+- 风险状态：已从“仅文档基线”推进到“工程骨架开始落地”，当前主要风险转为 changesets、CI 与数据库迁移机制尚未接线
 
 ## 已确认决策
 
@@ -20,7 +20,7 @@
 
 ## 当前阻塞
 
-- 工作区、CI、数据库迁移机制尚未初始化。
+- changesets、CI、数据库迁移机制尚未初始化。
 
 ## 本次执行记录
 
@@ -38,7 +38,43 @@
 - 已检查 `apps/`、`packages/`、`crates/` 的当前层级，结构与 `memory-bank/implementation-plan.md` 和 `memory-bank/tech-stack.md` 保持一致。
 - 当前验证结论：Step 5 通过，可进入 Step 6“建立 JS/TS 与 Rust 工作区”。
 
+### 2026-04-06 - 阶段 1 Step 6：建立 JS/TS 与 Rust 工作区
+
+- 已创建根工作区清单：`package.json`、`pnpm-workspace.yaml`、`Cargo.toml`。
+- 已为 `apps/desktop`、`apps/web`、`apps/mobile` 建立最小 `package.json`，使其能被 `pnpm workspace` 识别。
+- 已为 `packages/ui`、`packages/shared-types`、`packages/shared-query`、`packages/shared-config` 建立最小 `package.json`，固化共享包命名边界。
+- 已为 `crates/core-domain`、`crates/feed-engine`、`crates/content-pipeline`、`crates/rule-engine`、`crates/search-engine`、`crates/sync-engine`、`crates/integration-engine` 建立 `Cargo.toml` 与占位 `src/lib.rs`，使其能被 `Cargo workspace` 识别并编译。
+- `apps/sync-server` 本次仍保持目录占位，尚未加入任何工作区清单，避免在 Step 6 越过服务端脚手架边界。
+- 为完成 Rust 侧验证，当前机器已补装 `rustup` stable toolchain；这属于本地开发环境补齐，不改变仓库实施顺序。
+
+### 验证结果
+
+- 已执行 `corepack pnpm install --lockfile-only`，结果显示 `Scope: all 8 workspace projects`。
+- 已执行 `corepack pnpm list -r --depth -1`，确认根包、3 个应用包和 4 个共享包全部被识别。
+- 已执行 `cargo metadata --no-deps --format-version 1`，确认 7 个 Rust crate 全部被识别为 workspace members。
+- 已执行 `cargo test --workspace`，结果通过；当前 crate 仅包含占位库目标，因此测试数为 0，但编译与工作区解析链路已经跑通。
+- 当前验证结论：Step 6 通过，可进入 Step 7“确定统一代码规范”。
+
+### 2026-04-06 - 阶段 1 Step 7：确定统一代码规范
+
+- 已选定前端规范方案为 `Biome`（统一格式化与 lint，避免 ESLint + Prettier 双维护），并在根目录新增 `biome.json`。
+- 已在根 `package.json` 增加统一检查脚本：`format`、`format:check`、`lint`、`lint:fix`、`rust:fmt`、`rust:fmt:check`、`rust:clippy`、`test:rust`、`verify`。
+- 已引入 `lefthook` 并新增 `lefthook.yml`，定义 `pre-commit` 提交前检查链路：前端规范检查、Rust 格式检查、Rust Clippy。
+- 已新增 `.gitignore`，忽略 `node_modules/` 与 `target/`，避免规范工具与 Rust 构建产物污染仓库视图。
+
+### 验证结果
+
+- 已执行 `corepack pnpm install`，安装并接线 `@biomejs/biome` 与 `lefthook`，`pre-commit` hook 已同步成功。
+- 已执行 `corepack pnpm run format:check`，结果通过。
+- 已执行 `corepack pnpm run lint`，结果通过。
+- 已执行 `C:\Users\Administrator\.cargo\bin\cargo.exe fmt --all --check`，结果通过。
+- 已执行 `C:\Users\Administrator\.cargo\bin\cargo.exe clippy --workspace --all-targets -- -D warnings`，结果通过。
+- 已执行 `C:\Users\Administrator\.cargo\bin\cargo.exe test --workspace`，结果通过（当前测试数为 0，编译链路正常）。
+- 已执行 `corepack pnpm run verify`（临时补充 `PATH` 以包含 cargo），结果通过，确认统一脚本可串行跑完前端与 Rust 检查。
+- 已执行 `corepack pnpm exec lefthook run pre-commit --all-files`（临时补充 `PATH` 以包含 cargo），结果通过，确认提交前检查链路可执行且无冲突。
+- 当前验证结论：Step 7 通过，可进入 Step 8“建立变更集与版本管理流程”。
+
 ## 下一步
 
-- 按 `implementation-plan.md` 执行 Step 6，初始化 `pnpm workspace` 与 `Cargo workspace`。
-- 在工作区识别验证通过后，再继续代码规范、changesets 与 CI 基础设施。
+- 按 `implementation-plan.md` 执行 Step 8，建立 changesets、版本号策略与变更记录规则。
+- 在 Step 8 验证通过后，再继续 Step 9 的基础 CI 流程。

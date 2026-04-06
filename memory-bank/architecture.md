@@ -694,6 +694,38 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `crates/sync-engine`：事件日志、同步批次、重放与冲突合并。
 - `crates/integration-engine`：Webhook、REST 连接器、桥接服务与导出适配层。
 
+### 13.5 当前工作区清单与文件职责
+
+当前阶段已经从“纯目录占位”推进到“可被工具链识别的工作区骨架”。这些文件的职责应明确，避免后续把配置堆进单一根文件或单一应用。
+
+- `package.json`：JS/TS 根工作区入口，声明仓库为私有 workspace、固定 `pnpm` 版本，并集中定义 `Biome`、Rust 检查与 `verify` 等统一脚本，避免检查命令散落到各应用包。
+- `pnpm-workspace.yaml`：声明 `apps/*` 与 `packages/*` 为 JS/TS 工作区扫描边界，让桌面端、Web 端、移动端和共享包在单仓下统一发现。
+- `pnpm-lock.yaml`：记录当前 JS/TS 工作区（含规范工具依赖）的锁定解析结果，用于保证依赖安装可复现。
+- `biome.json`：统一前端格式化与 lint 规则，并显式限制扫描范围到 `apps/*`、`packages/*` 与关键根配置文件，避免文档区与无关目录被误扫。
+- `lefthook.yml`：定义提交前检查链路（`pre-commit`），把前端规范检查、Rust 格式检查与 Clippy 串联为同一入口，收敛“提交前”质量门禁。
+- `.gitignore`：屏蔽 `node_modules/`、`target/` 与调试日志等构建产物，保证仓库关注点聚焦源码、配置与文档。
+- `Cargo.toml`：Rust 根工作区入口，负责声明 `crates/*` 为 workspace members，并统一 edition、version、license、publish 等共享元数据。
+- `Cargo.lock`：记录当前 Rust 工作区的锁定解析结果；随着服务端和桌面 Rust 能力落地，应作为可复现构建的一部分保留。
+- `apps/desktop/package.json`：桌面端前端壳的包入口，后续承接 Tauri + React + Vite 配置与依赖。
+- `apps/web/package.json`：Web 端访问入口的包清单，后续承接远程阅读与搜索界面的前端依赖。
+- `apps/mobile/package.json`：移动端应用包清单，后续承接 React Native + Expo 工程配置。
+- `apps/sync-server/`：当前仅保留目录边界，尚未加入任何 workspace；等同步服务脚手架开始时，再作为独立 Rust 应用接入。
+- `packages/ui/package.json`：共享 UI 包的清单文件，后续只承载设计系统、布局与基础组件，不混入业务查询与数据访问。
+- `packages/shared-types/package.json`：共享领域类型包的清单文件，后续对齐数据库 schema、DTO 与状态枚举。
+- `packages/shared-query/package.json`：共享查询表达式包的清单文件，后续承载 AST、解析、校验与序列化。
+- `packages/shared-config/package.json`：共享配置模型包的清单文件，后续承载环境变量来源、优先级与默认策略。
+- `crates/*/Cargo.toml`：各 Rust crate 的边界声明文件，用于把抓取、搜索、规则、同步等能力维持在独立模块，而不是回退成单体 Rust 包。
+- `crates/*/src/lib.rs`：各 Rust crate 的最小库入口，当前只承担可编译占位职责；后续应逐步承接真实领域逻辑与测试。
+
+当前架构见解：
+
+- Step 6 的关键价值不是“把包管理器跑起来”，而是把 JS/TS 与 Rust 两条工具链的边界固定下来，这决定了后续共享代码如何演进。
+- Step 7 的关键价值不是“引入更多工具”，而是把规范执行入口收敛为 `package.json` 脚本与 `lefthook` 单链路，减少团队成员各自运行命令导致的漂移。
+- `apps/*` 与 `packages/*` 的拆分让前端壳和共享能力分离，避免在桌面端壳内沉积本应被 Web 或移动端复用的逻辑。
+- `crates/*` 先以多个空库接入 workspace，看似简单，但它提前锁定了“多引擎模块”而非“单个核心 crate”的演进方向，能显著降低后续拆分成本。
+- `apps/sync-server` 暂未加入任何工作区是刻意选择，因为当前阶段只需要固化客户端与共享引擎骨架，不应为了“形式完整”提前引入服务端脚手架复杂度。
+- 将 `Biome` 扫描范围限制在应用与共享包，是当前阶段的刻意边界控制：先规范代码骨架，再在后续阶段按需纳入更多目录，避免首轮规范化对文档资产造成噪音。
+
 ## 14. 当前文档职责
 
 当前仓库仍处在“文档先行 + 工程骨架初始化”阶段，因此每个文档都承担明确职责：

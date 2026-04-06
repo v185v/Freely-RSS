@@ -1,0 +1,9 @@
+pre-commit:
+  parallel: false
+  commands:
+    frontend-check:
+      run: corepack pnpm run format:check && corepack pnpm run lint
+    rust-format:
+      run: cargo fmt --all --check
+    rust-clippy:
+      run: cargo clippy --workspace --all-targets -- -D warnings

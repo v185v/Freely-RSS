@@ -1,0 +1,22 @@
+{
+  "name": "freelyrss-workspace",
+  "private": true,
+  "version": "0.0.0",
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "prepare": "lefthook install",
+    "format": "biome format --write .",
+    "format:check": "biome check .",
+    "lint": "biome lint .",
+    "lint:fix": "biome check --write .",
+    "rust:fmt": "cargo fmt --all",
+    "rust:fmt:check": "cargo fmt --all --check",
+    "rust:clippy": "cargo clippy --workspace --all-targets -- -D warnings",
+    "test:rust": "cargo test --workspace",
+    "verify": "corepack pnpm run format:check && corepack pnpm run lint && corepack pnpm run rust:fmt:check && corepack pnpm run rust:clippy && corepack pnpm run test:rust"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "lefthook": "1.13.6"
+  }
+}
