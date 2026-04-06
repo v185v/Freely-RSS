@@ -5,6 +5,10 @@
   "packageManager": "pnpm@10.33.0",
   "scripts": {
     "prepare": "lefthook install",
+    "changeset": "changeset",
+    "changeset:add": "changeset add",
+    "changeset:status": "changeset status --verbose",
+    "changeset:version": "changeset version",
     "format": "biome format --write .",
     "format:check": "biome check .",
     "lint": "biome lint .",
@@ -17,6 +21,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
+    "@changesets/cli": "2.29.7",
     "lefthook": "1.13.6"
   }
 }

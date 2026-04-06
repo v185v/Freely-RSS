@@ -20,15 +20,21 @@ Until the application is scaffolded, keep planning, architecture, and implementa
 
 ## Build, Test, and Development Commands
 
-No build or test pipeline is configured yet. Do not invent one in commits without documenting it here.
+Current repository-level commands:
 
-Useful local commands during the planning phase:
+- `corepack pnpm install` : install JS/TS workspace dependencies and sync hooks
+- `corepack pnpm run format` : apply Biome formatting
+- `corepack pnpm run format:check` : run Biome formatting checks
+- `corepack pnpm run lint` : run Biome lint rules
+- `corepack pnpm run rust:fmt:check` : check Rust formatting
+- `corepack pnpm run rust:clippy` : run Rust static analysis
+- `corepack pnpm run test:rust` : run Rust workspace tests
+- `corepack pnpm run verify` : run the full repository verification chain
+- `corepack pnpm run changeset:add` : create a new workspace changeset
+- `corepack pnpm run changeset:status` : preview package version bumps and release notes plan
+- `corepack pnpm run changeset:version` : apply version bumps and generate package changelogs
 
-- `Get-ChildItem -Force` : inspect the repository root
-- `Get-ChildItem -Recurse -File` : list all files
-- `rg --files` : fast file listing when `ripgrep` is installed
-
-When scaffolding begins, add the exact build, test, lint, and run commands to this section.
+There is not yet an application build or run command for `apps/desktop`, `apps/web`, or `apps/mobile`. Add those here when the app shells are scaffolded.
 
 ## Coding Style & Naming Conventions
 

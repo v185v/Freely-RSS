@@ -4,7 +4,7 @@
 
 - 阶段：已进入阶段 1，仓库目录骨架、工作区清单与代码规范基础设施已初始化，下一步是变更集与版本管理流程
 - 最后更新：2026-04-06
-- 风险状态：已从“仅文档基线”推进到“工程骨架开始落地”，当前主要风险转为 changesets、CI 与数据库迁移机制尚未接线
+- 风险状态：已从“仅文档基线”推进到“工程骨架开始落地”，当前主要风险转为基础 CI 与数据库迁移机制尚未接线
 
 ## 已确认决策
 
@@ -20,7 +20,7 @@
 
 ## 当前阻塞
 
-- changesets、CI、数据库迁移机制尚未初始化。
+- 基础 CI 与数据库迁移机制尚未初始化。
 
 ## 本次执行记录
 
@@ -74,7 +74,24 @@
 - 已执行 `corepack pnpm exec lefthook run pre-commit --all-files`（临时补充 `PATH` 以包含 cargo），结果通过，确认提交前检查链路可执行且无冲突。
 - 当前验证结论：Step 7 通过，可进入 Step 8“建立变更集与版本管理流程”。
 
+### 2026-04-06 - 阶段 1 Step 8：建立变更集与版本管理流程
+
+- 已在根工作区引入 `@changesets/cli`，并新增 `changeset`、`changeset:add`、`changeset:status`、`changeset:version` 脚本入口。
+- 已初始化 `.changeset/` 目录，并保留 `config.json` 作为 workspace 版本计算配置入口。
+- 已重写 `.changeset/README.md`，明确当前版本策略：JS/TS 客户端与共享包由 changesets 管理；同步协议版本、Rust crate 版本与数据库 schema 版本独立管理，不与包版本混用。
+- 已创建一次 bootstrap changeset，并成功生成 7 个 JS/TS workspace 包的首批 `CHANGELOG.md` 与版本号草稿，验证变更记录可以落到每个包自己的发布线，而不是堆在仓库根级别。
+- 已将 `apps/desktop`、`apps/web`、`apps/mobile`、`packages/ui`、`packages/shared-types`、`packages/shared-query`、`packages/shared-config` 的版本从 `0.0.0` 推进到 `0.0.1`，作为工作区版本管理基线。
+- 已同步更新锁文件，确保版本管理工具链可复现安装。
+
+### 验证结果
+
+- 已执行 `corepack pnpm run changeset:status`，结果正确计算出 7 个包的 patch bump 计划，证明变更记录可生成预期的发布计划草稿。
+- 已执行 `corepack pnpm run changeset:version`，结果成功写入各包版本号与 `CHANGELOG.md`，证明版本流转与发布说明草稿生成链路可用。
+- 已执行 `corepack pnpm run verify`（临时补充 `PATH` 以包含 cargo），结果通过。
+- 已执行 `corepack pnpm exec lefthook run pre-commit --all-files`（临时补充 `PATH` 以包含 cargo），结果通过。
+- 当前验证结论：Step 8 通过，可进入 Step 9“建立基础 CI 流程”。
+
 ## 下一步
 
-- 按 `implementation-plan.md` 执行 Step 8，建立 changesets、版本号策略与变更记录规则。
-- 在 Step 8 验证通过后，再继续 Step 9 的基础 CI 流程。
+- 按 `implementation-plan.md` 执行 Step 9，建立基础 CI 流程。
+- 在 Step 9 验证通过后，再继续推进 Step 10 的配置与环境变量边界。

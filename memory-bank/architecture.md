@@ -701,19 +701,28 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `package.json`：JS/TS 根工作区入口，声明仓库为私有 workspace、固定 `pnpm` 版本，并集中定义 `Biome`、Rust 检查与 `verify` 等统一脚本，避免检查命令散落到各应用包。
 - `pnpm-workspace.yaml`：声明 `apps/*` 与 `packages/*` 为 JS/TS 工作区扫描边界，让桌面端、Web 端、移动端和共享包在单仓下统一发现。
 - `pnpm-lock.yaml`：记录当前 JS/TS 工作区（含规范工具依赖）的锁定解析结果，用于保证依赖安装可复现。
+- `.changeset/config.json`：定义 JS/TS workspace 的版本计算策略、基础分支、内部依赖联动方式与 changelog 生成方式，是包级发布线的策略入口。
+- `.changeset/README.md`：面向贡献者说明何时必须编写 changeset、如何生成发布计划，以及“包版本 / 协议版本 / 数据库 schema 版本”三条版本线如何分离。
 - `biome.json`：统一前端格式化与 lint 规则，并显式限制扫描范围到 `apps/*`、`packages/*` 与关键根配置文件，避免文档区与无关目录被误扫。
 - `lefthook.yml`：定义提交前检查链路（`pre-commit`），把前端规范检查、Rust 格式检查与 Clippy 串联为同一入口，收敛“提交前”质量门禁。
 - `.gitignore`：屏蔽 `node_modules/`、`target/` 与调试日志等构建产物，保证仓库关注点聚焦源码、配置与文档。
 - `Cargo.toml`：Rust 根工作区入口，负责声明 `crates/*` 为 workspace members，并统一 edition、version、license、publish 等共享元数据。
 - `Cargo.lock`：记录当前 Rust 工作区的锁定解析结果；随着服务端和桌面 Rust 能力落地，应作为可复现构建的一部分保留。
 - `apps/desktop/package.json`：桌面端前端壳的包入口，后续承接 Tauri + React + Vite 配置与依赖。
+- `apps/desktop/CHANGELOG.md`：桌面端发布线的用户可见变更记录，避免桌面端变更混入其他应用或共享包的发布说明。
 - `apps/web/package.json`：Web 端访问入口的包清单，后续承接远程阅读与搜索界面的前端依赖。
+- `apps/web/CHANGELOG.md`：Web 端发布线的变更记录，后续用于区分远程访问入口的迭代说明。
 - `apps/mobile/package.json`：移动端应用包清单，后续承接 React Native + Expo 工程配置。
+- `apps/mobile/CHANGELOG.md`：移动端发布线的变更记录，后续用于独立跟踪阅读端与播客端迭代。
 - `apps/sync-server/`：当前仅保留目录边界，尚未加入任何 workspace；等同步服务脚手架开始时，再作为独立 Rust 应用接入。
 - `packages/ui/package.json`：共享 UI 包的清单文件，后续只承载设计系统、布局与基础组件，不混入业务查询与数据访问。
+- `packages/ui/CHANGELOG.md`：共享 UI 包的发布说明，专门记录设计系统与基础组件层的对外变化。
 - `packages/shared-types/package.json`：共享领域类型包的清单文件，后续对齐数据库 schema、DTO 与状态枚举。
+- `packages/shared-types/CHANGELOG.md`：共享类型包的发布说明，用于跟踪 DTO、枚举与领域类型契约变化。
 - `packages/shared-query/package.json`：共享查询表达式包的清单文件，后续承载 AST、解析、校验与序列化。
+- `packages/shared-query/CHANGELOG.md`：共享查询表达式包的发布说明，用于跟踪 AST、解析器与序列化协议变化。
 - `packages/shared-config/package.json`：共享配置模型包的清单文件，后续承载环境变量来源、优先级与默认策略。
+- `packages/shared-config/CHANGELOG.md`：共享配置包的发布说明，用于记录配置模型、默认策略与环境边界的外部变化。
 - `crates/*/Cargo.toml`：各 Rust crate 的边界声明文件，用于把抓取、搜索、规则、同步等能力维持在独立模块，而不是回退成单体 Rust 包。
 - `crates/*/src/lib.rs`：各 Rust crate 的最小库入口，当前只承担可编译占位职责；后续应逐步承接真实领域逻辑与测试。
 
@@ -721,10 +730,12 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 
 - Step 6 的关键价值不是“把包管理器跑起来”，而是把 JS/TS 与 Rust 两条工具链的边界固定下来，这决定了后续共享代码如何演进。
 - Step 7 的关键价值不是“引入更多工具”，而是把规范执行入口收敛为 `package.json` 脚本与 `lefthook` 单链路，减少团队成员各自运行命令导致的漂移。
+- Step 8 的关键价值不是“把版本号加上去”，而是把“JS/TS 包发布线”“同步协议版本”“数据库 schema 版本”拆成三条独立演进轴，避免后续把客户端发版、协议兼容与迁移节奏绑定在一起。
 - `apps/*` 与 `packages/*` 的拆分让前端壳和共享能力分离，避免在桌面端壳内沉积本应被 Web 或移动端复用的逻辑。
 - `crates/*` 先以多个空库接入 workspace，看似简单，但它提前锁定了“多引擎模块”而非“单个核心 crate”的演进方向，能显著降低后续拆分成本。
 - `apps/sync-server` 暂未加入任何工作区是刻意选择，因为当前阶段只需要固化客户端与共享引擎骨架，不应为了“形式完整”提前引入服务端脚手架复杂度。
 - 将 `Biome` 扫描范围限制在应用与共享包，是当前阶段的刻意边界控制：先规范代码骨架，再在后续阶段按需纳入更多目录，避免首轮规范化对文档资产造成噪音。
+- 先为每个 JS/TS 包生成独立 `CHANGELOG.md`，可以把变更记录继续保持在模块边界内，而不是退化为仓库级“大杂烩”发布说明；这与 FreelyRSS 的多应用壳、多共享包架构是一致的。
 
 ## 14. 当前文档职责
 
@@ -741,3 +752,4 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - 阶段 1 已经可以开始以“多应用壳 + 多共享包 + 多 Rust 引擎”的方式演进，避免早期形成单体应用结构。
 - 目录骨架先行是必要步骤，因为后续 `pnpm workspace`、`Cargo workspace`、CI、changesets 和数据库迁移都会依赖这套边界。
 - 即使还未开始建表，数据库 schema 也必须先固化在架构文档中，这样后续迁移、领域模型和共享类型才能围绕同一命名体系演进。
+- 当前阶段已经完成 JS/TS 工作区的版本治理基线，但同步协议号与数据库 schema 号仍应留在各自的实现边界中演进，不能被 npm 包版本替代。
