@@ -406,3 +406,306 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - 可选在线层后接入
 - 可选智能层最后增强
 - 所有后续实现都不能破坏“本地优先、离线优先、桌面优先”的基本盘
+
+## 11. Release 1 范围基线
+
+### 11.1 Release 1 包含
+
+- 高亮与批注
+- PDF 导出
+- Markdown / HTML 导出
+- 批量导出
+- 播客附件识别与播放器入口
+- 智能文件夹
+- 桌面端完整离线阅读主链路
+
+### 11.2 Release 1 不包含
+
+- 官方同步
+- Web 端
+- 移动端
+- AI 能力
+- 本地桌面 API
+- 团队协作
+
+### 11.3 范围解释
+
+- 首发版本先把桌面端的本地阅读、组织、搜索、标注与导出链路做完整。
+- 所有需要远程账号、远程计算或多端一致性协议的能力，均后移到后续阶段。
+- 智能文件夹虽然依赖统一查询表达式，但仍属于离线核心层，因此纳入首发范围。
+
+## 12. 数据库 Schema 基线
+
+本节固化桌面端本地数据库的核心实体与字段命名，作为阶段 3 建表与迁移的直接依据。当前字段名与 [RSS-design-document.md](F:\Codes\FreelyRSS\memory-bank\RSS-design-document.md) 保持一致。
+
+### 12.1 Feed
+
+- `id`
+- `title`
+- `site_url`
+- `feed_url`
+- `format`
+- `icon`
+- `folder_id`
+- `custom_name`
+- `sort_order`
+- `update_interval`
+- `health_status`
+- `last_checked_at`
+- `last_success_at`
+- `etag`
+- `last_modified`
+
+约束建议：
+
+- `id` 为主键。
+- `feed_url` 全局唯一。
+- `folder_id` 指向 `Folder.id`，允许为空。
+- `health_status` 采用受控枚举值。
+
+### 12.2 Folder
+
+- `id`
+- `name`
+- `parent_id`
+- `sort_order`
+- `kind`
+
+约束建议：
+
+- `id` 为主键。
+- `parent_id` 自引用 `Folder.id`，允许为空。
+- `kind` 用于区分普通文件夹、系统文件夹和保留分组节点。
+
+### 12.3 Tag
+
+- `id`
+- `name`
+- `scope`
+- `color`
+- `created_at`
+
+约束建议：
+
+- `id` 为主键。
+- `scope + name` 建议唯一，避免文章标签与订阅源标签语义混淆。
+
+### 12.4 FeedTag
+
+- `feed_id`
+- `tag_id`
+
+约束建议：
+
+- 复合主键：`feed_id + tag_id`。
+- 分别外键引用 `Feed.id` 与 `Tag.id`。
+
+### 12.5 ArticleTag
+
+- `article_id`
+- `tag_id`
+
+约束建议：
+
+- 复合主键：`article_id + tag_id`。
+- 分别外键引用 `Article.id` 与 `Tag.id`。
+
+### 12.6 Article
+
+- `id`
+- `feed_id`
+- `source_guid`
+- `title`
+- `author`
+- `summary`
+- `content_raw`
+- `content_extracted`
+- `canonical_url`
+- `original_url`
+- `published_at`
+- `fetched_at`
+- `language`
+- `thumbnail`
+- `word_count`
+- `content_hash`
+
+约束建议：
+
+- `id` 为主键。
+- `feed_id` 外键引用 `Feed.id`。
+- `source_guid` 不要求全局唯一，但应结合 `feed_id` 建联合索引。
+- `canonical_url`、`original_url`、`content_hash` 为去重核心字段。
+
+### 12.7 Attachment
+
+- `id`
+- `article_id`
+- `type`
+- `url`
+- `mime_type`
+- `duration`
+- `size`
+- `local_cache_path`
+
+约束建议：
+
+- `id` 为主键。
+- `article_id` 外键引用 `Article.id`。
+- `type` 区分图片、音频、视频和其他附件。
+
+### 12.8 UserState
+
+- `article_id`
+- `read_state`
+- `starred`
+- `liked`
+- `importance`
+- `read_later`
+- `reading_progress`
+- `last_opened_at`
+
+约束建议：
+
+- `article_id` 既是主键也是外键，引用 `Article.id`。
+- `read_state`、`importance` 采用受控枚举值。
+- `reading_progress` 限制在合法区间内。
+
+### 12.9 Annotation
+
+- `id`
+- `article_id`
+- `type`
+- `selected_text`
+- `anchor`
+- `note`
+- `color`
+- `created_at`
+
+约束建议：
+
+- `id` 为主键。
+- `article_id` 外键引用 `Article.id`。
+- `anchor` 保存可定位到阅读内容的锚点结构。
+- `type` 区分高亮、笔记、批注等记录类型。
+
+### 12.10 Rule
+
+- `id`
+- `name`
+- `enabled`
+- `priority`
+- `conditions`
+- `actions`
+- `scope`
+
+约束建议：
+
+- `id` 为主键。
+- `conditions` 存储统一查询表达式。
+- `actions` 存储命中后的动作定义。
+- `priority` 决定规则执行顺序。
+
+### 12.11 SmartFolder
+
+- `id`
+- `name`
+- `query_definition`
+- `sort_definition`
+
+约束建议：
+
+- `id` 为主键。
+- `query_definition` 与 `Rule.conditions` 使用同一表达式模型。
+
+### 12.12 AIArtifact
+
+- `id`
+- `article_id`
+- `kind`
+- `provider`
+- `input_hash`
+- `result`
+- `created_at`
+
+约束建议：
+
+- `id` 为主键。
+- `article_id` 外键引用 `Article.id`。
+- 当前阶段保留表结构，但首发版本不启用相关流程。
+
+### 12.13 SyncEvent
+
+- `id`
+- `entity_type`
+- `entity_id`
+- `change_type`
+- `payload`
+- `device_id`
+- `created_at`
+
+约束建议：
+
+- `id` 为主键。
+- `entity_type + entity_id` 用于定位业务实体。
+- `payload` 保存实体变更或操作日志。
+- 当前阶段保留表结构，但首发版本不启用远程同步。
+
+### 12.14 关系与索引基线
+
+- `Folder` 通过 `parent_id` 形成树结构。
+- `Feed` 通过 `folder_id` 归属到订阅树节点。
+- `FeedTag`、`ArticleTag` 作为多对多关系表，不承载额外业务状态。
+- `Article` 是正文、搜索、状态、批注、附件的中心实体。
+- `UserState` 与 `Article` 保持一对一。
+- `Annotation`、`Attachment`、`AIArtifact` 与 `Article` 保持一对多。
+- `SyncEvent` 是同步日志，不是业务读取主表。
+- 阶段 3 应优先为 `feed_url`、`feed_id + source_guid`、`published_at`、`fetched_at`、状态字段和关联表外键补齐索引。
+
+## 13. 当前工程骨架与模块职责
+
+### 13.1 顶层目录职责
+
+- `apps/`：承载可运行应用与服务壳，不放共享逻辑。
+- `packages/`：承载 TypeScript 共享模块，供桌面端、Web 端、移动端复用。
+- `crates/`：承载 Rust 共享领域与引擎模块，避免把抓取、规则、搜索等能力塞进单一应用。
+- `memory-bank/`：承载产品、架构、技术路线、实施计划和进度记录，是当前阶段的主知识库。
+
+### 13.2 当前应用目录职责
+
+- `apps/desktop`：桌面端主应用，未来承载 Tauri 壳、React UI 和本地能力入口。
+- `apps/web`：Web 端远程访问入口，后续只消费同步后的远程数据。
+- `apps/mobile`：移动端阅读优先应用，后续承接同步阅读、搜索、笔记与播客消费。
+- `apps/sync-server`：远程同步服务，后续承接账号、设备、事件交换和对象存储清单。
+
+### 13.3 当前共享包职责
+
+- `packages/ui`：共享 UI 基础件与主题变量，不承载业务逻辑。
+- `packages/shared-types`：共享领域类型、DTO 和状态枚举。
+- `packages/shared-query`：统一查询表达式 AST、解析、校验和序列化。
+- `packages/shared-config`：共享配置模型、环境变量边界与默认策略。
+
+### 13.4 当前 Rust crate 职责
+
+- `crates/core-domain`：核心实体、值对象、状态枚举与数据库映射边界。
+- `crates/feed-engine`：抓取、解析、标准化与增量更新。
+- `crates/content-pipeline`：正文提取、HTML 清洗、缩略图与附件识别。
+- `crates/rule-engine`：统一查询表达式命中判断与动作执行。
+- `crates/search-engine`：SQLite FTS5 搜索、过滤与高亮片段组装。
+- `crates/sync-engine`：事件日志、同步批次、重放与冲突合并。
+- `crates/integration-engine`：Webhook、REST 连接器、桥接服务与导出适配层。
+
+## 14. 当前文档职责
+
+当前仓库仍处在“文档先行 + 工程骨架初始化”阶段，因此每个文档都承担明确职责：
+
+- `memory-bank/RSS-design-document.md`：产品边界、功能范围、数据模型和阶段愿景的源文档。
+- `memory-bank/tech-stack.md`：技术选型、工程分层和依赖方向的源文档。
+- `memory-bank/implementation-plan.md`：按步骤推进实施的执行清单，当前编码工作应严格按此顺序落地。
+- `memory-bank/progress.md`：跨开发者交接用的进度记录，记录已完成步骤、验证结果、阻塞与下一步。
+- `memory-bank/architecture.md`：把产品设计、技术选型、数据库 schema、仓库骨架和模块边界收敛成统一的实现基线。
+
+当前架构洞察：
+
+- 阶段 1 已经可以开始以“多应用壳 + 多共享包 + 多 Rust 引擎”的方式演进，避免早期形成单体应用结构。
+- 目录骨架先行是必要步骤，因为后续 `pnpm workspace`、`Cargo workspace`、CI、changesets 和数据库迁移都会依赖这套边界。
+- 即使还未开始建表，数据库 schema 也必须先固化在架构文档中，这样后续迁移、领域模型和共享类型才能围绕同一命名体系演进。

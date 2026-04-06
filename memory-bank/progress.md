@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-- 阶段：文档基线完成澄清，尚未进入代码脚手架阶段
+- 阶段：已进入阶段 1，仓库目录骨架已初始化，尚未进入工作区与工具链初始化
 - 最后更新：2026-04-06
-- 风险状态：已从“关键架构歧义未冻结”收敛到“可进入文档固化阶段”
+- 风险状态：已从“仅文档基线”推进到“工程骨架开始落地”，当前主要风险转为工作区与工具链尚未接线
 
 ## 已确认决策
 
@@ -20,10 +20,25 @@
 
 ## 当前阻塞
 
-- `apps/`、`packages/`、`crates/` 目录尚未创建。
 - 工作区、CI、数据库迁移机制尚未初始化。
+
+## 本次执行记录
+
+### 2026-04-06 - 阶段 1 Step 5：建立 monorepo 目录骨架
+
+- 已创建顶层目录：`apps/`、`packages/`、`crates/`。
+- 已创建应用预留目录：`apps/desktop`、`apps/web`、`apps/mobile`、`apps/sync-server`。
+- 已创建共享包预留目录：`packages/ui`、`packages/shared-types`、`packages/shared-query`、`packages/shared-config`。
+- 已创建 Rust crate 预留目录：`crates/core-domain`、`crates/feed-engine`、`crates/content-pipeline`、`crates/rule-engine`、`crates/search-engine`、`crates/sync-engine`、`crates/integration-engine`。
+- 本步骤未初始化 `pnpm workspace`、`Cargo workspace`、CI、lint 或数据库迁移，以避免越过 `implementation-plan.md` 的下一步骤边界。
+
+### 验证结果
+
+- 已逐项校验 Step 5 要求的 15 个预留目录，结果全部存在。
+- 已检查 `apps/`、`packages/`、`crates/` 的当前层级，结构与 `memory-bank/implementation-plan.md` 和 `memory-bank/tech-stack.md` 保持一致。
+- 当前验证结论：Step 5 通过，可进入 Step 6“建立 JS/TS 与 Rust 工作区”。
 
 ## 下一步
 
-- 先按 `implementation-plan.md` 完成仓库骨架与工作区初始化。
-- 然后建立客户端数据库 schema 与搜索索引基础。
+- 按 `implementation-plan.md` 执行 Step 6，初始化 `pnpm workspace` 与 `Cargo workspace`。
+- 在工作区识别验证通过后，再继续代码规范、changesets 与 CI 基础设施。
