@@ -436,7 +436,7 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 
 ## 12. 数据库 Schema 基线
 
-本节固化桌面端本地数据库的核心实体与字段命名，作为阶段 3 建表与迁移的直接依据。当前字段名与 [RSS-design-document.md](F:\Codes\FreelyRSS\memory-bank\RSS-design-document.md) 保持一致。
+本节固化桌面端本地数据库的核心实体与字段命名，作为阶段 3 建表与迁移的直接依据。当前字段名与 [RSS-design-document.md](./RSS-design-document.md) 保持一致。
 
 ### 12.1 Feed
 
@@ -698,7 +698,7 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 
 当前阶段已经从“纯目录占位”推进到“可被工具链识别的工作区骨架”。这些文件的职责应明确，避免后续把配置堆进单一根文件或单一应用。
 
-- `package.json`：JS/TS 根工作区入口，声明仓库为私有 workspace、固定 `pnpm` 版本，并集中定义 `Biome`、Rust 检查与 `verify` 等统一脚本，避免检查命令散落到各应用包。
+- `package.json`：JS/TS 根工作区入口，声明仓库为私有 workspace、固定 `pnpm` 版本，并集中定义 `Biome`、Rust 检查、文档链接检查与 `verify` 等统一脚本，避免检查命令散落到各应用包。
 - `pnpm-workspace.yaml`：声明 `apps/*` 与 `packages/*` 为 JS/TS 工作区扫描边界，让桌面端、Web 端、移动端和共享包在单仓下统一发现。
 - `pnpm-lock.yaml`：记录当前 JS/TS 工作区（含规范工具依赖）的锁定解析结果，用于保证依赖安装可复现。
 - `.changeset/config.json`：定义 JS/TS workspace 的版本计算策略、基础分支、内部依赖联动方式与 changelog 生成方式，是包级发布线的策略入口。
@@ -706,8 +706,10 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `biome.json`：统一前端格式化与 lint 规则，并显式限制扫描范围到 `apps/*`、`packages/*` 与关键根配置文件，避免文档区与无关目录被误扫。
 - `lefthook.yml`：定义提交前检查链路（`pre-commit`），把前端规范检查、Rust 格式检查与 Clippy 串联为同一入口，收敛“提交前”质量门禁。
 - `.gitignore`：屏蔽 `node_modules/`、`target/` 与调试日志等构建产物，保证仓库关注点聚焦源码、配置与文档。
+- `.github/workflows/ci.yml`：基础 CI 入口，按作业拆分文档链接检查与工作区校验，覆盖依赖安装、前端规范、Rust 编译/静态检查/测试，确保在干净环境可复现。
 - `Cargo.toml`：Rust 根工作区入口，负责声明 `crates/*` 为 workspace members，并统一 edition、version、license、publish 等共享元数据。
 - `Cargo.lock`：记录当前 Rust 工作区的锁定解析结果；随着服务端和桌面 Rust 能力落地，应作为可复现构建的一部分保留。
+- `scripts/check-doc-links.mjs`：文档本地链接校验脚本，跨平台校验 Markdown 内部路径，作为 CI 与本地 `verify` 的统一检查实现，避免链接漂移进入主分支。
 - `apps/desktop/package.json`：桌面端前端壳的包入口，后续承接 Tauri + React + Vite 配置与依赖。
 - `apps/desktop/CHANGELOG.md`：桌面端发布线的用户可见变更记录，避免桌面端变更混入其他应用或共享包的发布说明。
 - `apps/web/package.json`：Web 端访问入口的包清单，后续承接远程阅读与搜索界面的前端依赖。
@@ -736,6 +738,8 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `apps/sync-server` 暂未加入任何工作区是刻意选择，因为当前阶段只需要固化客户端与共享引擎骨架，不应为了“形式完整”提前引入服务端脚手架复杂度。
 - 将 `Biome` 扫描范围限制在应用与共享包，是当前阶段的刻意边界控制：先规范代码骨架，再在后续阶段按需纳入更多目录，避免首轮规范化对文档资产造成噪音。
 - 先为每个 JS/TS 包生成独立 `CHANGELOG.md`，可以把变更记录继续保持在模块边界内，而不是退化为仓库级“大杂烩”发布说明；这与 FreelyRSS 的多应用壳、多共享包架构是一致的。
+- Step 9 的关键价值不是“把 CI 文件补齐”，而是把“文档可达性校验”和“前端/Rust 工具链校验”显式拆成独立作业，使失败定位直接映射到质量门禁类别。
+- 文档链接检查采用仓库内脚本并接入 `verify`，让本地开发与 CI 使用同一校验逻辑，降低“本地通过但 CI 失败”的环境差异风险。
 
 ## 14. 当前文档职责
 

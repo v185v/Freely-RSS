@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-- 阶段：已进入阶段 1，仓库目录骨架、工作区清单与代码规范基础设施已初始化，下一步是变更集与版本管理流程
-- 最后更新：2026-04-06
-- 风险状态：已从“仅文档基线”推进到“工程骨架开始落地”，当前主要风险转为基础 CI 与数据库迁移机制尚未接线
+- 阶段：已进入阶段 1，仓库目录骨架、工作区清单、代码规范与基础 CI 已初始化，下一步是配置与环境变量边界
+- 最后更新：2026-04-07
+- 风险状态：已从“仅文档基线”推进到“工程骨架开始落地”，当前主要风险转为数据库迁移机制尚未接线
 
 ## 已确认决策
 
@@ -20,7 +20,7 @@
 
 ## 当前阻塞
 
-- 基础 CI 与数据库迁移机制尚未初始化。
+- 数据库迁移机制尚未初始化。
 
 ## 本次执行记录
 
@@ -91,7 +91,23 @@
 - 已执行 `corepack pnpm exec lefthook run pre-commit --all-files`（临时补充 `PATH` 以包含 cargo），结果通过。
 - 当前验证结论：Step 8 通过，可进入 Step 9“建立基础 CI 流程”。
 
+### 2026-04-07 - 阶段 1 Step 9：建立基础 CI 流程
+
+- 已新增 `.github/workflows/ci.yml`，建立最小可用 CI。
+- `docs-links` 作业负责 Markdown 本地链接校验。
+- `workspace-verify` 作业负责 JS 依赖安装、前端格式与 lint、Rust 编译检查、格式检查、Clippy 与测试。
+- 已新增 `scripts/check-doc-links.mjs`，提供与平台无关的文档本地链接校验，避免外部网络波动导致 CI 假失败。
+- 已在根 `package.json` 新增 `docs:links` 脚本，并将其纳入 `verify` 链路，保证本地验证与 CI 校验口径一致。
+- 已将 `memory-bank/tech-stack.md` 与 `memory-bank/architecture.md` 中引用 `RSS-design-document.md` 的绝对路径链接改为相对路径，消除跨平台链接检查误报。
+
+### 验证结果
+
+- 已执行 `corepack pnpm install`，依赖安装通过（覆盖 CI 中前端依赖安装环节）。
+- 已执行 `corepack pnpm run verify`（含 `format:check`、`lint`、`rust:fmt:check`、`rust:clippy`、`test:rust`、`docs:links`），结果通过。
+- 已执行 `cargo check --workspace`，Rust 工作区编译检查通过（覆盖 CI 中 Rust 编译环节）。
+- 当前验证结论：Step 9 通过，可进入 Step 10“定义配置与环境变量边界”。
+
 ## 下一步
 
-- 按 `implementation-plan.md` 执行 Step 9，建立基础 CI 流程。
-- 在 Step 9 验证通过后，再继续推进 Step 10 的配置与环境变量边界。
+- 按 `implementation-plan.md` 执行 Step 10，定义配置与环境变量边界。
+- 在 Step 10 验证通过后，再继续推进阶段 2 的桌面壳与共享包基础工作。

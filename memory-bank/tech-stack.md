@@ -2,7 +2,7 @@
 
 ## 1. 文档目的
 
-本文档基于 [RSS-design-document.md](F:\Codes\FreelyRSS\memory-bank\RSS-design-document.md) 为 FreelyRSS 推荐最合适的技术栈，并明确取舍理由、分层边界和阶段性实施建议。
+本文档基于 [RSS-design-document.md](./RSS-design-document.md) 为 FreelyRSS 推荐最合适的技术栈，并明确取舍理由、分层边界和阶段性实施建议。
 
 目标不是堆砌流行技术，而是选择一套最符合以下约束的可执行方案：
 

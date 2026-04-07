@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  docs-links:
+    name: Docs Link Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check Markdown local links
+        run: node scripts/check-doc-links.mjs
+
+  workspace-verify:
+    name: Workspace Verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install JavaScript dependencies
+        run: corepack pnpm install --frozen-lockfile
+
+      - name: Frontend format check
+        run: corepack pnpm run format:check
+
+      - name: Frontend lint
+        run: corepack pnpm run lint
+
+      - name: Rust compile check
+        run: cargo check --workspace
+
+      - name: Rust format check
+        run: corepack pnpm run rust:fmt:check
+
+      - name: Rust clippy
+        run: corepack pnpm run rust:clippy
+
+      - name: Rust tests
+        run: corepack pnpm run test:rust
