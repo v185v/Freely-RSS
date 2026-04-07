@@ -672,7 +672,7 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 
 ### 13.2 当前应用目录职责
 
-- `apps/desktop`：桌面端主应用，未来承载 Tauri 壳、React UI 和本地能力入口。
+- `apps/desktop`：桌面端主应用，当前已承载 Tauri 壳、React 前端入口与最小桌面宿主配置；后续继续在此接入共享 UI、阅读器布局与本地能力入口。
 - `apps/web`：Web 端远程访问入口，后续只消费同步后的远程数据。
 - `apps/mobile`：移动端阅读优先应用，后续承接同步阅读、搜索、笔记与播客消费。
 - `apps/sync-server`：远程同步服务，后续承接账号、设备、事件交换和对象存储清单。
@@ -696,22 +696,37 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 
 ### 13.5 当前工作区清单与文件职责
 
-当前阶段已经从“纯目录占位”推进到“可被工具链识别的工作区骨架”。这些文件的职责应明确，避免后续把配置堆进单一根文件或单一应用。
+当前阶段已经从“纯目录占位”推进到“可被工具链识别的工作区骨架 + 可构建的桌面端应用壳”。这些文件的职责应明确，避免后续把配置堆进单一根文件或单一应用。
 
-- `package.json`：JS/TS 根工作区入口，声明仓库为私有 workspace、固定 `pnpm` 版本，并集中定义 `Biome`、共享配置测试、Rust 检查、文档链接检查与 `verify` 等统一脚本，避免检查命令散落到各应用包。
+- `package.json`：JS/TS 根工作区入口，声明仓库为私有 workspace、固定 `pnpm` 版本，并集中定义 `Biome`、共享配置测试、Rust 检查、文档链接检查与 `verify` 等统一脚本；当前还补充了 `desktop:dev`、`desktop:build`、`desktop:tauri:dev`、`desktop:tauri:build` 四个桌面壳入口，避免桌面运行命令继续散落到应用目录内。
 - `pnpm-workspace.yaml`：声明 `apps/*` 与 `packages/*` 为 JS/TS 工作区扫描边界，让桌面端、Web 端、移动端和共享包在单仓下统一发现。
 - `pnpm-lock.yaml`：记录当前 JS/TS 工作区（含规范工具依赖）的锁定解析结果，用于保证依赖安装可复现。
 - `.changeset/config.json`：定义 JS/TS workspace 的版本计算策略、基础分支、内部依赖联动方式与 changelog 生成方式，是包级发布线的策略入口。
 - `.changeset/README.md`：面向贡献者说明何时必须编写 changeset、如何生成发布计划，以及“包版本 / 协议版本 / 数据库 schema 版本”三条版本线如何分离。
-- `biome.json`：统一前端格式化与 lint 规则，并显式限制扫描范围到 `apps/*`、`packages/*` 与关键根配置文件，避免文档区与无关目录被误扫。
+- `biome.json`：统一前端格式化与 lint 规则，并显式限制扫描范围到 `apps/*`、`packages/*` 与关键根配置文件；当前还显式忽略 `apps/**/dist/**/*`、`apps/**/src-tauri/gen/**/*` 与 `apps/**/src-tauri/target/**/*`，避免 Tauri 生成物污染源码质量门禁。
 - `lefthook.yml`：定义提交前检查链路（`pre-commit`），把前端规范检查、Rust 格式检查与 Clippy 串联为同一入口，收敛“提交前”质量门禁。
-- `.gitignore`：屏蔽 `node_modules/`、`target/` 与调试日志等构建产物，保证仓库关注点聚焦源码、配置与文档。
+- `.gitignore`：屏蔽 `node_modules/`、`target/`、`dist/` 与调试日志等构建产物，保证仓库关注点聚焦源码、配置与文档。
 - `.github/workflows/ci.yml`：基础 CI 入口，按作业拆分文档链接检查与工作区校验，覆盖依赖安装、前端规范、共享配置测试、Rust 编译/静态检查/测试，确保在干净环境可复现。
 - `Cargo.toml`：Rust 根工作区入口，负责声明 `crates/*` 为 workspace members，并统一 edition、version、license、publish 等共享元数据。
 - `Cargo.lock`：记录当前 Rust 工作区的锁定解析结果；随着服务端和桌面 Rust 能力落地，应作为可复现构建的一部分保留。
 - `scripts/check-doc-links.mjs`：文档本地链接校验脚本，跨平台校验 Markdown 内部路径，作为 CI 与本地 `verify` 的统一检查实现，避免链接漂移进入主分支。
-- `apps/desktop/package.json`：桌面端前端壳的包入口，后续承接 Tauri + React + Vite 配置与依赖。
+- `apps/desktop/package.json`：桌面端前端壳的包入口，当前负责声明 React/Vite/Tauri CLI 依赖与 `dev`、`build`、`preview`、`tauri` 四类脚本，是桌面壳前端入口与 Tauri CLI 的交汇点。
 - `apps/desktop/CHANGELOG.md`：桌面端发布线的用户可见变更记录，避免桌面端变更混入其他应用或共享包的发布说明。
+- `apps/desktop/index.html`：桌面端前端宿主文档，提供 Vite 挂载点并定义应用窗口标题入口。
+- `apps/desktop/tsconfig.json`：桌面端 TypeScript 编译边界，当前覆盖 React 前端与 `vite.config.ts`，确保桌面壳类型检查在应用边界内闭合。
+- `apps/desktop/vite.config.ts`：桌面端前端构建配置，固定 Tauri 开发端口、约束 HMR 行为并忽略 `src-tauri` 目录变化，避免桌面壳开发时前后端工具链相互误触发。
+- `apps/desktop/src/main.tsx`：桌面端 React 引导入口，只负责挂载 `App` 到前端宿主节点，不掺入业务查询或本地状态逻辑。
+- `apps/desktop/src/App.tsx`：阶段 2 Step 11 的最小桌面壳界面，占位展示“桌面宿主链路已接通”，刻意不提前承担共享 UI 或三栏阅读器职责。
+- `apps/desktop/src/styles.css`：仅供桌面壳当前占位界面使用的本地样式层；在共享设计系统落地前，它负责壳级视觉占位，不应被误当作长期共享主题入口。
+- `apps/desktop/src/vite-env.d.ts`：Vite 客户端类型声明入口，为桌面壳前端提供 `vite/client` 类型边界。
+- `apps/desktop/src-tauri/Cargo.toml`：桌面端专属 Rust 宿主 crate 清单，负责声明 Tauri 构建依赖、运行时依赖与本地 `[workspace]` 边界，避免应用壳误并入根共享 Rust workspace。
+- `apps/desktop/src-tauri/build.rs`：Tauri 构建脚本入口，把窗口配置、能力清单、图标与前端产物元数据编译进宿主程序。
+- `apps/desktop/src-tauri/tauri.conf.json`：桌面宿主总配置，定义 `beforeDevCommand` / `beforeBuildCommand`、`frontendDist`、窗口尺寸、应用标识、能力模型与图标清单，是 Tauri 壳与前端产物的装配面。
+- `apps/desktop/src-tauri/.gitignore`：忽略 `src-tauri/gen/` 等由 Tauri 生成的中间产物，避免能力 schema 与生成文件混入源码提交面。
+- `apps/desktop/src-tauri/capabilities/default.json`：桌面端主窗口的默认权限清单，当前只授予 `core:default`，把权限边界显式收敛到“最小可用壳”。
+- `apps/desktop/src-tauri/icons/*`：桌面宿主的占位应用图标资源，当前只服务于壳级编译与打包校验，不承载品牌定稿含义。
+- `apps/desktop/src-tauri/src/lib.rs`：桌面宿主的薄运行时入口，当前仅负责启动 `tauri::Builder` 并加载编译后的上下文，不承担共享领域逻辑。
+- `apps/desktop/src-tauri/src/main.rs`：桌面宿主二进制入口，在 Windows release 模式下隐藏额外控制台窗口，并把运行控制权交给 `lib.rs` 中的壳层入口。
 - `apps/web/package.json`：Web 端访问入口的包清单，后续承接远程阅读与搜索界面的前端依赖。
 - `apps/web/CHANGELOG.md`：Web 端发布线的变更记录，后续用于区分远程访问入口的迭代说明。
 - `apps/mobile/package.json`：移动端应用包清单，后续承接 React Native + Expo 工程配置。
@@ -752,6 +767,11 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - 先吸收标准代理环境变量，再叠加 `FREELYRSS_*` 专用变量，最后允许显式覆写，是当前最稳妥的优先级设计：既兼容通用开发环境，又保证应用侧可以精确覆盖代理与服务端配置。
 - 在共享配置层显式拒绝“启用同步但缺少 endpoint”“启用 AI 但缺少 provider 凭证”这类状态，能把错误从运行期网络失败前移到启动期配置校验，减少后续桌面壳接线时的隐性故障。
 - 将配置文档与 Node 原生测试一起放在 `shared-config` 包边界内，意味着后续任何应用壳接入该包时，都必须复用同一份配置契约，而不是在各自壳内复制一套解析逻辑。
+- Step 11 的关键价值不是“把 Tauri 跑起来”，而是把“桌面宿主层”和“前端应用层”真正分开：`src-tauri` 只负责窗口、能力与运行时装配，React/Vite 继续负责前端界面演进。
+- 将 `apps/desktop/src-tauri` 维持为应用专属 crate、而不是塞进根 `Cargo workspace`，锁定了“共享引擎 crates”与“应用宿主 crate”两条不同演进路径，避免未来把桌面端运行时约束泄漏到共享 Rust 模块。
+- `tauri.conf.json` 中的 `beforeDevCommand` / `beforeBuildCommand` 与 `frontendDist` 把前端产物定义为宿主层的显式输入，这能让后续 `packages/ui`、共享类型和三栏布局在不触碰 Rust 壳层的前提下独立演进。
+- 当前 `App.tsx` 与 `styles.css` 保持壳级占位而不提前复用 `packages/ui`，是刻意的阶段控制：先验证桌面入口链路，再在 Step 12 单独收敛共享设计系统边界，避免“为了有界面”反向污染共享包。
+- 在 `biome.json` 与 `src-tauri/.gitignore` 中显式忽略 `dist/`、`gen/` 与 `target/`，实质上是在架构层把“源码边界”和“生成物边界”分开；否则 Tauri 的生成文件会持续干扰仓库质量门禁与代码审阅噪音。
 
 ## 14. 当前文档职责
 

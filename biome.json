@@ -8,6 +8,7 @@
       "pnpm-workspace.yaml",
       "lefthook.yml"
     ],
+    "ignore": ["apps/**/dist/**/*", "apps/**/src-tauri/gen/**/*", "apps/**/src-tauri/target/**/*"],
     "ignoreUnknown": true
   },
   "formatter": {

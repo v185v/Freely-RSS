@@ -1,0 +1,18 @@
+[package]
+name = "freelyrss-desktop"
+version = "0.0.1"
+description = "FreelyRSS desktop application shell"
+authors = ["FreelyRSS contributors"]
+edition = "2021"
+
+[workspace]
+
+[lib]
+name = "freelyrss_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }

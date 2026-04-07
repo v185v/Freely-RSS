@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-- 阶段：阶段 1 已完成，仓库目录骨架、工作区清单、代码规范、基础 CI 与共享配置边界已初始化，下一步进入阶段 2 的桌面端应用壳
+- 阶段：阶段 2 Step 11 已完成，`apps/desktop` 的 Tauri + React + TypeScript + Vite 桌面端应用壳已初始化并通过验证，下一步进入阶段 2 Step 12 的共享 UI 基础包
 - 最后更新：2026-04-07
-- 风险状态：已从“仅文档基线”推进到“工程骨架已可验证”，当前主要风险转为数据库迁移机制与桌面端壳尚未接线
+- 风险状态：已从“桌面端壳尚未接线”推进到“桌面端壳已可构建验证”，当前主要风险转为共享 UI 边界设计是否足够克制，以及后续三栏布局接入时避免把业务逻辑提前沉积到应用壳
 
 ## 已确认决策
 
@@ -20,7 +20,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 3 的数据库迁移机制尚未初始化。
+- 当前无阻塞；下一步风险点是阶段 2 Step 12 需要把共享 UI 保持为纯展示与主题层，避免在 `packages/ui` 过早掺入阅读器业务查询与状态逻辑。
 
 ## 本次执行记录
 
@@ -123,7 +123,28 @@
 - 已执行 `cargo check --workspace`，Rust 工作区编译检查通过，确认本次 JS/TS 侧改动未破坏现有根级验证链路。
 - 当前验证结论：Step 10 通过，阶段 1 完成，可进入阶段 2 Step 11“初始化桌面应用壳”。
 
+### 2026-04-07 - 阶段 2 Step 11：初始化桌面应用壳
+
+- 已将 `apps/desktop` 从占位包推进为可运行桌面端前端壳，补齐 `index.html`、`tsconfig.json`、`vite.config.ts`、`src/main.tsx`、`src/App.tsx`、`src/styles.css` 与 `src/vite-env.d.ts`。
+- 已在 `apps/desktop/package.json` 中接入 React 19、TypeScript 5.9、Vite 8 与 `@tauri-apps/cli`，并暴露 `dev`、`build`、`preview`、`tauri` 四类桌面壳入口。
+- 已新增 `apps/desktop/src-tauri` 桌面宿主层，包含 `Cargo.toml`、`build.rs`、`tauri.conf.json`、`src/lib.rs`、`src/main.rs`、`capabilities/default.json` 与占位图标资源，使 Tauri 壳、前端构建产物与 Rust 入口可以接线。
+- 已将 `src-tauri` 明确保持在根 Cargo workspace 之外，通过本地 `[workspace]` 边界把“应用宿主 crate”和“共享 Rust 引擎 crates”分离，避免后续把桌面运行时壳误并入共享核心模块。
+- 已在根 `package.json` 新增 `desktop:dev`、`desktop:build`、`desktop:tauri:dev`、`desktop:tauri:build` 四个桌面相关脚本入口，并把 `.gitignore` / `biome.json` 调整到可忽略 `dist/`、`src-tauri/gen/` 与 `src-tauri/target/` 等生成产物。
+- 已在本步骤中保持界面刻意最小化：当前 `App.tsx` 只承担“桌面壳已接线”的占位职责，不越过 Step 12 去提前定义共享设计系统或三栏阅读器布局。
+
+### 验证结果
+
+- 已执行 `corepack pnpm install`，桌面壳新增的 JS/TS 依赖安装通过。
+- 已执行 `corepack pnpm run desktop:build`，确认桌面前端壳可完成 TypeScript 检查与 Vite 产物构建。
+- 已执行 `cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --all --check`，桌面壳 Rust 宿主层格式检查通过。
+- 已执行 `cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --config "source.crates-io.replace-with='rsproxy'" --config "source.rsproxy.registry='sparse+https://rsproxy.cn/index/'"`，确认 Tauri/Rust 宿主层可编译。
+- 已执行 `cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets --config "source.crates-io.replace-with='rsproxy'" --config "source.rsproxy.registry='sparse+https://rsproxy.cn/index/'" -- -D warnings`，桌面壳 Rust 宿主层静态检查通过。
+- 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，确认 `beforeBuildCommand`、前端产物路径、Tauri 配置与 Rust 入口可在 CLI 级别串通，生成 `apps/desktop/src-tauri/target/debug/freelyrss-desktop.exe`。
+- 已执行 `corepack pnpm run verify`，根级格式、lint、共享配置测试、Rust workspace 校验与文档链接检查全部通过。
+- 说明：当前机器上 `crates.io` 直连在 Cargo 拉取依赖时表现不稳定，因此桌面壳 Rust/Tauri 验证命令使用了临时 `rsproxy` registry override；该镜像配置未写入仓库文件，仅用于本次环境中的验证拉取。
+- 当前验证结论：Step 11 通过，可进入阶段 2 Step 12“建立共享 UI 基础包”。
+
 ## 下一步
 
-- 按 `implementation-plan.md` 执行阶段 2 Step 11，初始化 `apps/desktop` 的 Tauri + React + TypeScript + Vite 桌面应用壳。
-- 在桌面壳可启动并验证通过后，再继续推进阶段 2 的共享 UI、共享类型与三栏主布局工作。
+- 按 `implementation-plan.md` 执行阶段 2 Step 12，在 `packages/ui` 中建立共享 UI 基础包与主题变量边界。
+- 在共享 UI 基础包验证通过后，再继续推进阶段 2 Step 13 与 Step 15 的共享类型和三栏主布局工作。

@@ -23,6 +23,10 @@ Until the application is scaffolded, keep planning, architecture, and implementa
 Current repository-level commands:
 
 - `corepack pnpm install` : install JS/TS workspace dependencies and sync hooks
+- `corepack pnpm run desktop:dev` : start the desktop frontend shell in Vite dev mode
+- `corepack pnpm run desktop:build` : type-check and build the desktop frontend shell
+- `corepack pnpm --filter @freelyrss/desktop tauri dev` : run the desktop application shell locally through Tauri
+- `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle` : validate the desktop shell end-to-end without generating installers
 - `corepack pnpm run format` : apply Biome formatting
 - `corepack pnpm run format:check` : run Biome formatting checks
 - `corepack pnpm run lint` : run Biome lint rules
@@ -34,7 +38,7 @@ Current repository-level commands:
 - `corepack pnpm run changeset:status` : preview package version bumps and release notes plan
 - `corepack pnpm run changeset:version` : apply version bumps and generate package changelogs
 
-There is not yet an application build or run command for `apps/desktop`, `apps/web`, or `apps/mobile`. Add those here when the app shells are scaffolded.
+`apps/web` and `apps/mobile` do not yet have scaffolded application build or run commands. Add those here once their app shells are introduced.
 
 ## Coding Style & Naming Conventions
 
