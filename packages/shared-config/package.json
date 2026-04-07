@@ -2,5 +2,11 @@
   "name": "@freelyrss/shared-config",
   "private": true,
   "version": "0.0.1",
-  "type": "module"
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "node --test src/config.test.js"
+  }
 }

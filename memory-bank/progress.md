@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-- 阶段：已进入阶段 1，仓库目录骨架、工作区清单、代码规范与基础 CI 已初始化，下一步是配置与环境变量边界
+- 阶段：阶段 1 已完成，仓库目录骨架、工作区清单、代码规范、基础 CI 与共享配置边界已初始化，下一步进入阶段 2 的桌面端应用壳
 - 最后更新：2026-04-07
-- 风险状态：已从“仅文档基线”推进到“工程骨架开始落地”，当前主要风险转为数据库迁移机制尚未接线
+- 风险状态：已从“仅文档基线”推进到“工程骨架已可验证”，当前主要风险转为数据库迁移机制与桌面端壳尚未接线
 
 ## 已确认决策
 
@@ -20,7 +20,7 @@
 
 ## 当前阻塞
 
-- 数据库迁移机制尚未初始化。
+- 当前无阻塞；下一步风险点是阶段 3 的数据库迁移机制尚未初始化。
 
 ## 本次执行记录
 
@@ -107,7 +107,23 @@
 - 已执行 `cargo check --workspace`，Rust 工作区编译检查通过（覆盖 CI 中 Rust 编译环节）。
 - 当前验证结论：Step 9 通过，可进入 Step 10“定义配置与环境变量边界”。
 
+### 2026-04-07 - 阶段 1 Step 10：定义配置与环境变量边界
+
+- 已在 `packages/shared-config` 内建立共享配置包实现，新增 `src/index.js`、`src/defaults.js`、`src/env.js`、`src/merge.js`、`src/validate.js`、`src/errors.js`，将配置默认值、环境变量解析、分层合并、错误建模与校验边界拆分为独立模块。
+- 已定义配置覆盖范围：运行环境、运行目标、日志级别、代理设置、同步配置、AI 配置与实验性功能开关。
+- 已固化配置来源优先级：`defaults -> standard-proxy-env -> freelyrss-env -> explicit-overrides`，其中标准代理环境变量复用 `HTTP_PROXY`、`HTTPS_PROXY` 与 `NO_PROXY`，FreelyRSS 专用变量使用 `FREELYRSS_` 前缀。
+- 已在 `packages/shared-config/README.md` 写明环境变量约定、优先级与校验规则，避免后续桌面端、Web 端或测试环境各自发明配置口径。
+- 已更新 `packages/shared-config/package.json` 暴露包入口，并为该包添加独立测试脚本；同时在根 `package.json` 新增 `test:config`，并将其接入 `verify`。
+- 已更新 `.github/workflows/ci.yml`，让工作区校验作业显式执行共享配置测试，避免配置边界只在本地验证。
+
+### 验证结果
+
+- 已执行 `corepack pnpm run test:config`，4 个配置测试全部通过，覆盖桌面开发环境加载、桌面测试环境加载、同步缺失必填项报错与 AI 缺失凭证报错。
+- 已执行 `corepack pnpm run verify`，结果通过；其中包含 `format:check`、`lint`、`test:config`、`rust:fmt:check`、`rust:clippy`、`test:rust` 与 `docs:links`。
+- 已执行 `cargo check --workspace`，Rust 工作区编译检查通过，确认本次 JS/TS 侧改动未破坏现有根级验证链路。
+- 当前验证结论：Step 10 通过，阶段 1 完成，可进入阶段 2 Step 11“初始化桌面应用壳”。
+
 ## 下一步
 
-- 按 `implementation-plan.md` 执行 Step 10，定义配置与环境变量边界。
-- 在 Step 10 验证通过后，再继续推进阶段 2 的桌面壳与共享包基础工作。
+- 按 `implementation-plan.md` 执行阶段 2 Step 11，初始化 `apps/desktop` 的 Tauri + React + TypeScript + Vite 桌面应用壳。
+- 在桌面壳可启动并验证通过后，再继续推进阶段 2 的共享 UI、共享类型与三栏主布局工作。

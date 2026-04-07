@@ -53,6 +53,9 @@ jobs:
       - name: Frontend lint
         run: corepack pnpm run lint
 
+      - name: Shared config tests
+        run: corepack pnpm run test:config
+
       - name: Rust compile check
         run: cargo check --workspace
 

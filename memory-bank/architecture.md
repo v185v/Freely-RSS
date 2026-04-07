@@ -698,7 +698,7 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 
 当前阶段已经从“纯目录占位”推进到“可被工具链识别的工作区骨架”。这些文件的职责应明确，避免后续把配置堆进单一根文件或单一应用。
 
-- `package.json`：JS/TS 根工作区入口，声明仓库为私有 workspace、固定 `pnpm` 版本，并集中定义 `Biome`、Rust 检查、文档链接检查与 `verify` 等统一脚本，避免检查命令散落到各应用包。
+- `package.json`：JS/TS 根工作区入口，声明仓库为私有 workspace、固定 `pnpm` 版本，并集中定义 `Biome`、共享配置测试、Rust 检查、文档链接检查与 `verify` 等统一脚本，避免检查命令散落到各应用包。
 - `pnpm-workspace.yaml`：声明 `apps/*` 与 `packages/*` 为 JS/TS 工作区扫描边界，让桌面端、Web 端、移动端和共享包在单仓下统一发现。
 - `pnpm-lock.yaml`：记录当前 JS/TS 工作区（含规范工具依赖）的锁定解析结果，用于保证依赖安装可复现。
 - `.changeset/config.json`：定义 JS/TS workspace 的版本计算策略、基础分支、内部依赖联动方式与 changelog 生成方式，是包级发布线的策略入口。
@@ -706,7 +706,7 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `biome.json`：统一前端格式化与 lint 规则，并显式限制扫描范围到 `apps/*`、`packages/*` 与关键根配置文件，避免文档区与无关目录被误扫。
 - `lefthook.yml`：定义提交前检查链路（`pre-commit`），把前端规范检查、Rust 格式检查与 Clippy 串联为同一入口，收敛“提交前”质量门禁。
 - `.gitignore`：屏蔽 `node_modules/`、`target/` 与调试日志等构建产物，保证仓库关注点聚焦源码、配置与文档。
-- `.github/workflows/ci.yml`：基础 CI 入口，按作业拆分文档链接检查与工作区校验，覆盖依赖安装、前端规范、Rust 编译/静态检查/测试，确保在干净环境可复现。
+- `.github/workflows/ci.yml`：基础 CI 入口，按作业拆分文档链接检查与工作区校验，覆盖依赖安装、前端规范、共享配置测试、Rust 编译/静态检查/测试，确保在干净环境可复现。
 - `Cargo.toml`：Rust 根工作区入口，负责声明 `crates/*` 为 workspace members，并统一 edition、version、license、publish 等共享元数据。
 - `Cargo.lock`：记录当前 Rust 工作区的锁定解析结果；随着服务端和桌面 Rust 能力落地，应作为可复现构建的一部分保留。
 - `scripts/check-doc-links.mjs`：文档本地链接校验脚本，跨平台校验 Markdown 内部路径，作为 CI 与本地 `verify` 的统一检查实现，避免链接漂移进入主分支。
@@ -723,8 +723,16 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `packages/shared-types/CHANGELOG.md`：共享类型包的发布说明，用于跟踪 DTO、枚举与领域类型契约变化。
 - `packages/shared-query/package.json`：共享查询表达式包的清单文件，后续承载 AST、解析、校验与序列化。
 - `packages/shared-query/CHANGELOG.md`：共享查询表达式包的发布说明，用于跟踪 AST、解析器与序列化协议变化。
-- `packages/shared-config/package.json`：共享配置模型包的清单文件，后续承载环境变量来源、优先级与默认策略。
+- `packages/shared-config/package.json`：共享配置模型包的清单文件，当前负责暴露 `shared-config` 的公共入口与独立测试脚本，固定该包的分发边界。
 - `packages/shared-config/CHANGELOG.md`：共享配置包的发布说明，用于记录配置模型、默认策略与环境边界的外部变化。
+- `packages/shared-config/README.md`：共享配置包的使用说明，明确环境变量命名、来源优先级、配置覆盖范围与校验规则，作为桌面端和测试环境接线前的契约文档。
+- `packages/shared-config/src/index.js`：共享配置包的统一入口，负责组合默认值、标准代理环境变量、FreelyRSS 环境变量与显式覆写，并输出最终配置对象。
+- `packages/shared-config/src/defaults.js`：配置域常量与默认值工厂，集中定义运行环境、运行目标、日志级别、同步模式、AI provider 和实验开关的合法集合与默认策略。
+- `packages/shared-config/src/env.js`：环境变量解析层，把 `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` 与 `FREELYRSS_*` 变量映射为结构化配置片段，并在解析阶段提供基础类型校验。
+- `packages/shared-config/src/merge.js`：配置分层合并实现，负责把默认值、环境变量层与调用方覆写收敛到同一配置对象，避免应用侧各自实现不一致的 merge 逻辑。
+- `packages/shared-config/src/validate.js`：共享配置校验器，负责在真正接入桌面壳之前就强制同步、AI 与代理相关的必填条件和枚举边界，阻止静默容错进入运行期。
+- `packages/shared-config/src/errors.js`：共享配置错误模型，提供带路径信息的 `ConfigValidationError`，让调用方能直接定位失败字段，而不是只看到模糊异常。
+- `packages/shared-config/src/config.test.js`：共享配置的 Node 原生测试，覆盖桌面开发环境、桌面测试环境和缺失必填配置时的失败路径，用作阶段 1 Step 10 的自动化验收。
 - `crates/*/Cargo.toml`：各 Rust crate 的边界声明文件，用于把抓取、搜索、规则、同步等能力维持在独立模块，而不是回退成单体 Rust 包。
 - `crates/*/src/lib.rs`：各 Rust crate 的最小库入口，当前只承担可编译占位职责；后续应逐步承接真实领域逻辑与测试。
 
@@ -740,6 +748,10 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - 先为每个 JS/TS 包生成独立 `CHANGELOG.md`，可以把变更记录继续保持在模块边界内，而不是退化为仓库级“大杂烩”发布说明；这与 FreelyRSS 的多应用壳、多共享包架构是一致的。
 - Step 9 的关键价值不是“把 CI 文件补齐”，而是把“文档可达性校验”和“前端/Rust 工具链校验”显式拆成独立作业，使失败定位直接映射到质量门禁类别。
 - 文档链接检查采用仓库内脚本并接入 `verify`，让本地开发与 CI 使用同一校验逻辑，降低“本地通过但 CI 失败”的环境差异风险。
+- Step 10 的关键价值不是“多加几项环境变量”，而是把运行环境、代理、同步、AI 和实验开关统一收敛到 `packages/shared-config`，防止桌面端、Web 端和测试环境出现三套不兼容的配置口径。
+- 先吸收标准代理环境变量，再叠加 `FREELYRSS_*` 专用变量，最后允许显式覆写，是当前最稳妥的优先级设计：既兼容通用开发环境，又保证应用侧可以精确覆盖代理与服务端配置。
+- 在共享配置层显式拒绝“启用同步但缺少 endpoint”“启用 AI 但缺少 provider 凭证”这类状态，能把错误从运行期网络失败前移到启动期配置校验，减少后续桌面壳接线时的隐性故障。
+- 将配置文档与 Node 原生测试一起放在 `shared-config` 包边界内，意味着后续任何应用壳接入该包时，都必须复用同一份配置契约，而不是在各自壳内复制一套解析逻辑。
 
 ## 14. 当前文档职责
 
