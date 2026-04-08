@@ -20,6 +20,9 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@freelyrss/shared-types':
+        specifier: workspace:*
+        version: link:../../packages/shared-types
       '@freelyrss/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -57,7 +60,11 @@ importers:
 
   packages/shared-query: {}
 
-  packages/shared-types: {}
+  packages/shared-types:
+    devDependencies:
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
 
   packages/ui:
     dependencies:

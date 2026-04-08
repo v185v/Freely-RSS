@@ -680,7 +680,7 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 ### 13.3 当前共享包职责
 
 - `packages/ui`：已承载共享主题变量、布局骨架与基础组件，不承载业务逻辑。
-- `packages/shared-types`：共享领域类型、DTO 和状态枚举。
+- `packages/shared-types`：共享领域标识符、基础原语、状态枚举与前端消费 DTO，承接桌面端、Web 端、移动端对统一数据契约的依赖，但不承载查询解释器或 React 展示逻辑。
 - `packages/shared-query`：统一查询表达式 AST、解析、校验和序列化。
 - `packages/shared-config`：共享配置模型、环境变量边界与默认策略。
 
@@ -696,9 +696,9 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 
 ### 13.5 当前工作区清单与文件职责
 
-当前阶段已经从“纯目录占位”推进到“可被工具链识别的工作区骨架 + 可构建的桌面端应用壳 + 可被桌面壳实际消费的共享 UI 基础包”。这些文件的职责应明确，避免后续把配置、样式与组件堆进单一根文件或单一应用。
+当前阶段已经从“纯目录占位”推进到“可被工具链识别的工作区骨架 + 可构建的桌面端应用壳 + 可被桌面壳实际消费的共享 UI 基础包 + 可独立校验并已被桌面壳消费的共享类型包”。这些文件的职责应明确，避免后续把配置、样式、组件与类型契约堆进单一根文件或单一应用。
 
-- `package.json`：JS/TS 根工作区入口，声明仓库为私有 workspace、固定 `pnpm` 版本，并集中定义 `Biome`、共享配置测试、Rust 检查、文档链接检查与 `verify` 等统一脚本；当前还补充了 `desktop:dev`、`desktop:build`、`desktop:tauri:dev`、`desktop:tauri:build` 四个桌面壳入口，避免桌面运行命令继续散落到应用目录内。
+- `package.json`：JS/TS 根工作区入口，声明仓库为私有 workspace、固定 `pnpm` 版本，并集中定义 `Biome`、共享配置测试、共享类型检查、Rust 检查、文档链接检查与 `verify` 等统一脚本；当前还补充了 `desktop:dev`、`desktop:build`、`desktop:tauri:dev`、`desktop:tauri:build` 四个桌面壳入口，避免桌面运行命令继续散落到应用目录内。
 - `pnpm-workspace.yaml`：声明 `apps/*` 与 `packages/*` 为 JS/TS 工作区扫描边界，让桌面端、Web 端、移动端和共享包在单仓下统一发现。
 - `pnpm-lock.yaml`：记录当前 JS/TS 工作区（含规范工具依赖）的锁定解析结果，用于保证依赖安装可复现。
 - `.changeset/config.json`：定义 JS/TS workspace 的版本计算策略、基础分支、内部依赖联动方式与 changelog 生成方式，是包级发布线的策略入口。
@@ -710,13 +710,13 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `Cargo.toml`：Rust 根工作区入口，负责声明 `crates/*` 为 workspace members，并统一 edition、version、license、publish 等共享元数据。
 - `Cargo.lock`：记录当前 Rust 工作区的锁定解析结果；随着服务端和桌面 Rust 能力落地，应作为可复现构建的一部分保留。
 - `scripts/check-doc-links.mjs`：文档本地链接校验脚本，跨平台校验 Markdown 内部路径，作为 CI 与本地 `verify` 的统一检查实现，避免链接漂移进入主分支。
-- `apps/desktop/package.json`：桌面端前端壳的包入口，当前负责声明 React/Vite/Tauri CLI 与 `@freelyrss/ui` 依赖，并暴露 `dev`、`build`、`preview`、`tauri` 四类脚本，是桌面壳前端入口、共享 UI 包与 Tauri CLI 的交汇点。
+- `apps/desktop/package.json`：桌面端前端壳的包入口，当前负责声明 React/Vite/Tauri CLI、`@freelyrss/ui` 与 `@freelyrss/shared-types` 依赖，并暴露 `dev`、`build`、`preview`、`tauri` 四类脚本，是桌面壳前端入口、共享 UI 包、共享类型包与 Tauri CLI 的交汇点。
 - `apps/desktop/CHANGELOG.md`：桌面端发布线的用户可见变更记录，避免桌面端变更混入其他应用或共享包的发布说明。
 - `apps/desktop/index.html`：桌面端前端宿主文档，提供 Vite 挂载点并定义应用窗口标题入口。
 - `apps/desktop/tsconfig.json`：桌面端 TypeScript 编译边界，当前覆盖 React 前端与 `vite.config.ts`，确保桌面壳类型检查在应用边界内闭合。
 - `apps/desktop/vite.config.ts`：桌面端前端构建配置，固定 Tauri 开发端口、约束 HMR 行为并忽略 `src-tauri` 目录变化，避免桌面壳开发时前后端工具链相互误触发。
 - `apps/desktop/src/main.tsx`：桌面端 React 引导入口，当前负责先加载 `@freelyrss/ui/theme.css`，再挂载 `App` 到前端宿主节点；它仍不掺入业务查询或本地状态逻辑。
-- `apps/desktop/src/App.tsx`：阶段 2 Step 12 的桌面壳演示界面，职责是组合 `packages/ui` 暴露的主题根、分栏布局、列表与控件，验证共享展示层已可被真实应用壳消费；它仍刻意不承担读取数据库、查询文章或管理阅读状态的职责。
+- `apps/desktop/src/App.tsx`：阶段 2 Step 13 的桌面壳演示界面，职责是在继续组合 `packages/ui` 展示层的同时，显式消费 `packages/shared-types` 的订阅源、文章、标签与批注 DTO，验证桌面壳已不再依赖局部临时数据形状；它仍刻意不承担读取数据库、查询文章或管理阅读状态的职责。
 - `apps/desktop/src/styles.css`：桌面壳本地样式层，当前只负责页面编排、标题区排版和共享组件组合时的壳级布局，不再承担主题 token 或基础控件样式定义。
 - `apps/desktop/src/vite-env.d.ts`：Vite 客户端类型声明入口，为桌面壳前端提供 `vite/client` 类型边界。
 - `apps/desktop/src-tauri/Cargo.toml`：桌面端专属 Rust 宿主 crate 清单，负责声明 Tauri 构建依赖、运行时依赖与本地 `[workspace]` 边界，避免应用壳误并入根共享 Rust workspace。
@@ -743,8 +743,17 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `packages/ui/src/components/text-input.tsx`：共享文本输入组件，当前封装标签、输入框与提示文本结构，统一输入控件视觉与可读性边界。
 - `packages/ui/src/components/list.tsx`：共享列表组件文件，当前提供 `ListSection` 与 `ListRow` 两种基础构件，用于承载来源列表、文章列表等行式展示场景，但不预先绑定任何数据模型。
 - `packages/ui/src/components/split-layout.tsx`：共享分栏布局组件文件，当前提供 `SplitLayout` 与 `SplitPane`，把三栏阅读器将来要用的网格骨架提前固化为可复用展示层能力。
-- `packages/shared-types/package.json`：共享领域类型包的清单文件，后续对齐数据库 schema、DTO 与状态枚举。
+- `packages/shared-types/package.json`：共享领域类型包的清单文件，当前显式暴露源码入口、`types` 入口与独立 `check` 脚本，并声明本地 TypeScript 依赖，固定该包的分发与校验边界。
 - `packages/shared-types/CHANGELOG.md`：共享类型包的发布说明，用于跟踪 DTO、枚举与领域类型契约变化。
+- `packages/shared-types/tsconfig.json`：共享类型包的 TypeScript 校验边界，确保该包可在不依赖任何应用壳的前提下独立完成严格类型检查。
+- `packages/shared-types/src/index.ts`：共享类型包的统一导出面，集中暴露标识符、基础原语、状态枚举与各领域 DTO，避免应用壳深链引用具体文件。
+- `packages/shared-types/src/ids.ts`：共享领域标识符别名定义，统一 `Feed`、`Folder`、`Article`、`Annotation`、`Rule`、`SmartFolder`、`AIArtifact` 与 `SyncEvent` 等实体 ID 的命名边界。
+- `packages/shared-types/src/primitives.ts`：共享基础原语文件，定义 `Nullable`、ISO 时间字符串、URL、语言代码、缓存路径与 JSON 值等跨模块可复用类型。
+- `packages/shared-types/src/enums.ts`：共享受控枚举集合，当前固化 feed 格式、folder kind、tag scope、附件类型、阅读状态、重要级别、批注类型与 AI Artifact kind 等状态语义。
+- `packages/shared-types/src/organization.ts`：订阅组织与标签相关 DTO 文件，定义 `Folder`、`Tag`、`FeedTag` 与 `ArticleTag` 的共享类型边界。
+- `packages/shared-types/src/feed.ts`：订阅源相关 DTO 文件，定义 `Feed` 基础模型、订阅树摘要模型与树节点联合类型，供桌面壳后续订阅树与源管理界面消费。
+- `packages/shared-types/src/article.ts`：文章阅读相关 DTO 文件，定义 `Article`、`Attachment`、`UserState`、`Annotation` 以及文章列表项与文章详情模型，供后续中栏和右栏阅读界面复用。
+- `packages/shared-types/src/automation.ts`：规则、智能文件夹、AI Artifact 与同步事件相关 DTO 文件，当前以 `JsonValue` 形式保留查询条件、动作定义与同步 payload 边界，为后续 `shared-query` 和同步协议落地预留接口。
 - `packages/shared-query/package.json`：共享查询表达式包的清单文件，后续承载 AST、解析、校验与序列化。
 - `packages/shared-query/CHANGELOG.md`：共享查询表达式包的发布说明，用于跟踪 AST、解析器与序列化协议变化。
 - `packages/shared-config/package.json`：共享配置模型包的清单文件，当前负责暴露 `shared-config` 的公共入口与独立测试脚本，固定该包的分发边界。
@@ -785,6 +794,10 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `@freelyrss/ui/theme.css` 作为显式样式入口、`src/index.ts` 作为显式组件入口，意味着后续 Web 端和移动端 Web 预览若要复用设计系统，可以沿用同一条包消费路径，而不是复制 CSS 或深链源码文件。
 - `packages/ui` 在 pnpm workspace 下需要单独声明 React 类型依赖，说明“共享包能被桌面壳编译”并不等于“共享包已经具备独立类型边界”；这条经验应被沿用到 `shared-types` 与 `shared-query` 的后续落地中。
 - 将桌面壳本地 `styles.css` 收敛为页面编排层，而把 token、焦点态、按钮和列表视觉移入共享包，证明 FreelyRSS 可以在不引入重型 UI 库的前提下建立自己的设计系统边界。
+- Step 13 的关键价值不是“多写几组 TypeScript interface”，而是把桌面壳当前真实消费的数据形状从 `App.tsx` 的局部对象字面量中抽离出来，提前建立跨应用壳共享的数据契约。
+- 将 `shared-types` 拆分为 `ids`、`primitives`、`enums` 与多个领域 DTO 文件，意味着后续桌面端、Web 端、移动端乃至 Rust 边界代码生成都可以只依赖需要的模块，而不是绑定到单一庞大类型文件。
+- 在 `shared-types` 中把 `Rule.conditions`、`SmartFolder.queryDefinition`、`AIArtifact.result` 与 `SyncEvent.payload` 保持为 `JsonValue` 占位，是刻意的阶段控制：先把 schema 槽位固定，再由阶段 2 Step 14 的 `shared-query` 去收敛真正的 AST 与序列化模型，避免类型包抢跑业务解释器设计。
+- 将 `test:types` 纳入根级 `verify` 之后，共享类型契约不再依赖“恰好被桌面壳编译到”才暴露问题，而是拥有与共享配置、Rust 工作区同等级的独立质量门禁。
 
 ## 14. 当前文档职责
 

@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-- 阶段：阶段 2 Step 12 已完成，`packages/ui` 共享 UI 基础包与桌面壳接线均已通过验证，下一步进入阶段 2 Step 13 的共享类型包
+- 阶段：阶段 2 Step 13 已完成，`packages/shared-types` 共享类型包已落地并接入桌面壳，下一步进入阶段 2 Step 14 的共享查询表达式包
 - 最后更新：2026-04-08
-- 风险状态：已从“共享 UI 边界尚未落地”推进到“共享主题与展示层契约已固化”，当前主要风险转为共享类型包在对齐数据库 schema 时避免提前暴露持久化细节或把业务语义硬编码进 UI 基础包
+- 风险状态：已从“共享主题与展示层契约已固化”推进到“前端消费的数据契约已从桌面壳局部 mock 中抽离”，当前主要风险转为在阶段 2 Step 14 中引入共享查询表达式时避免把 AST、SQL 计划或服务端协议细节反向塞回 `shared-types`
 
 ## 已确认决策
 
@@ -20,7 +20,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 2 Step 13 需要把前端消费的 DTO、枚举和领域类型边界定义清楚，同时继续保持 `packages/ui` 为纯展示层。
+- 当前无阻塞；下一步风险点是阶段 2 Step 14 需要把规则、搜索和智能文件夹共用的查询表达式 AST 定义清楚，同时继续保持 `shared-types` 不承载查询解释器或持久化实现。
 
 ## 本次执行记录
 
@@ -161,7 +161,24 @@
 - 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，确认共享 UI 接线后，桌面壳前端产物、Tauri 宿主装配与 Rust 入口链路仍可端到端打通。
 - 当前验证结论：Step 12 通过，可进入阶段 2 Step 13“建立共享类型包”。
 
+### 2026-04-08 - 阶段 2 Step 13：建立共享类型包
+
+- 已将 `packages/shared-types` 从占位包推进为可独立检查的 TypeScript workspace 包，新增 `tsconfig.json`、`src/index.ts`、`src/ids.ts`、`src/primitives.ts`、`src/enums.ts`、`src/organization.ts`、`src/feed.ts`、`src/article.ts` 与 `src/automation.ts`，把标识符、基础 JSON/时间原语、状态枚举和各领域 DTO 拆分到多个文件，避免形成单一“大类型文件”。
+- 已在 `packages/shared-types/package.json` 中补齐 `exports`、`types` 与 `check` 脚本，并为该包补充本地 `typescript` 开发依赖，使共享类型包可以在不依赖桌面壳工具链的前提下独立完成类型校验。
+- 已在根 `package.json` 中新增 `test:types` 并接入 `verify`，把共享类型包纳入统一质量门禁，避免类型契约仅依赖桌面壳偶然消费时才暴露问题。
+- 已在 `apps/desktop/package.json` 中接入 `@freelyrss/shared-types`，并重写 `apps/desktop/src/App.tsx` 的 mock 数据，让订阅源分组、文章列表、阅读详情、标签与批注示例全部受共享 DTO 约束，而不是继续使用壳内临时对象字面量。
+- 已明确保留 `Rule.conditions`、`SmartFolder.queryDefinition`、`AIArtifact.result` 与 `SyncEvent.payload` 为 `JsonValue` 边界，占位承接后续阶段 2 Step 14 的共享查询表达式模型，同时避免在 Step 13 提前硬编码 AST 或服务端协议细节。
+
+### 验证结果
+
+- 已执行 `corepack pnpm install`，确认 `packages/shared-types` 的本地 TypeScript 依赖、桌面壳对 `@freelyrss/shared-types` 的 workspace 依赖以及锁文件更新均可稳定解析。
+- 已执行 `corepack pnpm run test:types`，确认 `packages/shared-types` 可独立通过 `tsc --noEmit` 校验，不依赖桌面壳编译上下文。
+- 已执行 `corepack pnpm run desktop:build`，确认桌面壳在消费 `@freelyrss/shared-types` 后可完成 TypeScript 检查与 Vite 构建。
+- 已执行 `corepack pnpm run verify`，结果通过；其中已包含新接入的 `test:types`，证明共享类型包已纳入仓库统一验证链路。
+- 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，确认共享类型包接线后，桌面壳前端构建、Tauri 宿主装配与 Rust 入口链路仍可端到端打通。
+- 当前验证结论：Step 13 通过，可进入阶段 2 Step 14“建立共享查询表达式包”。
+
 ## 下一步
 
-- 按 `implementation-plan.md` 执行阶段 2 Step 13，在 `packages/shared-types` 中定义桌面端下一步要消费的核心 DTO、状态枚举与领域类型边界。
-- 在共享类型包验证通过后，再继续推进阶段 2 Step 14 的共享查询表达式包与阶段 2 Step 15 的三栏主布局工作。
+- 按 `implementation-plan.md` 执行阶段 2 Step 14，在 `packages/shared-query` 中定义规则、搜索和智能文件夹共用的 AST、序列化边界与校验模型。
+- 在共享查询表达式包验证通过后，再继续推进阶段 2 Step 15 的三栏主布局工作，并让桌面壳从“类型化 mock 数据”演进到“共享查询 + 真实布局状态”。
