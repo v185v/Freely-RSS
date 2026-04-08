@@ -679,7 +679,7 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 
 ### 13.3 当前共享包职责
 
-- `packages/ui`：共享 UI 基础件与主题变量，不承载业务逻辑。
+- `packages/ui`：已承载共享主题变量、布局骨架与基础组件，不承载业务逻辑。
 - `packages/shared-types`：共享领域类型、DTO 和状态枚举。
 - `packages/shared-query`：统一查询表达式 AST、解析、校验和序列化。
 - `packages/shared-config`：共享配置模型、环境变量边界与默认策略。
@@ -696,7 +696,7 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 
 ### 13.5 当前工作区清单与文件职责
 
-当前阶段已经从“纯目录占位”推进到“可被工具链识别的工作区骨架 + 可构建的桌面端应用壳”。这些文件的职责应明确，避免后续把配置堆进单一根文件或单一应用。
+当前阶段已经从“纯目录占位”推进到“可被工具链识别的工作区骨架 + 可构建的桌面端应用壳 + 可被桌面壳实际消费的共享 UI 基础包”。这些文件的职责应明确，避免后续把配置、样式与组件堆进单一根文件或单一应用。
 
 - `package.json`：JS/TS 根工作区入口，声明仓库为私有 workspace、固定 `pnpm` 版本，并集中定义 `Biome`、共享配置测试、Rust 检查、文档链接检查与 `verify` 等统一脚本；当前还补充了 `desktop:dev`、`desktop:build`、`desktop:tauri:dev`、`desktop:tauri:build` 四个桌面壳入口，避免桌面运行命令继续散落到应用目录内。
 - `pnpm-workspace.yaml`：声明 `apps/*` 与 `packages/*` 为 JS/TS 工作区扫描边界，让桌面端、Web 端、移动端和共享包在单仓下统一发现。
@@ -710,14 +710,14 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `Cargo.toml`：Rust 根工作区入口，负责声明 `crates/*` 为 workspace members，并统一 edition、version、license、publish 等共享元数据。
 - `Cargo.lock`：记录当前 Rust 工作区的锁定解析结果；随着服务端和桌面 Rust 能力落地，应作为可复现构建的一部分保留。
 - `scripts/check-doc-links.mjs`：文档本地链接校验脚本，跨平台校验 Markdown 内部路径，作为 CI 与本地 `verify` 的统一检查实现，避免链接漂移进入主分支。
-- `apps/desktop/package.json`：桌面端前端壳的包入口，当前负责声明 React/Vite/Tauri CLI 依赖与 `dev`、`build`、`preview`、`tauri` 四类脚本，是桌面壳前端入口与 Tauri CLI 的交汇点。
+- `apps/desktop/package.json`：桌面端前端壳的包入口，当前负责声明 React/Vite/Tauri CLI 与 `@freelyrss/ui` 依赖，并暴露 `dev`、`build`、`preview`、`tauri` 四类脚本，是桌面壳前端入口、共享 UI 包与 Tauri CLI 的交汇点。
 - `apps/desktop/CHANGELOG.md`：桌面端发布线的用户可见变更记录，避免桌面端变更混入其他应用或共享包的发布说明。
 - `apps/desktop/index.html`：桌面端前端宿主文档，提供 Vite 挂载点并定义应用窗口标题入口。
 - `apps/desktop/tsconfig.json`：桌面端 TypeScript 编译边界，当前覆盖 React 前端与 `vite.config.ts`，确保桌面壳类型检查在应用边界内闭合。
 - `apps/desktop/vite.config.ts`：桌面端前端构建配置，固定 Tauri 开发端口、约束 HMR 行为并忽略 `src-tauri` 目录变化，避免桌面壳开发时前后端工具链相互误触发。
-- `apps/desktop/src/main.tsx`：桌面端 React 引导入口，只负责挂载 `App` 到前端宿主节点，不掺入业务查询或本地状态逻辑。
-- `apps/desktop/src/App.tsx`：阶段 2 Step 11 的最小桌面壳界面，占位展示“桌面宿主链路已接通”，刻意不提前承担共享 UI 或三栏阅读器职责。
-- `apps/desktop/src/styles.css`：仅供桌面壳当前占位界面使用的本地样式层；在共享设计系统落地前，它负责壳级视觉占位，不应被误当作长期共享主题入口。
+- `apps/desktop/src/main.tsx`：桌面端 React 引导入口，当前负责先加载 `@freelyrss/ui/theme.css`，再挂载 `App` 到前端宿主节点；它仍不掺入业务查询或本地状态逻辑。
+- `apps/desktop/src/App.tsx`：阶段 2 Step 12 的桌面壳演示界面，职责是组合 `packages/ui` 暴露的主题根、分栏布局、列表与控件，验证共享展示层已可被真实应用壳消费；它仍刻意不承担读取数据库、查询文章或管理阅读状态的职责。
+- `apps/desktop/src/styles.css`：桌面壳本地样式层，当前只负责页面编排、标题区排版和共享组件组合时的壳级布局，不再承担主题 token 或基础控件样式定义。
 - `apps/desktop/src/vite-env.d.ts`：Vite 客户端类型声明入口，为桌面壳前端提供 `vite/client` 类型边界。
 - `apps/desktop/src-tauri/Cargo.toml`：桌面端专属 Rust 宿主 crate 清单，负责声明 Tauri 构建依赖、运行时依赖与本地 `[workspace]` 边界，避免应用壳误并入根共享 Rust workspace。
 - `apps/desktop/src-tauri/build.rs`：Tauri 构建脚本入口，把窗口配置、能力清单、图标与前端产物元数据编译进宿主程序。
@@ -732,8 +732,17 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `apps/mobile/package.json`：移动端应用包清单，后续承接 React Native + Expo 工程配置。
 - `apps/mobile/CHANGELOG.md`：移动端发布线的变更记录，后续用于独立跟踪阅读端与播客端迭代。
 - `apps/sync-server/`：当前仅保留目录边界，尚未加入任何 workspace；等同步服务脚手架开始时，再作为独立 Rust 应用接入。
-- `packages/ui/package.json`：共享 UI 包的清单文件，后续只承载设计系统、布局与基础组件，不混入业务查询与数据访问。
+- `packages/ui/package.json`：共享 UI 包的清单文件，当前显式暴露源码入口与 `theme.css` 样式入口，并声明 React peer dependency 与本地 React 类型依赖，固定该包的分发与类型边界。
 - `packages/ui/CHANGELOG.md`：共享 UI 包的发布说明，专门记录设计系统与基础组件层的对外变化。
+- `packages/ui/src/index.ts`：共享 UI 包的统一导出面，集中暴露主题根、布局骨架、基础表面、按钮、输入框与列表组件，避免应用壳直接引用深层源码路径。
+- `packages/ui/src/theme.css`：共享 UI 的主题 token 与基础样式入口，定义颜色、字体、边框、阴影、焦点态与响应式分栏规则，是桌面壳与后续其他应用壳共享视觉契约的核心文件。
+- `packages/ui/src/lib/cx.ts`：共享 UI 的轻量类名拼接工具，避免在每个基础组件中重复实现样式类收敛逻辑。
+- `packages/ui/src/components/theme-root.tsx`：共享主题根组件，负责挂载主题作用域 class，让应用壳可以显式选择何处启用 FreelyRSS 设计 token。
+- `packages/ui/src/components/surface.tsx`：共享表面容器组件，收敛卡片/面板级边框、背景、圆角与紧凑模式样式。
+- `packages/ui/src/components/button.tsx`：共享按钮组件，当前封装主按钮、次按钮、幽灵按钮与尺寸变体，不包含任何业务动作语义。
+- `packages/ui/src/components/text-input.tsx`：共享文本输入组件，当前封装标签、输入框与提示文本结构，统一输入控件视觉与可读性边界。
+- `packages/ui/src/components/list.tsx`：共享列表组件文件，当前提供 `ListSection` 与 `ListRow` 两种基础构件，用于承载来源列表、文章列表等行式展示场景，但不预先绑定任何数据模型。
+- `packages/ui/src/components/split-layout.tsx`：共享分栏布局组件文件，当前提供 `SplitLayout` 与 `SplitPane`，把三栏阅读器将来要用的网格骨架提前固化为可复用展示层能力。
 - `packages/shared-types/package.json`：共享领域类型包的清单文件，后续对齐数据库 schema、DTO 与状态枚举。
 - `packages/shared-types/CHANGELOG.md`：共享类型包的发布说明，用于跟踪 DTO、枚举与领域类型契约变化。
 - `packages/shared-query/package.json`：共享查询表达式包的清单文件，后续承载 AST、解析、校验与序列化。
@@ -772,6 +781,10 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `tauri.conf.json` 中的 `beforeDevCommand` / `beforeBuildCommand` 与 `frontendDist` 把前端产物定义为宿主层的显式输入，这能让后续 `packages/ui`、共享类型和三栏布局在不触碰 Rust 壳层的前提下独立演进。
 - 当前 `App.tsx` 与 `styles.css` 保持壳级占位而不提前复用 `packages/ui`，是刻意的阶段控制：先验证桌面入口链路，再在 Step 12 单独收敛共享设计系统边界，避免“为了有界面”反向污染共享包。
 - 在 `biome.json` 与 `src-tauri/.gitignore` 中显式忽略 `dist/`、`gen/` 与 `target/`，实质上是在架构层把“源码边界”和“生成物边界”分开；否则 Tauri 的生成文件会持续干扰仓库质量门禁与代码审阅噪音。
+- Step 12 的关键价值不是“把界面做得更像产品”，而是把“应用壳组合层”和“共享展示层”真正拆开：`packages/ui` 开始承接 token、布局骨架与基础控件，桌面壳只负责组合演示。
+- `@freelyrss/ui/theme.css` 作为显式样式入口、`src/index.ts` 作为显式组件入口，意味着后续 Web 端和移动端 Web 预览若要复用设计系统，可以沿用同一条包消费路径，而不是复制 CSS 或深链源码文件。
+- `packages/ui` 在 pnpm workspace 下需要单独声明 React 类型依赖，说明“共享包能被桌面壳编译”并不等于“共享包已经具备独立类型边界”；这条经验应被沿用到 `shared-types` 与 `shared-query` 的后续落地中。
+- 将桌面壳本地 `styles.css` 收敛为页面编排层，而把 token、焦点态、按钮和列表视觉移入共享包，证明 FreelyRSS 可以在不引入重型 UI 库的前提下建立自己的设计系统边界。
 
 ## 14. 当前文档职责
 

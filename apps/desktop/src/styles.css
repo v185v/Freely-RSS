@@ -1,99 +1,125 @@
-:root {
-  color-scheme: dark;
-  font-family: "Segoe UI", "Helvetica Neue", sans-serif;
-  background: radial-gradient(circle at top, rgba(73, 115, 233, 0.28), transparent 40%),
-    linear-gradient(180deg, #0f1421 0%, #070b13 100%);
-  color: #f3f6fb;
-}
-
-* {
-  box-sizing: border-box;
-}
-
 html,
 body,
 #root {
   margin: 0;
-  min-height: 100%;
-}
-
-body {
   min-height: 100vh;
 }
 
-.shell {
+.desktop-shell {
   display: grid;
+  gap: 24px;
   min-height: 100vh;
-  place-items: center;
-  padding: 32px;
+  padding: 24px;
 }
 
-.shell__panel {
-  width: min(720px, 100%);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 24px;
-  padding: 32px;
-  background: rgba(8, 13, 24, 0.78);
-  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.42);
-  backdrop-filter: blur(18px);
+.desktop-shell__header {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 420px);
+  align-items: end;
 }
 
-.shell__eyebrow {
+.desktop-shell__title-block {
+  display: grid;
+  gap: 14px;
+}
+
+.desktop-shell__eyebrow {
   margin: 0 0 12px;
-  color: #90b8ff;
+  color: var(--fr-accent);
   font-size: 0.875rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.shell__panel h1 {
-  margin: 0 0 16px;
+.desktop-shell h1 {
+  margin: 0;
+  font-family: var(--fr-font-display);
   font-size: clamp(2rem, 4vw, 3rem);
-  line-height: 1.05;
+  line-height: 1.02;
 }
 
-.shell__body {
-  margin: 0;
-  max-width: 58ch;
-  color: rgba(243, 246, 251, 0.82);
+.desktop-shell__lead {
+  max-width: 62ch;
+  color: var(--fr-text-muted);
   font-size: 1.05rem;
   line-height: 1.7;
 }
 
-.shell__facts {
+.desktop-shell__controls {
   display: grid;
-  gap: 16px;
-  margin: 28px 0 0;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
 }
 
-.shell__facts div {
-  padding: 16px 18px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.04);
+.desktop-shell__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
-.shell__facts dt {
-  margin: 0 0 8px;
-  color: rgba(243, 246, 251, 0.58);
-  font-size: 0.8rem;
-  letter-spacing: 0.06em;
+.desktop-note {
+  display: grid;
+  gap: 10px;
+  background: linear-gradient(180deg, rgba(15, 27, 33, 0.92), rgba(8, 15, 20, 0.88));
+}
+
+.desktop-note__label {
+  color: var(--fr-success);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.shell__facts dd {
-  margin: 0;
+.desktop-panel {
+  height: 100%;
+}
+
+.desktop-panel--reader {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+
+.desktop-reader__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--fr-text-faint);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.desktop-reader__title {
+  font-family: var(--fr-font-display);
+  font-size: clamp(1.8rem, 3vw, 2.5rem);
+  line-height: 1.08;
+}
+
+.desktop-reader__body {
+  color: var(--fr-text-muted);
   font-size: 1rem;
-  font-weight: 600;
+  line-height: 1.75;
+}
+
+.desktop-reader__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 8px;
+}
+
+@media (max-width: 920px) {
+  .desktop-shell__header {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 640px) {
-  .shell {
+  .desktop-shell {
     padding: 18px;
-  }
-
-  .shell__panel {
-    padding: 24px;
   }
 }

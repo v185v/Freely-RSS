@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-- 阶段：阶段 2 Step 11 已完成，`apps/desktop` 的 Tauri + React + TypeScript + Vite 桌面端应用壳已初始化并通过验证，下一步进入阶段 2 Step 12 的共享 UI 基础包
-- 最后更新：2026-04-07
-- 风险状态：已从“桌面端壳尚未接线”推进到“桌面端壳已可构建验证”，当前主要风险转为共享 UI 边界设计是否足够克制，以及后续三栏布局接入时避免把业务逻辑提前沉积到应用壳
+- 阶段：阶段 2 Step 12 已完成，`packages/ui` 共享 UI 基础包与桌面壳接线均已通过验证，下一步进入阶段 2 Step 13 的共享类型包
+- 最后更新：2026-04-08
+- 风险状态：已从“共享 UI 边界尚未落地”推进到“共享主题与展示层契约已固化”，当前主要风险转为共享类型包在对齐数据库 schema 时避免提前暴露持久化细节或把业务语义硬编码进 UI 基础包
 
 ## 已确认决策
 
@@ -20,7 +20,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 2 Step 12 需要把共享 UI 保持为纯展示与主题层，避免在 `packages/ui` 过早掺入阅读器业务查询与状态逻辑。
+- 当前无阻塞；下一步风险点是阶段 2 Step 13 需要把前端消费的 DTO、枚举和领域类型边界定义清楚，同时继续保持 `packages/ui` 为纯展示层。
 
 ## 本次执行记录
 
@@ -144,7 +144,24 @@
 - 说明：当前机器上 `crates.io` 直连在 Cargo 拉取依赖时表现不稳定，因此桌面壳 Rust/Tauri 验证命令使用了临时 `rsproxy` registry override；该镜像配置未写入仓库文件，仅用于本次环境中的验证拉取。
 - 当前验证结论：Step 11 通过，可进入阶段 2 Step 12“建立共享 UI 基础包”。
 
+### 2026-04-08 - 阶段 2 Step 12：建立共享 UI 基础包
+
+- 已在 `packages/ui` 中建立共享 UI 基础包源码目录，新增 `src/index.ts`、`src/theme.css`、`src/lib/cx.ts` 与 `src/components/*`，把主题变量、分栏布局、卡片表面、按钮、输入框、列表分组和列表行拆分为多个纯展示层模块。
+- 已将 `packages/ui/package.json` 从占位清单推进为可消费的 workspace 包，显式暴露包入口与 `theme.css` 样式入口，并补齐 React peer dependency 与本地 `@types/react` 开发依赖，保证共享包在 pnpm workspace 边界下具备稳定类型解析。
+- 已将 `apps/desktop/package.json` 接入 `@freelyrss/ui`，并在 `apps/desktop/src/main.tsx` 中显式引入 `@freelyrss/ui/theme.css`，使桌面壳不再依赖本地全局主题定义。
+- 已重写 `apps/desktop/src/App.tsx`，让桌面壳使用共享包中的 `ThemeRoot`、`SplitLayout`、`SplitPane`、`Surface`、`TextInput`、`Button`、`ListSection` 与 `ListRow` 组合出三栏预览界面，验证共享样式和组件边界已可服务后续阅读器布局。
+- 已收敛 `apps/desktop/src/styles.css` 的职责，使其只负责桌面壳级组合与页面编排，不再承担长期共享设计系统角色。
+- 本步骤中出现过一次类型边界问题：`packages/ui` 作为独立 workspace 包无法直接复用桌面壳的 React 类型声明；已通过在 `packages/ui` 内补齐 `@types/react` 解决，避免后续共享前端包重复踩到同类问题。
+
+### 验证结果
+
+- 已执行 `corepack pnpm install`，确认新增 workspace 依赖与共享包类型依赖均可被锁定与解析。
+- 已执行 `corepack pnpm run desktop:build`，确认桌面壳在消费 `@freelyrss/ui` 后可完成 TypeScript 检查与 Vite 产物构建。
+- 已执行 `corepack pnpm run verify`，结果通过；其中包含 `format:check`、`lint`、`test:config`、`rust:fmt:check`、`rust:clippy`、`test:rust` 与 `docs:links`。
+- 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，确认共享 UI 接线后，桌面壳前端产物、Tauri 宿主装配与 Rust 入口链路仍可端到端打通。
+- 当前验证结论：Step 12 通过，可进入阶段 2 Step 13“建立共享类型包”。
+
 ## 下一步
 
-- 按 `implementation-plan.md` 执行阶段 2 Step 12，在 `packages/ui` 中建立共享 UI 基础包与主题变量边界。
-- 在共享 UI 基础包验证通过后，再继续推进阶段 2 Step 13 与 Step 15 的共享类型和三栏主布局工作。
+- 按 `implementation-plan.md` 执行阶段 2 Step 13，在 `packages/shared-types` 中定义桌面端下一步要消费的核心 DTO、状态枚举与领域类型边界。
+- 在共享类型包验证通过后，再继续推进阶段 2 Step 14 的共享查询表达式包与阶段 2 Step 15 的三栏主布局工作。
