@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-- 阶段：阶段 2 Step 14 已完成，`packages/shared-query` 共享查询表达式包已落地并纳入根级验证链路，下一步进入阶段 2 Step 15 的三栏主布局工作
+- 阶段：阶段 2 Step 15 已完成，桌面壳的稳定三栏主布局已落地并纳入桌面端与根级验证链路，下一步进入阶段 2 Step 16 的导航与视图状态框架工作
 - 最后更新：2026-04-08
-- 风险状态：已从“前端消费的数据契约已从桌面壳局部 mock 中抽离”推进到“规则、搜索与智能文件夹已拥有共享查询边界”，当前主要风险转为在阶段 2 Step 15 中接入真实三栏状态时避免把布局状态、查询状态和后续数据访问层耦合进单一桌面壳组件
+- 风险状态：已从“规则、搜索与智能文件夹已拥有共享查询边界”推进到“桌面壳已拥有稳定的三栏阅读骨架与本地选择态”，当前主要风险转为在阶段 2 Step 16 中引入导航、视图状态与后续数据访问入口时继续保持左栏来源上下文、中栏列表状态和右栏阅读上下文的分层边界
 
 ## 已确认决策
 
@@ -20,7 +20,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 2 Step 15 需要把左栏来源上下文、中栏文章列表和右栏阅读面板的布局状态梳理清楚，同时继续保持 `packages/ui` 只承载展示骨架、`shared-query` 只承载查询边界。
+- 当前无阻塞；下一步风险点是阶段 2 Step 16 需要在不回退成单体 `App.tsx` 的前提下，引入显式导航与视图状态来源，同时继续保持 `packages/ui` 只承载展示骨架、`shared-query` 只承载查询边界、桌面壳只承载组合与局部选择状态。
 
 ## 本次执行记录
 
@@ -194,7 +194,22 @@
 - 已执行 `corepack pnpm run verify`，结果通过；其中包含 `format:check`、`lint`、`test:config`、`test:types`、新增的 `test:query`、`rust:fmt:check`、`rust:clippy`、`test:rust` 与 `docs:links`，证明当前步骤已纳入仓库统一验证链路。
 - 当前验证结论：Step 14 通过，可进入阶段 2 Step 15“实现三栏主布局”。
 
+### 2026-04-08 - 阶段 2 Step 15：实现三栏主布局
+
+- 已重写 `apps/desktop/src/App.tsx`，把桌面壳从“共享包接线演示”推进为真正的三栏阅读器骨架：左栏承载来源上下文与订阅树占位，中栏承载文章队列与选中文章状态，右栏承载阅读面板与空状态回退。
+- 已在桌面壳内显式收敛本步骤允许的局部状态，只保留 `selectedSourceId` 与 `selectedArticleId` 两类本地选择态，用于证明三栏交互骨架成立，但不提前引入真实查询执行、路由或数据库访问。
+- 已继续复用 `packages/ui` 中的 `ThemeRoot`、`SplitLayout`、`SplitPane`、`Surface`、`TextInput`、`Button`、`ListSection` 与 `ListRow`，确认共享 UI 仍只提供展示层构件，桌面壳负责组合出阅读器结构，而不是把业务语义下沉回共享展示包。
+- 已更新 `apps/desktop/src/styles.css`，为三栏壳补齐壳级响应式重排、滚动容器、空状态与阅读面板排版规则，确保窄窗口下右栏可下沉而不破坏左栏与中栏的基本可读性。
+- 已保留当前阶段的数据边界为共享 DTO + 本地 mock：来源、文章、详情、标签、批注和附件示例仍受 `@freelyrss/shared-types` 约束，但不在本步骤越过 `implementation-plan.md` 去接入真实数据访问层。
+
+### 验证结果
+
+- 已执行 `corepack pnpm run desktop:build`，确认桌面壳在引入真实三栏骨架和局部选择态后，仍可完成 TypeScript 检查与 Vite 构建。
+- 已执行 `corepack pnpm run verify`，结果通过；其中包含 `format:check`、`lint`、`test:config`、`test:types`、`test:query`、`rust:fmt:check`、`rust:clippy`、`test:rust` 与 `docs:links`，证明阶段 2 Step 15 已纳入仓库统一质量门禁。
+- 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，确认三栏主布局接入后，桌面壳前端构建、Tauri 宿主装配与 Rust 入口链路仍可端到端打通，生成 `apps/desktop/src-tauri/target/debug/freelyrss-desktop.exe`。
+- 当前验证结论：Step 15 通过，可进入阶段 2 Step 16“建立导航与视图状态框架”。
+
 ## 下一步
 
-- 按 `implementation-plan.md` 执行阶段 2 Step 15，先在桌面壳中搭建左栏订阅树、中栏文章列表、右栏阅读面板的稳定三栏骨架，并保持当前步骤不引入真实数据访问层。
-- 在三栏主布局验证通过后，再继续推进阶段 2 Step 16 的导航与视图状态框架工作，让桌面壳从“共享查询边界已存在”演进到“共享查询 + 布局状态 + 选中状态”分层清晰的阅读器壳。
+- 按 `implementation-plan.md` 执行阶段 2 Step 16，在当前三栏骨架之上补齐导航与视图状态框架，显式定义“当前来源”“当前视图/过滤条件”“当前选中文章”的状态来源与组合方式。
+- 在推进 Step 16 时继续保持当前边界：桌面壳只组合局部状态与展示结构，不把真实查询执行、持久化访问或后续同步入口耦合回单一 `App.tsx`。
