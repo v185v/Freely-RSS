@@ -681,7 +681,7 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 
 - `packages/ui`：已承载共享主题变量、布局骨架与基础组件，不承载业务逻辑。
 - `packages/shared-types`：共享领域标识符、基础原语、状态枚举与前端消费 DTO，承接桌面端、Web 端、移动端对统一数据契约的依赖，但不承载查询解释器或 React 展示逻辑。
-- `packages/shared-query`：统一查询表达式 AST、解析、校验和序列化。
+- `packages/shared-query`：统一规则、搜索与智能文件夹的查询 AST、双输入归一化、序列化与 SQL 计划边界，不承载具体数据库执行器或 UI 状态。
 - `packages/shared-config`：共享配置模型、环境变量边界与默认策略。
 
 ### 13.4 当前 Rust crate 职责
@@ -754,8 +754,21 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `packages/shared-types/src/feed.ts`：订阅源相关 DTO 文件，定义 `Feed` 基础模型、订阅树摘要模型与树节点联合类型，供桌面壳后续订阅树与源管理界面消费。
 - `packages/shared-types/src/article.ts`：文章阅读相关 DTO 文件，定义 `Article`、`Attachment`、`UserState`、`Annotation` 以及文章列表项与文章详情模型，供后续中栏和右栏阅读界面复用。
 - `packages/shared-types/src/automation.ts`：规则、智能文件夹、AI Artifact 与同步事件相关 DTO 文件，当前以 `JsonValue` 形式保留查询条件、动作定义与同步 payload 边界，为后续 `shared-query` 和同步协议落地预留接口。
-- `packages/shared-query/package.json`：共享查询表达式包的清单文件，后续承载 AST、解析、校验与序列化。
+- `packages/shared-query/package.json`：共享查询表达式包的清单文件，当前显式暴露源码入口、独立 `check` / `test` 脚本与本地 TypeScript 依赖，固定该包的分发和验证边界。
 - `packages/shared-query/CHANGELOG.md`：共享查询表达式包的发布说明，用于跟踪 AST、解析器与序列化协议变化。
+- `packages/shared-query/tsconfig.json`：共享查询表达式包的 TypeScript 校验边界，当前采用 `NodeNext` 与 `allowImportingTsExtensions`，让源码既能被工作区类型检查，也能被 Node 原生测试直接消费。
+- `packages/shared-query/src/index.ts`：共享查询表达式包的统一导出面，集中暴露 AST、构造器、文本解析、校验、序列化与 SQL 计划接口，避免调用方深链引用实现文件。
+- `packages/shared-query/src/json.ts`：共享查询表达式包内部的 JSON 原语定义，专门服务查询 AST 的序列化与反序列化边界，不反向依赖 `shared-types`。
+- `packages/shared-query/src/ast.ts`：查询表达式的核心语法树定义，固化查询节点、字段集合、操作符集合、排序定义与版本号，是规则、搜索和智能文件夹共享的结构性契约。
+- `packages/shared-query/src/errors.ts`：查询校验错误模型，提供带路径与错误码的结构化问题输出，避免后续调用方只能拿到模糊字符串异常。
+- `packages/shared-query/src/schema.ts`：查询字段 schema 注册表，集中维护字段别名、默认操作符、合法操作符与枚举取值，防止构造器、解析器和执行计划层各自维护一套字段知识。
+- `packages/shared-query/src/normalize.ts`：查询归一化模块，负责拍平同类分组、消解双重取反与复制可变值，确保不同输入路径最终收敛到稳定 AST 形状。
+- `packages/shared-query/src/validate.ts`：查询校验器，负责拒绝非法字段、非法操作符、空列表和值类型不匹配的谓词，把错误前移到共享查询边界。
+- `packages/shared-query/src/builder.ts`：可视化构造器侧的 AST 生成入口，提供显式的谓词、文本项、分组与取反构造函数，用于把 UI 侧结构化条件稳定映射到 AST。
+- `packages/shared-query/src/text-query.ts`：文本查询解析入口，当前支持字段前缀、`is:` / `has:` 语义、`after:` / `before:` 时间条件、排序声明以及 `AND` / `OR` / `NOT` 的最小文本语法，并统一落到 AST。
+- `packages/shared-query/src/serialize.ts`：查询 AST 的 JSON 序列化与反序列化入口，负责在持久化与传输边界保持查询定义的结构稳定，同时复用共享校验器防止无效查询入库。
+- `packages/shared-query/src/sql-plan.ts`：SQL 查询计划编译器，当前把 AST 收敛为 SQLite 导向的 `where` / `join` / `order by` 计划，明确 `Feed`、`UserState`、`Attachment`、`Tag` 等实体参与查询时的装配方式，但仍故意停留在“计划”而非“执行器”层。
+- `packages/shared-query/test/query.test.mjs`：共享查询包的 Node 原生验收测试，当前覆盖可视化构造器与文本查询生成等价 AST、序列化往返、SQL 计划编译和非法谓词校验，是阶段 2 Step 14 的主要自动化验收文件。
 - `packages/shared-config/package.json`：共享配置模型包的清单文件，当前负责暴露 `shared-config` 的公共入口与独立测试脚本，固定该包的分发边界。
 - `packages/shared-config/CHANGELOG.md`：共享配置包的发布说明，用于记录配置模型、默认策略与环境边界的外部变化。
 - `packages/shared-config/README.md`：共享配置包的使用说明，明确环境变量命名、来源优先级、配置覆盖范围与校验规则，作为桌面端和测试环境接线前的契约文档。
@@ -798,6 +811,12 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - 将 `shared-types` 拆分为 `ids`、`primitives`、`enums` 与多个领域 DTO 文件，意味着后续桌面端、Web 端、移动端乃至 Rust 边界代码生成都可以只依赖需要的模块，而不是绑定到单一庞大类型文件。
 - 在 `shared-types` 中把 `Rule.conditions`、`SmartFolder.queryDefinition`、`AIArtifact.result` 与 `SyncEvent.payload` 保持为 `JsonValue` 占位，是刻意的阶段控制：先把 schema 槽位固定，再由阶段 2 Step 14 的 `shared-query` 去收敛真正的 AST 与序列化模型，避免类型包抢跑业务解释器设计。
 - 将 `test:types` 纳入根级 `verify` 之后，共享类型契约不再依赖“恰好被桌面壳编译到”才暴露问题，而是拥有与共享配置、Rust 工作区同等级的独立质量门禁。
+- Step 14 的关键价值不是“提前把搜索语法做复杂”，而是把规则、搜索和智能文件夹共享的查询语义从应用壳和未来执行层中抽离出来，先固化统一 AST 与输入归一化边界。
+- `shared-query` 同时提供“可视化构造器 -> AST”和“文本查询 -> AST”两条入口，意味着后续 UI 可以自由切换交互方式，而不必维护两套彼此漂移的筛选语义。
+- 将字段别名、默认操作符、合法操作符和枚举值集中收敛到 `src/schema.ts`，避免解析器、校验器和 SQL 计划层分别复制一份字段知识，降低后续字段扩展时的漏改风险。
+- `src/normalize.ts` 的存在说明 FreelyRSS 当前并不把“用户输入长什么样”直接等同于“持久化 AST 长什么样”；规范化层先把输入收敛，再交给序列化、规则引擎和未来数据库层消费。
+- `src/sql-plan.ts` 明确只输出轻量查询计划而不直接访问数据库，是当前阶段的重要边界控制：先固定查询语义和表关联策略，再在阶段 3 的 SQLite 落地中决定真正的执行器、索引利用和 FTS 结合方式。
+- 将 `test:query` 纳入根级 `verify` 后，共享查询包不再依赖未来桌面壳偶然消费或 Rust 引擎接线时才暴露问题，而是成为与 `shared-types`、`shared-config` 同级的独立质量门禁。
 
 ## 14. 当前文档职责
 

@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-- 阶段：阶段 2 Step 13 已完成，`packages/shared-types` 共享类型包已落地并接入桌面壳，下一步进入阶段 2 Step 14 的共享查询表达式包
+- 阶段：阶段 2 Step 14 已完成，`packages/shared-query` 共享查询表达式包已落地并纳入根级验证链路，下一步进入阶段 2 Step 15 的三栏主布局工作
 - 最后更新：2026-04-08
-- 风险状态：已从“共享主题与展示层契约已固化”推进到“前端消费的数据契约已从桌面壳局部 mock 中抽离”，当前主要风险转为在阶段 2 Step 14 中引入共享查询表达式时避免把 AST、SQL 计划或服务端协议细节反向塞回 `shared-types`
+- 风险状态：已从“前端消费的数据契约已从桌面壳局部 mock 中抽离”推进到“规则、搜索与智能文件夹已拥有共享查询边界”，当前主要风险转为在阶段 2 Step 15 中接入真实三栏状态时避免把布局状态、查询状态和后续数据访问层耦合进单一桌面壳组件
 
 ## 已确认决策
 
@@ -20,7 +20,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 2 Step 14 需要把规则、搜索和智能文件夹共用的查询表达式 AST 定义清楚，同时继续保持 `shared-types` 不承载查询解释器或持久化实现。
+- 当前无阻塞；下一步风险点是阶段 2 Step 15 需要把左栏来源上下文、中栏文章列表和右栏阅读面板的布局状态梳理清楚，同时继续保持 `packages/ui` 只承载展示骨架、`shared-query` 只承载查询边界。
 
 ## 本次执行记录
 
@@ -178,7 +178,23 @@
 - 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，确认共享类型包接线后，桌面壳前端构建、Tauri 宿主装配与 Rust 入口链路仍可端到端打通。
 - 当前验证结论：Step 13 通过，可进入阶段 2 Step 14“建立共享查询表达式包”。
 
+### 2026-04-08 - 阶段 2 Step 14：建立共享查询表达式包
+
+- 已将 `packages/shared-query` 从占位包推进为可独立校验和测试的 TypeScript workspace 包，补齐 `tsconfig.json`、`src/index.ts` 与 `test/query.test.mjs`，使其具备明确的源码入口、类型边界与包级验证入口。
+- 已在 `packages/shared-query/src/ast.ts` 中固化规则、搜索和智能文件夹共用的查询 AST、排序定义与受控字段集合，并在 `src/schema.ts` 中集中维护字段别名、默认操作符、合法操作符与枚举取值，避免查询语义散落到应用壳或未来执行层。
+- 已在 `packages/shared-query/src/builder.ts` 中提供“可视化构造器 -> AST”的构造接口，在 `src/text-query.ts` 中提供“文本查询 -> AST”的最小解析路径，并用 `src/normalize.ts` 统一收敛分组、取反与单子节点归一化，保证两种输入最终落到同一结构。
+- 已在 `packages/shared-query/src/validate.ts` 与 `src/errors.ts` 中建立查询校验边界，显式拒绝非法字段、非法操作符、错误值类型和空列表谓词，避免把无效查询推迟到后续 Rust 引擎或数据库层才暴露。
+- 已在 `packages/shared-query/src/serialize.ts` 中建立 AST 的 JSON 序列化与反序列化边界，在 `src/sql-plan.ts` 中输出面向 SQLite schema 的轻量 SQL 查询计划，当前覆盖 `Article`、`Feed`、`UserState`、`Attachment`、`Tag` 等核心实体的 where/join/order by 规划，但不在此阶段引入真实数据库执行器。
+- 已在根 `package.json` 中新增 `test:query` 并接入 `verify`，使共享查询包拥有与共享配置、共享类型和 Rust workspace 同等级的独立质量门禁。
+
+### 验证结果
+
+- 已执行 `corepack pnpm install`，确认 `packages/shared-query` 的本地 TypeScript 依赖、脚本入口与锁文件状态均可稳定解析。
+- 已执行 `corepack pnpm run test:query`，确认共享查询包可独立通过 `tsc --noEmit` 校验，并通过 4 个 Node 原生测试：构造器与文本查询归一化等价、JSON 序列化往返、SQL 计划编译输出、非法谓词校验。
+- 已执行 `corepack pnpm run verify`，结果通过；其中包含 `format:check`、`lint`、`test:config`、`test:types`、新增的 `test:query`、`rust:fmt:check`、`rust:clippy`、`test:rust` 与 `docs:links`，证明当前步骤已纳入仓库统一验证链路。
+- 当前验证结论：Step 14 通过，可进入阶段 2 Step 15“实现三栏主布局”。
+
 ## 下一步
 
-- 按 `implementation-plan.md` 执行阶段 2 Step 14，在 `packages/shared-query` 中定义规则、搜索和智能文件夹共用的 AST、序列化边界与校验模型。
-- 在共享查询表达式包验证通过后，再继续推进阶段 2 Step 15 的三栏主布局工作，并让桌面壳从“类型化 mock 数据”演进到“共享查询 + 真实布局状态”。
+- 按 `implementation-plan.md` 执行阶段 2 Step 15，先在桌面壳中搭建左栏订阅树、中栏文章列表、右栏阅读面板的稳定三栏骨架，并保持当前步骤不引入真实数据访问层。
+- 在三栏主布局验证通过后，再继续推进阶段 2 Step 16 的导航与视图状态框架工作，让桌面壳从“共享查询边界已存在”演进到“共享查询 + 布局状态 + 选中状态”分层清晰的阅读器壳。
