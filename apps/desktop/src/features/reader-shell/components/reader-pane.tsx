@@ -1,3 +1,5 @@
+import type { Ref } from "react"
+
 import type { ArticleDetailDto } from "@freelyrss/shared-types"
 import { Button, SplitPane, Surface } from "@freelyrss/ui"
 
@@ -5,25 +7,48 @@ import { formatReaderProgress } from "../selectors"
 
 type ReaderPaneProps = {
   activeDetail: ArticleDetailDto | null
+  describedBy?: string
+  headingId: string
+  paneId: string
+  paneRef?: Ref<HTMLElement>
 }
 
-export function ReaderPane({ activeDetail }: ReaderPaneProps) {
+export function ReaderPane({
+  activeDetail,
+  describedBy,
+  headingId,
+  paneId,
+  paneRef,
+}: ReaderPaneProps) {
   const readerParagraphs = activeDetail?.article.contentExtracted?.split("\n\n") ?? []
 
   return (
-    <SplitPane aria-label="Reading panel" className="desktop-pane">
+    <SplitPane
+      aria-describedby={describedBy}
+      aria-keyshortcuts="Alt+4"
+      aria-labelledby={headingId}
+      className="desktop-pane"
+      id={paneId}
+      ref={paneRef}
+      tabIndex={-1}
+    >
       <Surface className="desktop-pane__surface desktop-pane__surface--reader">
+        <div className="desktop-pane__header">
+          <p className="desktop-pane__eyebrow">Right pane</p>
+          <h2 id={headingId}>Reading panel</h2>
+          {activeDetail ? (
+            <p className="desktop-pane__focus-title">{activeDetail.article.title}</p>
+          ) : (
+            <p className="desktop-pane__focus-title">No article selected yet</p>
+          )}
+          <p className="desktop-pane__description">
+            The selected article comes from route state and is reconciled against the queue before
+            reader content renders.
+          </p>
+        </div>
+
         {activeDetail ? (
           <>
-            <div className="desktop-pane__header">
-              <p className="desktop-pane__eyebrow">Right pane</p>
-              <h2>{activeDetail.article.title}</h2>
-              <p className="desktop-pane__description">
-                The selected article now comes from route state and is reconciled against the
-                current queue before this pane renders.
-              </p>
-            </div>
-
             <div className="desktop-reader__facts">
               <div>
                 <span className="desktop-reader__fact-label">Feed</span>
@@ -83,7 +108,7 @@ export function ReaderPane({ activeDetail }: ReaderPaneProps) {
             </div>
           </>
         ) : (
-          <div className="desktop-empty-state desktop-empty-state--reader">
+          <div className="desktop-empty-state">
             <p className="desktop-empty-state__eyebrow">Reader idle</p>
             <h3>Select an article once the queue has content.</h3>
             <p>

@@ -16,6 +16,39 @@ body {
   padding: 24px;
 }
 
+.desktop-skip-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.desktop-skip-link {
+  position: absolute;
+  top: -100px;
+  left: 24px;
+  z-index: 20;
+  padding: 10px 14px;
+  border: 1px solid var(--fr-border-strong);
+  border-radius: 999px;
+  background: var(--fr-surface-strong);
+  color: var(--fr-text-strong);
+  text-decoration: none;
+}
+
+.desktop-skip-link:focus-visible {
+  top: 20px;
+}
+
+.desktop-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
 .desktop-loading {
   display: grid;
   gap: 12px;
@@ -123,6 +156,12 @@ body {
   gap: 12px;
 }
 
+.desktop-navigation:focus-visible,
+.desktop-pane:focus-visible {
+  outline: 2px solid var(--fr-accent-strong);
+  outline-offset: 4px;
+}
+
 .desktop-navigation__button {
   justify-content: flex-start;
   min-height: 92px;
@@ -179,6 +218,12 @@ body {
   font-family: var(--fr-font-display);
   font-size: 1.5rem;
   line-height: 1.08;
+}
+
+.desktop-pane__focus-title {
+  font-family: var(--fr-font-display);
+  font-size: 1.05rem;
+  line-height: 1.35;
 }
 
 .desktop-pane__eyebrow {
@@ -314,6 +359,51 @@ body {
 
 .desktop-view-state {
   gap: 14px;
+}
+
+.desktop-shortcuts {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--fr-border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.desktop-shortcuts__summary {
+  display: grid;
+  gap: 6px;
+}
+
+.desktop-shortcuts__list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.desktop-shortcuts__item {
+  display: grid;
+  grid-template-columns: minmax(88px, 104px) minmax(0, 1fr);
+  gap: 10px;
+  color: var(--fr-text-muted);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.desktop-shortcuts__item span:first-child {
+  color: var(--fr-accent-strong);
+  font-family: "Cascadia Code", "Consolas", monospace;
+  font-size: 0.82rem;
+}
+
+.desktop-shortcuts__toggle {
+  justify-self: start;
+}
+
+.desktop-shortcuts__toggle--active {
+  border-color: rgba(248, 255, 115, 0.45);
 }
 
 .desktop-view-state__summary {

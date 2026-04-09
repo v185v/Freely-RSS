@@ -716,20 +716,21 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `apps/desktop/tsconfig.json`：桌面端 TypeScript 编译边界，当前覆盖 React 前端源码与 `vite.config.ts`，确保应用层、功能层与测试构建配置都在桌面壳边界内完成类型校验。
 - `apps/desktop/vite.config.ts`：桌面端前端构建配置，固定 Tauri 开发端口、约束 HMR 行为并忽略 `src-tauri` 目录变化；当前还接入 `jsdom` 测试环境配置，使桌面壳状态框架既能被构建也能被 Vitest 验收。
 - `apps/desktop/src/main.tsx`：桌面端 React 引导入口，当前负责先加载 `@freelyrss/ui/theme.css`，再挂载 `App` 到前端宿主节点；它仍不掺入业务查询或本地状态逻辑。
-- `apps/desktop/src/App.tsx`：桌面端应用装配入口，当前只负责把 `ThemeRoot`、`QueryClientProvider` 与 `RouterProvider` 组合起来；它不再承载三栏业务组合，而是把“主题层”“异步数据层”“导航层”三种基础装配显式前置。
+- `apps/desktop/src/App.tsx`：桌面端应用装配入口，当前负责读取桌面壳局部主题状态，并把 `ThemeRoot`、`QueryClientProvider` 与 `RouterProvider` 组合起来；它不承载三栏业务组合，只承担“主题层”“异步数据层”“导航层”的基础装配。
 - `apps/desktop/src/app/query-client.ts`：桌面端查询客户端工厂，集中创建 TanStack Query `QueryClient`，当前把 mock 数据边界配置为“无重试、无窗口焦点回刷、长生命周期缓存”，为后续真实数据访问层预留稳定装配面。
 - `apps/desktop/src/app/router.tsx`：桌面端路由树定义文件，当前负责注册根路由与阅读器首页路由，并把 `reader-shell` 的搜索参数校验接入 TanStack Router，固定“当前来源/当前文章”由路由而不是组件本地状态承载。
-- `apps/desktop/src/features/reader-shell/types.ts`：阅读器壳功能层的局部契约文件，定义导航入口、来源节点、路由搜索参数、局部视图过滤条件与组合后视图摘要类型，避免把桌面壳专属中间状态污染共享 DTO。
-- `apps/desktop/src/features/reader-shell/state.ts`：阅读器壳的 Zustand 本地视图状态源，当前只承载 `searchText`、`statusFilter` 与 `sortMode` 三类短生命周期过滤状态，明确与路由导航态分层。
+- `apps/desktop/src/features/reader-shell/types.ts`：阅读器壳功能层的局部契约文件，定义导航入口、来源节点、路由搜索参数、局部视图过滤条件、主题 tone 与组合后视图摘要类型，避免把桌面壳专属中间状态污染共享 DTO。
+- `apps/desktop/src/features/reader-shell/accessibility.ts`：阅读器壳的无障碍元数据中心，集中维护地标 id、全局快捷键映射与“当前事件目标是否可编辑”的判定逻辑，确保快捷键、跳转链接、组件命名与测试用例共享同一事实来源。
+- `apps/desktop/src/features/reader-shell/state.ts`：阅读器壳的 Zustand 本地视图状态源，当前承载 `searchText`、`statusFilter`、`sortMode`、`themeTone` 与测试用 reset 能力，明确与路由导航态分层，并把高对比模式保持在壳级 UI 状态而不是业务数据层。
 - `apps/desktop/src/features/reader-shell/mock-data.ts`：阅读器壳的异步 mock 数据边界，当前负责提供来源树、文章队列、文章详情、导航入口与统计摘要样本，用于在未接入数据库前验证组合层与状态框架。
 - `apps/desktop/src/features/reader-shell/selectors.ts`：阅读器壳选择器与状态收敛层，负责把 route state、store state 与 mock 数据组合为“可见文章队列”“当前来源”“当前选中文章”“视图过滤 JSON 预览”等派生结果，并在这里集中处理空队列回退与失效文章修正。
-- `apps/desktop/src/features/reader-shell/components/navigation-strip.tsx`：顶部导航条组件，负责把主导航入口渲染为按钮组，并通过统一回调切换路由来源，是左栏来源树之外的第二个导航入口。
-- `apps/desktop/src/features/reader-shell/components/source-pane.tsx`：左栏来源面板组件，负责渲染来源分组、文件夹/订阅源节点与壳级来源动作按钮，只消费来源上下文，不触碰文章队列过滤逻辑。
-- `apps/desktop/src/features/reader-shell/components/queue-pane.tsx`：中栏文章队列组件，负责承载局部搜索、状态过滤、排序切换、共享查询 JSON 预览与文章列表显示，是桌面壳本地视图状态的主要消费面。
-- `apps/desktop/src/features/reader-shell/components/reader-pane.tsx`：右栏阅读面板组件，负责显示当前选中文章详情、状态摘要、标签/批注/附件占位与空阅读态；它只消费已经被修正过的有效文章详情。
-- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`：阅读器首页路由组件，负责把 TanStack Router、TanStack Query、Zustand 与三栏展示组件真正装配起来，并承担搜索参数校验、空来源回退和选中文章一致性修正，是阶段 2 Step 16 的核心组合边界。
-- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`：桌面壳回归测试文件，当前通过 Vitest + Testing Library 验证“进入空来源路由时回收失效文章引用，再切回非空导航入口后恢复有效选中文章”的状态一致性场景。
-- `apps/desktop/src/styles.css`：桌面壳本地样式层，当前负责标题区、壳级指标卡、顶部导航条、视图状态 JSON 预览、三栏滚动容器、空状态、阅读面板排版与窄窗口重排等仅属于桌面壳组合层的布局规则，不承担主题 token 或基础控件样式定义。
+- `apps/desktop/src/features/reader-shell/components/navigation-strip.tsx`：顶部导航条组件，负责把主导航入口渲染为可聚焦的命名导航地标，并通过统一回调切换路由来源，是左栏来源树之外的第二个导航入口，同时承接 `Alt+1` 的焦点目标。
+- `apps/desktop/src/features/reader-shell/components/source-pane.tsx`：左栏来源面板组件，负责渲染来源分组、文件夹/订阅源节点与壳级来源动作按钮，同时暴露稳定的“Sources”地标名称与 `Alt+2` 聚焦入口；它只消费来源上下文，不触碰文章队列过滤逻辑。
+- `apps/desktop/src/features/reader-shell/components/queue-pane.tsx`：中栏文章队列组件，负责承载局部搜索、状态过滤、排序切换、共享查询 JSON 预览与文章列表显示，并把区域名称稳定为“Article queue”，避免把动态来源标题误当成地标名。
+- `apps/desktop/src/features/reader-shell/components/reader-pane.tsx`：右栏阅读面板组件，负责显示当前选中文章详情、状态摘要、标签/批注/附件占位与空阅读态，并把区域名称稳定为“Reading panel”，把当前文章标题保留在区域内部上下文而非 landmark 名称上。
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`：阅读器首页路由组件，负责把 TanStack Router、TanStack Query、Zustand、快捷键注册、跳转链接、主题切换与三栏展示组件真正装配起来，并承担搜索参数校验、空来源回退和选中文章一致性修正，是阶段 2 Step 16 / 17 组合边界的汇聚点。
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`：桌面壳回归测试文件，当前通过 Vitest + Testing Library 同时验证“进入空来源路由时回收失效文章引用”与“键盘快捷键可聚焦命名区域并切换高对比主题”两类壳级验收场景。
+- `apps/desktop/src/styles.css`：桌面壳本地样式层，当前负责标题区、壳级指标卡、顶部导航条、skip links、快捷键说明卡、区域聚焦轮廓、视图状态 JSON 预览、三栏滚动容器、空状态、阅读面板排版与窄窗口重排等仅属于桌面壳组合层的布局规则，不承担主题 token 或基础控件样式定义。
 - `apps/desktop/src/vite-env.d.ts`：Vite 客户端类型声明入口，为桌面壳前端提供 `vite/client` 类型边界。
 - `apps/desktop/src-tauri/Cargo.toml`：桌面端专属 Rust 宿主 crate 清单，负责声明 Tauri 构建依赖、运行时依赖与本地 `[workspace]` 边界，避免应用壳误并入根共享 Rust workspace。
 - `apps/desktop/src-tauri/build.rs`：Tauri 构建脚本入口，把窗口配置、能力清单、图标与前端产物元数据编译进宿主程序。
@@ -747,14 +748,14 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `packages/ui/package.json`：共享 UI 包的清单文件，当前显式暴露源码入口与 `theme.css` 样式入口，并声明 React peer dependency 与本地 React 类型依赖，固定该包的分发与类型边界。
 - `packages/ui/CHANGELOG.md`：共享 UI 包的发布说明，专门记录设计系统与基础组件层的对外变化。
 - `packages/ui/src/index.ts`：共享 UI 包的统一导出面，集中暴露主题根、布局骨架、基础表面、按钮、输入框与列表组件，避免应用壳直接引用深层源码路径。
-- `packages/ui/src/theme.css`：共享 UI 的主题 token 与基础样式入口，定义颜色、字体、边框、阴影、焦点态与响应式分栏规则，是桌面壳与后续其他应用壳共享视觉契约的核心文件。
+- `packages/ui/src/theme.css`：共享 UI 的主题 token 与基础样式入口，定义颜色、字体、边框、阴影、焦点态、响应式分栏规则与高对比主题变量，是桌面壳与后续其他应用壳共享视觉契约的核心文件。
 - `packages/ui/src/lib/cx.ts`：共享 UI 的轻量类名拼接工具，避免在每个基础组件中重复实现样式类收敛逻辑。
-- `packages/ui/src/components/theme-root.tsx`：共享主题根组件，负责挂载主题作用域 class，让应用壳可以显式选择何处启用 FreelyRSS 设计 token。
+- `packages/ui/src/components/theme-root.tsx`：共享主题根组件，负责挂载主题作用域 class，并允许应用壳在 `midnight` 与 `high-contrast` 主题之间切换，让主题选择保持在统一 token 边界上。
 - `packages/ui/src/components/surface.tsx`：共享表面容器组件，收敛卡片/面板级边框、背景、圆角与紧凑模式样式。
 - `packages/ui/src/components/button.tsx`：共享按钮组件，当前封装主按钮、次按钮、幽灵按钮与尺寸变体，不包含任何业务动作语义。
 - `packages/ui/src/components/text-input.tsx`：共享文本输入组件，当前封装标签、输入框与提示文本结构，统一输入控件视觉与可读性边界。
 - `packages/ui/src/components/list.tsx`：共享列表组件文件，当前提供 `ListSection` 与 `ListRow` 两种基础构件，用于承载来源列表、文章列表等行式展示场景，但不预先绑定任何数据模型。
-- `packages/ui/src/components/split-layout.tsx`：共享分栏布局组件文件，当前提供 `SplitLayout` 与 `SplitPane`，把三栏阅读器实际正在使用的网格骨架固化为可复用展示层能力，同时把响应式重排责任限制在“展示骨架”而不是业务状态层。
+- `packages/ui/src/components/split-layout.tsx`：共享分栏布局组件文件，当前提供 `SplitLayout` 与支持 ref 转发的 `SplitPane`，把三栏阅读器实际正在使用的网格骨架与区域聚焦挂载点固化为可复用展示层能力，同时把响应式重排责任限制在“展示骨架”而不是业务状态层。
 - `packages/shared-types/package.json`：共享领域类型包的清单文件，当前显式暴露源码入口、`types` 入口与独立 `check` 脚本，并声明本地 TypeScript 依赖，固定该包的分发与校验边界。
 - `packages/shared-types/CHANGELOG.md`：共享类型包的发布说明，用于跟踪 DTO、枚举与领域类型契约变化。
 - `packages/shared-types/tsconfig.json`：共享类型包的 TypeScript 校验边界，确保该包可在不依赖任何应用壳的前提下独立完成严格类型检查。
@@ -830,7 +831,7 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `src/sql-plan.ts` 明确只输出轻量查询计划而不直接访问数据库，是当前阶段的重要边界控制：先固定查询语义和表关联策略，再在阶段 3 的 SQLite 落地中决定真正的执行器、索引利用和 FTS 结合方式。
 - 将 `test:query` 纳入根级 `verify` 后，共享查询包不再依赖未来桌面壳偶然消费或 Rust 引擎接线时才暴露问题，而是成为与 `shared-types`、`shared-config` 同级的独立质量门禁。
 - Step 15 的关键价值不是“把阅读器做得更像成品”，而是把桌面壳的组合边界真正固定下来：左栏只表达来源上下文，中栏只表达当前队列与选中项，右栏只表达阅读上下文，三者都不越界承担真实数据访问职责。
-- `apps/desktop/src/App.tsx` 现在只保留两类局部选择状态，说明 FreelyRSS 可以先验证三栏骨架和交互回退，再在 Step 16 单独引入导航与视图状态来源，而不是把状态框架、查询框架和数据访问层提前揉成一个组件。
+- Step 15 中“局部来源选择态”和“局部文章选择态”曾短暂留在壳层，随后在 Step 16 被正式收敛到路由层；这说明 FreelyRSS 允许用受控的过渡性本地状态验证骨架，但不会把它们长期固化在根入口中。
 - `apps/desktop/src/styles.css` 现在承接的是“壳级响应式行为”而不是“共享视觉系统”：滚动容器、空状态和窄窗口下右栏下沉规则留在应用壳，主题 token、基础表面和基础控件仍留在 `packages/ui`，这条边界对后续 Web 壳复用非常关键。
 - Step 16 的关键价值不是“把状态库和路由库接进来”，而是把桌面壳真正拆成 `provider` 装配层、`route` 组合层、`store` 局部视图状态层和 `query` 异步数据层四个显式边界，避免后续功能继续回退到单体 `App.tsx`。
 - `apps/desktop/src/App.tsx` 现在只保留基础 provider 装配，说明 FreelyRSS 已把“应用入口”与“阅读器业务组合”正式解耦；后续新增其他路由或功能壳时，不需要再改写桌面端根入口的业务结构。
@@ -838,6 +839,12 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `reader-shell/selectors.ts` 把“空来源回退”和“失效文章引用修正”前移为显式选择器规则，意味着空队列已不再是边缘异常，而是桌面壳必须稳定收敛的一类一等状态。
 - `@freelyrss/shared-query` 在 Step 16 中只负责视图过滤条件的表达与 JSON 预览，而不直接执行数据库查询，这保持了“查询语义层”与“未来 SQLite 执行层”的架构分离。
 - 将 `test:desktop` 接入根级 `verify` 的意义，不只是多了一条测试命令，而是把桌面壳状态一致性正式提升为仓库级质量门禁，而非仅靠人工点按验证。
+- Step 17 的关键价值不是“零散补几个 ARIA 属性”，而是把快捷键、地标命名、跳转链接与高对比主题正式定义为桌面壳组合层的职责，使无障碍层建立在既有 route / store / query 分层之上，而不是反向侵入共享 UI 或未来数据层。
+- `apps/desktop/src/features/reader-shell/accessibility.ts` 把地标 id、快捷键与输入目标排除规则集中化，意味着后续新增阅读面板快捷键或更多地标时，不必让路由组件、面板组件和测试文件分别维护三套快捷键知识。
+- 把 `themeTone` 留在 `reader-shell/state.ts`、而让 `App.tsx` 仅消费它并传给 `ThemeRoot`，证明“主题选择”被视为壳级视图状态，而不是阅读业务状态或共享组件内部私有状态。
+- 通过让 `SplitPane` 支持 ref 转发、让命名 `section` 变成可聚焦目标，FreelyRSS 现在可以在不引入额外焦点管理库的前提下，为键盘用户提供稳定的区域进入点，同时保持共享 UI 仍然只是展示骨架。
+- 中栏与右栏把动态业务标题从 landmark 名称中剥离出来，说明 FreelyRSS 已开始把“屏幕阅读器需要稳定识别的壳级语义”与“会随当前来源/文章变化的业务上下文”明确区分，这对后续真实数据接入后的可访问性稳定性非常关键。
+- 将键盘快捷键与高对比切换验收直接写入 `reader-shell.test.tsx` 并纳入根级 `verify`，意味着从 Step 17 起，可访问性入口不再只是人工体验检查项，而是仓库级自动化质量门禁的一部分。
 
 ## 14. 当前文档职责
 

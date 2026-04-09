@@ -1,3 +1,4 @@
+import { forwardRef } from "react"
 import type { HTMLAttributes } from "react"
 
 import { cx } from "../lib/cx"
@@ -14,10 +15,13 @@ export function SplitLayout({ children, className, ...props }: SplitLayoutProps)
 
 export type SplitPaneProps = HTMLAttributes<HTMLElement>
 
-export function SplitPane({ children, className, ...props }: SplitPaneProps) {
+export const SplitPane = forwardRef<HTMLElement, SplitPaneProps>(function SplitPane(
+  { children, className, ...props },
+  ref,
+) {
   return (
-    <section {...props} className={cx("fr-split-pane", className)}>
+    <section {...props} className={cx("fr-split-pane", className)} ref={ref}>
       {children}
     </section>
   )
-}
+})

@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-- 阶段：阶段 2 Step 16 已完成，桌面壳已具备显式导航、局部视图状态与异步 mock 数据边界，下一步进入阶段 2 Step 17 的键盘与可访问性基础设施工作
+- 阶段：阶段 2 Step 17 已完成，桌面壳已具备显式导航、局部视图状态、异步 mock 数据边界，以及键盘进入点、焦点地标与高对比主题入口；下一步进入阶段 3 Step 18 的本地数据库迁移方案落地
 - 最后更新：2026-04-09
-- 风险状态：已从“桌面壳已拥有稳定的三栏阅读骨架与本地选择态”推进到“桌面壳已明确 route / store / query 三类状态来源”，当前主要风险转为在阶段 2 Step 17 引入键盘导航、焦点顺序与 ARIA 语义时继续保持导航状态、视图过滤状态和阅读上下文之间的分层边界
+- 风险状态：已从“桌面壳已明确 route / store / query 三类状态来源”推进到“桌面壳已把键盘导航、地标命名与主题切换收敛为壳级能力”，当前主要风险转为在阶段 3 Step 18 引入 SQLite 迁移机制时继续保持无障碍层、导航层与未来数据访问层之间的边界稳定
 
 ## 已确认决策
 
@@ -20,7 +20,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 2 Step 17 需要在不破坏阶段 2 Step 16 已建立的路由/视图状态边界前提下，引入全局快捷键、焦点管理与更完整的语义化结构，同时继续保持 `packages/ui` 只承载展示骨架、`shared-query` 只承载查询边界、桌面壳只承载组合、导航与局部视图状态。
+- 当前无阻塞；下一步风险点是阶段 3 Step 18 需要在不破坏阶段 2 已建立的 route / store / query / accessibility 分层前提下，引入 SQLite 迁移入口、schema 版本边界与本地数据目录策略，同时继续保持 `packages/ui` 只承载展示骨架、`shared-query` 只承载查询边界、桌面壳只承载组合、导航、可访问性与局部视图状态。
 
 ## 本次执行记录
 
@@ -228,7 +228,26 @@
 - 已在验证通过后同步回写 `memory-bank/progress.md` 与 `memory-bank/architecture.md`，补齐阶段 2 Step 16 的交接记录、文件职责说明与新的架构边界见解，避免后续开发者仍按 Step 15 的单体壳认知继续推进。
 - 当前验证结论：Step 16 通过，可进入阶段 2 Step 17“建立键盘与可访问性基础设施”。
 
+### 2026-04-09 - 阶段 2 Step 17：建立键盘与可访问性基础设施
+
+- 已新增 `apps/desktop/src/features/reader-shell/accessibility.ts`，集中收敛桌面壳的地标 id、快捷键映射与可编辑输入检测逻辑，避免导航条、三栏面板与测试文件各自硬编码快捷键事实来源。
+- 已扩展 `apps/desktop/src/features/reader-shell/state.ts` 与 `apps/desktop/src/App.tsx`：桌面壳局部 store 现在除 `searchText`、`statusFilter`、`sortMode` 外，还承载 `themeTone` 与 reset 能力；根级 `App` 则只消费该壳级主题状态并把它传给 `ThemeRoot`，继续保持 provider 装配职责。
+- 已更新 `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`、`navigation-strip.tsx`、`source-pane.tsx`、`queue-pane.tsx` 与 `reader-pane.tsx`，为顶部导航、三栏面板和页面顶部补齐以下无障碍基础设施：跳转链接、`Alt+1..4` 快捷键、可聚焦 landmark、稳定的 heading/landmark 命名、`aria-describedby` 快捷键提示与高对比模式入口。
+- 已把中栏与右栏的 landmark 名称从“当前来源标题/当前文章标题”收敛为稳定的“Article queue / Reading panel”区域名，同时把当前来源标题和当前文章标题下沉为区域内上下文文本，避免屏幕阅读器把动态业务内容误当成区域恒定名称。
+- 已扩展 `packages/ui/src/components/split-layout.tsx`、`packages/ui/src/components/theme-root.tsx` 与 `packages/ui/src/theme.css`：`SplitPane` 现在支持 ref 转发以承接区域聚焦，`ThemeRoot` 支持 `high-contrast` 主题变体，基础 token 层新增高对比颜色、轮廓与表面规则，使高对比能力保持在共享视觉边界而不是散落在桌面壳局部样式中。
+- 已更新 `apps/desktop/src/styles.css`，补齐 skip links、区域聚焦轮廓、快捷键说明卡片与高对比切换按钮等仅属于桌面壳编排层的样式，不把这些壳级辅助结构反向塞回共享 UI 包。
+- 已扩展 `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`，除保留 Step 16 的“空来源回收失效文章引用”回归场景外，新增“键盘快捷键可聚焦命名区域并切换高对比主题”的验收用例，把可访问性入口纳入自动化质量门禁。
+
+### 验证结果
+
+- 已执行 `corepack pnpm run desktop:build`，确认接入快捷键、地标命名、跳转链接与主题切换后，桌面壳仍可完成 TypeScript 检查与 Vite 生产构建。
+- 已执行 `corepack pnpm run test:desktop`，2 个 Vitest + Testing Library 用例全部通过，确认旧有空路由回退逻辑未回归，且 `Alt+1..4` 快捷键与高对比主题入口可被自动化验证。
+- 已执行 `corepack pnpm run verify`，结果通过；其中包含 `format:check`、`lint`、`test:config`、`test:types`、`test:query`、`test:desktop`、`rust:fmt:check`、`rust:clippy`、`test:rust` 与 `docs:links`，证明阶段 2 Step 17 已纳入仓库统一质量门禁。
+- 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，确认桌面壳新增的无障碍层没有破坏前端构建、Tauri 宿主装配与 Rust 入口链路，生成 `apps/desktop/src-tauri/target/debug/freelyrss-desktop.exe`。
+- 已在验证通过后同步回写 `memory-bank/progress.md` 与 `memory-bank/architecture.md`，补齐阶段 2 Step 17 的交接记录、文件职责说明与新的架构边界见解，避免后续开发者在接入数据层时绕过已建立的键盘与地标边界。
+- 当前验证结论：Step 17 通过，可进入阶段 3 Step 18“选定数据库迁移方案”。
+
 ## 下一步
 
-- 按 `implementation-plan.md` 执行阶段 2 Step 17，在当前导航与视图状态框架之上补齐全局快捷键、焦点顺序、ARIA 语义与高对比度入口。
-- 在推进 Step 17 时继续保持当前边界：路由负责导航来源，桌面壳 store 负责局部视图状态，`@freelyrss/shared-query` 负责查询表达，TanStack Query 负责异步数据装配，不把这些职责重新耦合回单一 `App.tsx`。
+- 按 `implementation-plan.md` 执行阶段 3 Step 18，选定 SQLite 迁移方案，并明确 schema 版本升级、失败恢复与回滚策略。
+- 在推进 Step 18 时继续保持当前边界：路由负责导航来源，桌面壳 store 负责局部视图状态与主题切换，`reader-shell` 的 accessibility 层负责快捷键与地标事实来源，`@freelyrss/shared-query` 负责查询表达，TanStack Query 负责异步数据装配，不把这些职责重新耦合回单一 `App.tsx` 或未来数据库入口。

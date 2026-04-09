@@ -1,4 +1,4 @@
-import type { ChangeEvent } from "react"
+import type { ChangeEvent, Ref } from "react"
 
 import type { ArticleListItemDto } from "@freelyrss/shared-types"
 import { Button, ListRow, ListSection, SplitPane, Surface, TextInput } from "@freelyrss/ui"
@@ -15,11 +15,15 @@ import type {
 type QueuePaneProps = {
   activeArticleId: string | null
   activeSource: SourceRow
+  describedBy?: string
   filterSummary: ReaderViewFilterSummary
+  headingId: string
   onSearchTextChange: (searchText: string) => void
   onSelectArticle: (articleId: string) => void
   onSetSortMode: (sortMode: ReaderSortMode) => void
   onSetStatusFilter: (statusFilter: ReaderStatusFilter) => void
+  paneId: string
+  paneRef?: Ref<HTMLElement>
   searchText: string
   sortMode: ReaderSortMode
   statusFilter: ReaderStatusFilter
@@ -29,11 +33,15 @@ type QueuePaneProps = {
 export function QueuePane({
   activeArticleId,
   activeSource,
+  describedBy,
   filterSummary,
+  headingId,
   onSearchTextChange,
   onSelectArticle,
   onSetSortMode,
   onSetStatusFilter,
+  paneId,
+  paneRef,
   searchText,
   sortMode,
   statusFilter,
@@ -44,11 +52,20 @@ export function QueuePane({
   }
 
   return (
-    <SplitPane aria-label="Article queue" className="desktop-pane">
+    <SplitPane
+      aria-describedby={describedBy}
+      aria-keyshortcuts="Alt+3"
+      aria-labelledby={headingId}
+      className="desktop-pane"
+      id={paneId}
+      ref={paneRef}
+      tabIndex={-1}
+    >
       <Surface className="desktop-pane__surface desktop-pane__surface--queue">
         <div className="desktop-pane__header">
           <p className="desktop-pane__eyebrow">Middle pane</p>
-          <h2>{activeSource.title}</h2>
+          <h2 id={headingId}>Article queue</h2>
+          <p className="desktop-pane__focus-title">{activeSource.title}</p>
           <p className="desktop-pane__description">{activeSource.description}</p>
         </div>
 
@@ -137,6 +154,7 @@ export function QueuePane({
               {visibleArticles.map((article) => (
                 <ListRow
                   active={activeArticleId === article.id}
+                  aria-current={activeArticleId === article.id ? "page" : undefined}
                   className="desktop-article-row"
                   eyebrow={article.feedTitle}
                   key={article.id}

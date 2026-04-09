@@ -3,7 +3,7 @@ import type { HTMLAttributes } from "react"
 import { cx } from "../lib/cx"
 
 export type ThemeRootProps = HTMLAttributes<HTMLDivElement> & {
-  tone?: "midnight"
+  tone?: "high-contrast" | "midnight"
 }
 
 export function ThemeRoot({ children, className, tone = "midnight", ...props }: ThemeRootProps) {
