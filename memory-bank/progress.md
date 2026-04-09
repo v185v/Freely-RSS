@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-- 阶段：阶段 2 Step 15 已完成，桌面壳的稳定三栏主布局已落地并纳入桌面端与根级验证链路，下一步进入阶段 2 Step 16 的导航与视图状态框架工作
-- 最后更新：2026-04-08
-- 风险状态：已从“规则、搜索与智能文件夹已拥有共享查询边界”推进到“桌面壳已拥有稳定的三栏阅读骨架与本地选择态”，当前主要风险转为在阶段 2 Step 16 中引入导航、视图状态与后续数据访问入口时继续保持左栏来源上下文、中栏列表状态和右栏阅读上下文的分层边界
+- 阶段：阶段 2 Step 16 已完成，桌面壳已具备显式导航、局部视图状态与异步 mock 数据边界，下一步进入阶段 2 Step 17 的键盘与可访问性基础设施工作
+- 最后更新：2026-04-09
+- 风险状态：已从“桌面壳已拥有稳定的三栏阅读骨架与本地选择态”推进到“桌面壳已明确 route / store / query 三类状态来源”，当前主要风险转为在阶段 2 Step 17 引入键盘导航、焦点顺序与 ARIA 语义时继续保持导航状态、视图过滤状态和阅读上下文之间的分层边界
 
 ## 已确认决策
 
@@ -20,7 +20,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 2 Step 16 需要在不回退成单体 `App.tsx` 的前提下，引入显式导航与视图状态来源，同时继续保持 `packages/ui` 只承载展示骨架、`shared-query` 只承载查询边界、桌面壳只承载组合与局部选择状态。
+- 当前无阻塞；下一步风险点是阶段 2 Step 17 需要在不破坏阶段 2 Step 16 已建立的路由/视图状态边界前提下，引入全局快捷键、焦点管理与更完整的语义化结构，同时继续保持 `packages/ui` 只承载展示骨架、`shared-query` 只承载查询边界、桌面壳只承载组合、导航与局部视图状态。
 
 ## 本次执行记录
 
@@ -209,7 +209,26 @@
 - 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，确认三栏主布局接入后，桌面壳前端构建、Tauri 宿主装配与 Rust 入口链路仍可端到端打通，生成 `apps/desktop/src-tauri/target/debug/freelyrss-desktop.exe`。
 - 当前验证结论：Step 15 通过，可进入阶段 2 Step 16“建立导航与视图状态框架”。
 
+### 2026-04-09 - 阶段 2 Step 16：建立导航与视图状态框架
+
+- 已将桌面壳从“单体 `App.tsx` 组合组件”重构为显式的应用层与功能层结构：`src/app` 承载 QueryClient 与 Router，`src/features/reader-shell` 承载 mock 数据、选择器、局部状态与三栏展示组件。
+- 已在 `apps/desktop/package.json` 中接入 `@tanstack/react-router`、`@tanstack/react-query` 与 `zustand`，并新增 `vitest`、`@testing-library/react`、`@testing-library/user-event` 与 `jsdom` 作为桌面壳验证基础设施；根级 `package.json` 同步新增 `test:desktop` 并接入 `verify`。
+- 已把“当前来源”“当前选中文章”迁移为路由搜索参数来源：`sourceId` 与 `articleId` 现在由 TanStack Router 承载，顶部导航条和左栏来源树共享同一导航入口，不再依赖壳组件内部 `useState` 维护选择态。
+- 已把“当前视图/过滤条件”迁移为桌面壳局部 store 来源：`apps/desktop/src/features/reader-shell/state.ts` 通过 Zustand 收敛 `searchText`、`statusFilter` 与 `sortMode` 三类局部视图状态，避免把导航态与视图过滤态重新混回单体壳组件。
+- 已在 `apps/desktop/src/features/reader-shell/selectors.ts` 中显式定义 route state + store state 的组合方式：先按来源路由筛选，再按视图过滤状态和本地搜索文本收敛文章队列，并在同一层内处理空队列回退与选中文章修正。
+- 已让 `@freelyrss/shared-query` 在 Step 16 真正进入桌面壳的视图状态边界：桌面壳现在会把局部过滤状态构造成共享查询定义并展示 JSON 预览，但仍刻意停在“状态表达与预览”层，不越过当前阶段去执行真实 SQL 或数据库访问。
+- 已引入桌面端自动化验收测试 `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`，覆盖“初始进入空来源路由时回收失效文章引用，再切回非空导航入口恢复有效选中文章”的关键回归场景，直接对应 Step 16 的验收目标。
+- 已更新 `apps/desktop/src/styles.css` 与 `apps/desktop/vite.config.ts`，补齐顶部导航条、视图状态预览、字段集语义化工具栏与 `jsdom` 测试环境配置，使新的导航/状态框架既可被构建也可被自动化验证。
+### 验证结果
+
+- 已执行 `corepack pnpm run desktop:build`，确认引入路由、异步查询状态和局部 store 后，桌面壳仍可完成 TypeScript 检查与 Vite 生产构建。
+- 已执行 `corepack pnpm run test:desktop`，新增 Vitest + Testing Library 用例通过，确认空数据路由切换时不会保留失效文章引用，且从空来源切回“Unread desk”后可恢复有效选中文章。
+- 已执行 `corepack pnpm run verify`，结果通过；其中已包含新增的 `test:desktop`，证明阶段 2 Step 16 的桌面端状态框架已纳入仓库统一质量门禁。
+- 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，确认路由与测试依赖接入后，前端构建、Tauri 宿主装配与 Rust 入口链路仍可端到端打通，生成 `apps/desktop/src-tauri/target/debug/freelyrss-desktop.exe`。
+- 已在验证通过后同步回写 `memory-bank/progress.md` 与 `memory-bank/architecture.md`，补齐阶段 2 Step 16 的交接记录、文件职责说明与新的架构边界见解，避免后续开发者仍按 Step 15 的单体壳认知继续推进。
+- 当前验证结论：Step 16 通过，可进入阶段 2 Step 17“建立键盘与可访问性基础设施”。
+
 ## 下一步
 
-- 按 `implementation-plan.md` 执行阶段 2 Step 16，在当前三栏骨架之上补齐导航与视图状态框架，显式定义“当前来源”“当前视图/过滤条件”“当前选中文章”的状态来源与组合方式。
-- 在推进 Step 16 时继续保持当前边界：桌面壳只组合局部状态与展示结构，不把真实查询执行、持久化访问或后续同步入口耦合回单一 `App.tsx`。
+- 按 `implementation-plan.md` 执行阶段 2 Step 17，在当前导航与视图状态框架之上补齐全局快捷键、焦点顺序、ARIA 语义与高对比度入口。
+- 在推进 Step 17 时继续保持当前边界：路由负责导航来源，桌面壳 store 负责局部视图状态，`@freelyrss/shared-query` 负责查询表达，TanStack Query 负责异步数据装配，不把这些职责重新耦合回单一 `App.tsx`。

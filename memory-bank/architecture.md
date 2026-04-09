@@ -698,7 +698,7 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 
 当前阶段已经从“纯目录占位”推进到“可被工具链识别的工作区骨架 + 可构建的桌面端应用壳 + 可被桌面壳消费的共享 UI / 共享类型 / 共享查询包 + 已落地的三栏阅读器骨架”。这些文件的职责应明确，避免后续把配置、样式、组件、视图状态与类型契约堆进单一根文件或单一应用。
 
-- `package.json`：JS/TS 根工作区入口，声明仓库为私有 workspace、固定 `pnpm` 版本，并集中定义 `Biome`、共享配置测试、共享类型检查、Rust 检查、文档链接检查与 `verify` 等统一脚本；当前还补充了 `desktop:dev`、`desktop:build`、`desktop:tauri:dev`、`desktop:tauri:build` 四个桌面壳入口，避免桌面运行命令继续散落到应用目录内。
+- `package.json`：JS/TS 根工作区入口，声明仓库为私有 workspace、固定 `pnpm` 版本，并集中定义 `Biome`、共享配置测试、共享类型检查、共享查询测试、桌面壳测试、Rust 检查、文档链接检查与 `verify` 等统一脚本；当前还补充了 `desktop:dev`、`desktop:build`、`desktop:tauri:dev`、`desktop:tauri:build` 与 `test:desktop`，避免桌面运行与验收命令继续散落到应用目录内。
 - `pnpm-workspace.yaml`：声明 `apps/*` 与 `packages/*` 为 JS/TS 工作区扫描边界，让桌面端、Web 端、移动端和共享包在单仓下统一发现。
 - `pnpm-lock.yaml`：记录当前 JS/TS 工作区（含规范工具依赖）的锁定解析结果，用于保证依赖安装可复现。
 - `.changeset/config.json`：定义 JS/TS workspace 的版本计算策略、基础分支、内部依赖联动方式与 changelog 生成方式，是包级发布线的策略入口。
@@ -710,14 +710,26 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `Cargo.toml`：Rust 根工作区入口，负责声明 `crates/*` 为 workspace members，并统一 edition、version、license、publish 等共享元数据。
 - `Cargo.lock`：记录当前 Rust 工作区的锁定解析结果；随着服务端和桌面 Rust 能力落地，应作为可复现构建的一部分保留。
 - `scripts/check-doc-links.mjs`：文档本地链接校验脚本，跨平台校验 Markdown 内部路径，作为 CI 与本地 `verify` 的统一检查实现，避免链接漂移进入主分支。
-- `apps/desktop/package.json`：桌面端前端壳的包入口，当前负责声明 React/Vite/Tauri CLI、`@freelyrss/ui` 与 `@freelyrss/shared-types` 依赖，并暴露 `dev`、`build`、`preview`、`tauri` 四类脚本，是桌面壳前端入口、共享 UI 包、共享类型包与 Tauri CLI 的交汇点。
+- `apps/desktop/package.json`：桌面端前端壳的包入口，当前负责声明 React/Vite/Tauri CLI、`@freelyrss/ui`、`@freelyrss/shared-types`、`@freelyrss/shared-query`、TanStack Router、TanStack Query、Zustand 与 Vitest/Testing Library 依赖，并暴露 `dev`、`test`、`build`、`preview`、`tauri` 五类脚本，是桌面壳前端入口、共享包消费层与桌面端自动化验收入口的交汇点。
 - `apps/desktop/CHANGELOG.md`：桌面端发布线的用户可见变更记录，避免桌面端变更混入其他应用或共享包的发布说明。
 - `apps/desktop/index.html`：桌面端前端宿主文档，提供 Vite 挂载点并定义应用窗口标题入口。
-- `apps/desktop/tsconfig.json`：桌面端 TypeScript 编译边界，当前覆盖 React 前端与 `vite.config.ts`，确保桌面壳类型检查在应用边界内闭合。
-- `apps/desktop/vite.config.ts`：桌面端前端构建配置，固定 Tauri 开发端口、约束 HMR 行为并忽略 `src-tauri` 目录变化，避免桌面壳开发时前后端工具链相互误触发。
+- `apps/desktop/tsconfig.json`：桌面端 TypeScript 编译边界，当前覆盖 React 前端源码与 `vite.config.ts`，确保应用层、功能层与测试构建配置都在桌面壳边界内完成类型校验。
+- `apps/desktop/vite.config.ts`：桌面端前端构建配置，固定 Tauri 开发端口、约束 HMR 行为并忽略 `src-tauri` 目录变化；当前还接入 `jsdom` 测试环境配置，使桌面壳状态框架既能被构建也能被 Vitest 验收。
 - `apps/desktop/src/main.tsx`：桌面端 React 引导入口，当前负责先加载 `@freelyrss/ui/theme.css`，再挂载 `App` 到前端宿主节点；它仍不掺入业务查询或本地状态逻辑。
-- `apps/desktop/src/App.tsx`：阶段 2 Step 15 的桌面阅读器壳组合层，当前负责把来源上下文、文章队列与阅读面板组合成稳定三栏骨架，并在壳内只保留 `selectedSourceId` 与 `selectedArticleId` 两类局部选择状态；它显式消费 `packages/shared-types` 的 DTO 与 `packages/ui` 的展示构件，但仍刻意不承担读取数据库、执行查询、管理路由或持久化阅读状态的职责。
-- `apps/desktop/src/styles.css`：桌面壳本地样式层，当前负责标题区、壳级指标卡、三栏滚动容器、空状态、阅读面板排版与窄窗口重排等仅属于桌面壳组合层的布局规则，不承担主题 token 或基础控件样式定义。
+- `apps/desktop/src/App.tsx`：桌面端应用装配入口，当前只负责把 `ThemeRoot`、`QueryClientProvider` 与 `RouterProvider` 组合起来；它不再承载三栏业务组合，而是把“主题层”“异步数据层”“导航层”三种基础装配显式前置。
+- `apps/desktop/src/app/query-client.ts`：桌面端查询客户端工厂，集中创建 TanStack Query `QueryClient`，当前把 mock 数据边界配置为“无重试、无窗口焦点回刷、长生命周期缓存”，为后续真实数据访问层预留稳定装配面。
+- `apps/desktop/src/app/router.tsx`：桌面端路由树定义文件，当前负责注册根路由与阅读器首页路由，并把 `reader-shell` 的搜索参数校验接入 TanStack Router，固定“当前来源/当前文章”由路由而不是组件本地状态承载。
+- `apps/desktop/src/features/reader-shell/types.ts`：阅读器壳功能层的局部契约文件，定义导航入口、来源节点、路由搜索参数、局部视图过滤条件与组合后视图摘要类型，避免把桌面壳专属中间状态污染共享 DTO。
+- `apps/desktop/src/features/reader-shell/state.ts`：阅读器壳的 Zustand 本地视图状态源，当前只承载 `searchText`、`statusFilter` 与 `sortMode` 三类短生命周期过滤状态，明确与路由导航态分层。
+- `apps/desktop/src/features/reader-shell/mock-data.ts`：阅读器壳的异步 mock 数据边界，当前负责提供来源树、文章队列、文章详情、导航入口与统计摘要样本，用于在未接入数据库前验证组合层与状态框架。
+- `apps/desktop/src/features/reader-shell/selectors.ts`：阅读器壳选择器与状态收敛层，负责把 route state、store state 与 mock 数据组合为“可见文章队列”“当前来源”“当前选中文章”“视图过滤 JSON 预览”等派生结果，并在这里集中处理空队列回退与失效文章修正。
+- `apps/desktop/src/features/reader-shell/components/navigation-strip.tsx`：顶部导航条组件，负责把主导航入口渲染为按钮组，并通过统一回调切换路由来源，是左栏来源树之外的第二个导航入口。
+- `apps/desktop/src/features/reader-shell/components/source-pane.tsx`：左栏来源面板组件，负责渲染来源分组、文件夹/订阅源节点与壳级来源动作按钮，只消费来源上下文，不触碰文章队列过滤逻辑。
+- `apps/desktop/src/features/reader-shell/components/queue-pane.tsx`：中栏文章队列组件，负责承载局部搜索、状态过滤、排序切换、共享查询 JSON 预览与文章列表显示，是桌面壳本地视图状态的主要消费面。
+- `apps/desktop/src/features/reader-shell/components/reader-pane.tsx`：右栏阅读面板组件，负责显示当前选中文章详情、状态摘要、标签/批注/附件占位与空阅读态；它只消费已经被修正过的有效文章详情。
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`：阅读器首页路由组件，负责把 TanStack Router、TanStack Query、Zustand 与三栏展示组件真正装配起来，并承担搜索参数校验、空来源回退和选中文章一致性修正，是阶段 2 Step 16 的核心组合边界。
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`：桌面壳回归测试文件，当前通过 Vitest + Testing Library 验证“进入空来源路由时回收失效文章引用，再切回非空导航入口后恢复有效选中文章”的状态一致性场景。
+- `apps/desktop/src/styles.css`：桌面壳本地样式层，当前负责标题区、壳级指标卡、顶部导航条、视图状态 JSON 预览、三栏滚动容器、空状态、阅读面板排版与窄窗口重排等仅属于桌面壳组合层的布局规则，不承担主题 token 或基础控件样式定义。
 - `apps/desktop/src/vite-env.d.ts`：Vite 客户端类型声明入口，为桌面壳前端提供 `vite/client` 类型边界。
 - `apps/desktop/src-tauri/Cargo.toml`：桌面端专属 Rust 宿主 crate 清单，负责声明 Tauri 构建依赖、运行时依赖与本地 `[workspace]` 边界，避免应用壳误并入根共享 Rust workspace。
 - `apps/desktop/src-tauri/build.rs`：Tauri 构建脚本入口，把窗口配置、能力清单、图标与前端产物元数据编译进宿主程序。
@@ -820,6 +832,12 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - Step 15 的关键价值不是“把阅读器做得更像成品”，而是把桌面壳的组合边界真正固定下来：左栏只表达来源上下文，中栏只表达当前队列与选中项，右栏只表达阅读上下文，三者都不越界承担真实数据访问职责。
 - `apps/desktop/src/App.tsx` 现在只保留两类局部选择状态，说明 FreelyRSS 可以先验证三栏骨架和交互回退，再在 Step 16 单独引入导航与视图状态来源，而不是把状态框架、查询框架和数据访问层提前揉成一个组件。
 - `apps/desktop/src/styles.css` 现在承接的是“壳级响应式行为”而不是“共享视觉系统”：滚动容器、空状态和窄窗口下右栏下沉规则留在应用壳，主题 token、基础表面和基础控件仍留在 `packages/ui`，这条边界对后续 Web 壳复用非常关键。
+- Step 16 的关键价值不是“把状态库和路由库接进来”，而是把桌面壳真正拆成 `provider` 装配层、`route` 组合层、`store` 局部视图状态层和 `query` 异步数据层四个显式边界，避免后续功能继续回退到单体 `App.tsx`。
+- `apps/desktop/src/App.tsx` 现在只保留基础 provider 装配，说明 FreelyRSS 已把“应用入口”与“阅读器业务组合”正式解耦；后续新增其他路由或功能壳时，不需要再改写桌面端根入口的业务结构。
+- 路由搜索参数统一承载 `sourceId` 与 `articleId`，让顶部导航条和左栏来源树共享同一导航事实来源；这比多个 `useState` 入口并存更容易在后续键盘导航、可访问性和深链接场景下保持一致。
+- `reader-shell/selectors.ts` 把“空来源回退”和“失效文章引用修正”前移为显式选择器规则，意味着空队列已不再是边缘异常，而是桌面壳必须稳定收敛的一类一等状态。
+- `@freelyrss/shared-query` 在 Step 16 中只负责视图过滤条件的表达与 JSON 预览，而不直接执行数据库查询，这保持了“查询语义层”与“未来 SQLite 执行层”的架构分离。
+- 将 `test:desktop` 接入根级 `verify` 的意义，不只是多了一条测试命令，而是把桌面壳状态一致性正式提升为仓库级质量门禁，而非仅靠人工点按验证。
 
 ## 14. 当前文档职责
 

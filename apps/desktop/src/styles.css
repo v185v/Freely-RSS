@@ -16,6 +16,14 @@ body {
   padding: 24px;
 }
 
+.desktop-loading {
+  display: grid;
+  gap: 12px;
+  align-content: center;
+  justify-items: start;
+  min-height: calc(100vh - 48px);
+}
+
 .desktop-shell__header {
   display: grid;
   gap: 18px;
@@ -93,6 +101,53 @@ body {
   line-height: 1.6;
 }
 
+.desktop-route-state {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.desktop-route-state > div,
+.desktop-view-state {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--fr-border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.desktop-navigation {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.desktop-navigation__button {
+  justify-content: flex-start;
+  min-height: 92px;
+  text-align: left;
+}
+
+.desktop-navigation__button--active {
+  border-color: rgba(127, 226, 192, 0.35);
+}
+
+.desktop-navigation__title,
+.desktop-navigation__description {
+  display: block;
+}
+
+.desktop-navigation__title {
+  font-weight: 700;
+}
+
+.desktop-navigation__description {
+  color: var(--fr-text-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 .desktop-workspace {
   min-height: min(780px, calc(100vh - 210px));
 }
@@ -143,6 +198,37 @@ body {
 .desktop-pane__toolbar {
   display: grid;
   gap: 12px;
+}
+
+.desktop-toolbar-group {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.desktop-toolbar-group__legend {
+  padding: 0;
+  color: var(--fr-text-faint);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.desktop-toolbar-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.desktop-pill {
+  min-width: auto;
+}
+
+.desktop-pill--active {
+  border-color: rgba(127, 226, 192, 0.35);
 }
 
 .desktop-pane__toolbar-actions,
@@ -226,6 +312,33 @@ body {
   line-height: 1.6;
 }
 
+.desktop-view-state {
+  gap: 14px;
+}
+
+.desktop-view-state__summary {
+  display: grid;
+  gap: 6px;
+}
+
+.desktop-view-state__preview {
+  margin: 0;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(4, 7, 13, 0.7);
+  color: var(--fr-text-muted);
+  font-family: "Cascadia Code", "Consolas", monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.desktop-view-state__note {
+  color: var(--fr-text-muted);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
 .desktop-reader__facts {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -282,6 +395,10 @@ body {
   .desktop-shell__header {
     grid-template-columns: 1fr;
   }
+
+  .desktop-navigation {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 640px) {
@@ -290,7 +407,9 @@ body {
   }
 
   .desktop-summary__metrics,
-  .desktop-reader__facts {
+  .desktop-reader__facts,
+  .desktop-route-state,
+  .desktop-navigation {
     grid-template-columns: 1fr;
   }
 }

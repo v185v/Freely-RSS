@@ -19,13 +19,14 @@
     "lint": "biome lint .",
     "lint:fix": "biome check --write .",
     "test:config": "node --test packages/shared-config/src/config.test.js",
+    "test:desktop": "corepack pnpm --filter @freelyrss/desktop test",
     "test:types": "corepack pnpm --filter @freelyrss/shared-types check",
     "test:query": "corepack pnpm --filter @freelyrss/shared-query check && corepack pnpm --filter @freelyrss/shared-query test",
     "rust:fmt": "cargo fmt --all",
     "rust:fmt:check": "cargo fmt --all --check",
     "rust:clippy": "cargo clippy --workspace --all-targets -- -D warnings",
     "test:rust": "cargo test --workspace",
-    "verify": "corepack pnpm run format:check && corepack pnpm run lint && corepack pnpm run test:config && corepack pnpm run test:types && corepack pnpm run test:query && corepack pnpm run rust:fmt:check && corepack pnpm run rust:clippy && corepack pnpm run test:rust && corepack pnpm run docs:links"
+    "verify": "corepack pnpm run format:check && corepack pnpm run lint && corepack pnpm run test:config && corepack pnpm run test:types && corepack pnpm run test:query && corepack pnpm run test:desktop && corepack pnpm run rust:fmt:check && corepack pnpm run rust:clippy && corepack pnpm run test:rust && corepack pnpm run docs:links"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
