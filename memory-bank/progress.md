@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-- 阶段：阶段 2 Step 17 已完成，桌面壳已具备显式导航、局部视图状态、异步 mock 数据边界，以及键盘进入点、焦点地标与高对比主题入口；下一步进入阶段 3 Step 18 的本地数据库迁移方案落地
+- 阶段：阶段 3 Step 18 已完成，SQLite 迁移机制、系统表、自恢复备份入口与桌面宿主启动接线已落地；下一步进入阶段 3 Step 19 的核心业务表建模与首批 schema 迁移
 - 最后更新：2026-04-09
-- 风险状态：已从“桌面壳已明确 route / store / query 三类状态来源”推进到“桌面壳已把键盘导航、地标命名与主题切换收敛为壳级能力”，当前主要风险转为在阶段 3 Step 18 引入 SQLite 迁移机制时继续保持无障碍层、导航层与未来数据访问层之间的边界稳定
+- 风险状态：已从“在桌面壳中引入迁移机制而不破坏 route / store / query / accessibility 分层”推进到“迁移框架已固定，下一风险转为在 Step 19 中把完整业务表通过同一迁移链路落地，同时保持字段命名与 `architecture.md` 完全一致”
 
 ## 已确认决策
 
@@ -20,7 +20,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 3 Step 18 需要在不破坏阶段 2 已建立的 route / store / query / accessibility 分层前提下，引入 SQLite 迁移入口、schema 版本边界与本地数据目录策略，同时继续保持 `packages/ui` 只承载展示骨架、`shared-query` 只承载查询边界、桌面壳只承载组合、导航、可访问性与局部视图状态。
+- 当前无阻塞；下一步风险点是阶段 3 Step 19 需要沿用已落地的迁移框架，把 `Feed`、`Folder`、`Tag`、`Article` 等核心业务表与约束一次性写入迁移文件，同时避免把数据库访问细节重新耦合回桌面宿主或前端壳层。
 
 ## 本次执行记录
 
@@ -247,7 +247,23 @@
 - 已在验证通过后同步回写 `memory-bank/progress.md` 与 `memory-bank/architecture.md`，补齐阶段 2 Step 17 的交接记录、文件职责说明与新的架构边界见解，避免后续开发者在接入数据层时绕过已建立的键盘与地标边界。
 - 当前验证结论：Step 17 通过，可进入阶段 3 Step 18“选定数据库迁移方案”。
 
+### 2026-04-09 - 阶段 3 Step 18：选定数据库迁移方案
+
+- 已在 `crates/core-domain` 中新增 `sqlite` 模块，建立桌面本地库的统一迁移入口，把连接预处理、迁移历史校验、待执行迁移判定、事务提交与迁移报告收敛到共享 Rust 边界，而不是直接塞进 `src-tauri`。
+- 已落地两张系统表：`schema_migrations` 负责记录已执行迁移的版本、名称与时间；`app_metadata` 负责保存 bootstrap 级数据库元数据。这样 Step 19 起的所有业务表都可以通过同一套机制继续演进。
+- 已将失败恢复策略编码化：每条迁移单独运行在 `IMMEDIATE` 事务中，单条迁移失败时自动回滚该事务；针对“已有库 + 存在待执行迁移”的场景，会在应用迁移前通过 `VACUUM INTO` 生成快照备份，并提供显式恢复函数清理 `-wal` / `-shm` 后回放快照。
+- 已在 `apps/desktop/src-tauri/src/storage.rs` 中把桌面宿主的职责限制为“解析 app local data 目录、决定数据库文件与备份目录位置、在 setup 阶段触发初始化”；迁移语义、版本边界和恢复策略继续留在 `core-domain`，避免宿主层掌握数据库实现细节。
+- 已将桌面本地数据库默认布局固定为 `app_local_data_dir()/database/freelyrss.sqlite3` 与 `app_local_data_dir()/database/backups/`，为后续 Step 22 的更完整本地数据分层预留稳定起点，但暂不越界引入正文缓存、媒体缓存或导出目录。
+
+### 验证结果
+
+- 已执行 `cargo test -p freelyrss-core-domain`，5 个迁移相关测试全部通过，覆盖空库初始化、重复执行幂等、升级前备份生成、失败迁移事务回滚与从备份快照恢复数据库。
+- 已执行 `cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --message-format short`，确认桌面宿主对 `freelyrss-core-domain` 的接线可编译，`setup` 钩子在类型与依赖边界上成立。
+- 已执行 `corepack pnpm run verify`，结果通过；其中 `test:rust` 已纳入新增的 `core-domain` 迁移测试，证明 Step 18 已进入仓库统一质量门禁。
+- 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，确认新增数据库初始化接线后，前端构建、Tauri 宿主装配与 Rust 入口链路仍可端到端打通，生成 `apps/desktop/src-tauri/target/debug/freelyrss-desktop.exe`。
+- 当前验证结论：Step 18 通过，可进入阶段 3 Step 19“实现核心业务表”。
+
 ## 下一步
 
-- 按 `implementation-plan.md` 执行阶段 3 Step 18，选定 SQLite 迁移方案，并明确 schema 版本升级、失败恢复与回滚策略。
-- 在推进 Step 18 时继续保持当前边界：路由负责导航来源，桌面壳 store 负责局部视图状态与主题切换，`reader-shell` 的 accessibility 层负责快捷键与地标事实来源，`@freelyrss/shared-query` 负责查询表达，TanStack Query 负责异步数据装配，不把这些职责重新耦合回单一 `App.tsx` 或未来数据库入口。
+- 按 `implementation-plan.md` 执行阶段 3 Step 19，通过已落地的迁移机制创建 `Feed`、`Folder`、`Tag`、`FeedTag`、`ArticleTag`、`Article`、`Attachment`、`UserState`、`Annotation`、`Rule`、`SmartFolder`、`AIArtifact` 与 `SyncEvent` 业务表。
+- 在推进 Step 19 时继续保持当前边界：`core-domain/sqlite` 负责迁移编排、版本历史与恢复策略；`src-tauri/storage.rs` 只负责桌面本地路径与启动接线；前端壳继续停留在 route / store / query / accessibility 分层，不提前拉入直接 SQL 访问。

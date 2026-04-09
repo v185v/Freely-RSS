@@ -438,6 +438,34 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 
 本节固化桌面端本地数据库的核心实体与字段命名，作为阶段 3 建表与迁移的直接依据。当前字段名与 [RSS-design-document.md](./RSS-design-document.md) 保持一致。
 
+除业务实体外，阶段 3 Step 18 已先落地数据库系统表与迁移策略边界。后续所有业务表、索引和 FTS 结构都必须通过同一条迁移链路进入本地库，而不是由宿主层或测试脚本直接“顺手建表”。
+
+### 12.0 系统表
+
+#### 12.0.1 `schema_migrations`
+
+- `version`
+- `name`
+- `applied_at`
+
+约束建议：
+
+- `version` 为主键，且必须与嵌入式迁移序列一一对应。
+- `name` 必须与同版本嵌入式迁移名称完全一致，用于阻止迁移历史漂移。
+- `applied_at` 记录迁移提交时间，只反映迁移执行事实，不承载任何业务状态。
+
+#### 12.0.2 `app_metadata`
+
+- `key`
+- `value`
+- `updated_at`
+
+约束建议：
+
+- `key` 为主键，只允许保存数据库 bootstrap 级元数据。
+- `value` 采用字符串边界，避免在系统元数据层提前引入与业务表耦合的结构化 schema。
+- `app_metadata` 不用于替代 `Feed`、`Article` 等业务实体表，只服务于迁移框架和数据库初始化边界。
+
 ### 12.1 Feed
 
 - `id`
@@ -794,6 +822,15 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `packages/shared-config/src/config.test.js`：共享配置的 Node 原生测试，覆盖桌面开发环境、桌面测试环境和缺失必填配置时的失败路径，用作阶段 1 Step 10 的自动化验收。
 - `crates/*/Cargo.toml`：各 Rust crate 的边界声明文件，用于把抓取、搜索、规则、同步等能力维持在独立模块，而不是回退成单体 Rust 包。
 - `crates/*/src/lib.rs`：各 Rust crate 的最小库入口，当前只承担可编译占位职责；后续应逐步承接真实领域逻辑与测试。
+- `crates/core-domain/Cargo.toml`：核心领域 crate 的清单文件；从阶段 3 Step 18 起，它不再只是占位，而是显式声明 `rusqlite`、`thiserror` 与本地数据库迁移所需依赖，固定“迁移语义属于共享 Rust 边界，而不是桌面宿主私有细节”。
+- `crates/core-domain/src/lib.rs`：核心领域 crate 的根入口，当前负责导出 `sqlite` 模块，使桌面宿主与后续其他 Rust 模块都能沿同一入口消费数据库 bootstrap 与迁移能力。
+- `crates/core-domain/src/sqlite/mod.rs`：SQLite 迁移编排入口，负责准备连接 pragma、校验迁移集、计算待执行迁移、串行提交事务并返回迁移报告，是阶段 3 Step 18 的核心实现文件。
+- `crates/core-domain/src/sqlite/migrations.rs`：嵌入式迁移定义与迁移历史校验文件，负责固化迁移版本/名称序列、维护 `schema_migrations` 系统表并拒绝不连续或被篡改的迁移历史。
+- `crates/core-domain/src/sqlite/backup.rs`：数据库快照备份与恢复辅助文件，负责在升级前通过 `VACUUM INTO` 生成备份，并提供从快照恢复主数据库与清理 sidecar 文件的入口。
+- `crates/core-domain/src/sqlite/error.rs`：SQLite 迁移错误模型文件，负责把 IO、SQLite、迁移序列不一致与路径错误收敛为结构化错误边界。
+- `apps/desktop/src-tauri/Cargo.toml`：桌面宿主 crate 清单；从阶段 3 Step 18 起显式依赖 `freelyrss-core-domain`，让“启动时先收敛本地 schema”成为宿主构建边界的一部分。
+- `apps/desktop/src-tauri/src/lib.rs`：桌面宿主入口；当前通过 `setup` 钩子先触发本地数据库初始化，再进入窗口运行链路，保证后续任何前端数据消费都建立在已收敛 schema 之上。
+- `apps/desktop/src-tauri/src/storage.rs`：桌面宿主本地存储装配文件，负责把 `app_local_data_dir` 映射为数据库文件和备份目录，并把路径策略与迁移调用隔离出 `lib.rs`，避免宿主入口重新膨胀为单体文件。
 
 当前架构见解：
 
@@ -845,6 +882,12 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - 通过让 `SplitPane` 支持 ref 转发、让命名 `section` 变成可聚焦目标，FreelyRSS 现在可以在不引入额外焦点管理库的前提下，为键盘用户提供稳定的区域进入点，同时保持共享 UI 仍然只是展示骨架。
 - 中栏与右栏把动态业务标题从 landmark 名称中剥离出来，说明 FreelyRSS 已开始把“屏幕阅读器需要稳定识别的壳级语义”与“会随当前来源/文章变化的业务上下文”明确区分，这对后续真实数据接入后的可访问性稳定性非常关键。
 - 将键盘快捷键与高对比切换验收直接写入 `reader-shell.test.tsx` 并纳入根级 `verify`，意味着从 Step 17 起，可访问性入口不再只是人工体验检查项，而是仓库级自动化质量门禁的一部分。
+- Step 18 的关键价值不是“先把业务表建出来”，而是先把唯一合法的本地 schema 演进入口固定下来：自此之后，业务表、索引、FTS 和缓存相关结构都必须通过 `core-domain/sqlite` 的迁移编排层进入数据库。
+- 将迁移编排放在 `crates/core-domain`、把路径决策留在 `apps/desktop/src-tauri/src/storage.rs`，明确分开了“共享数据库语义”与“桌面端本地文件系统布局”两条职责边界；前者未来可被测试工具或其他宿主复用，后者仍然是桌面平台私有决策。
+- `schema_migrations` 与 `app_metadata` 作为系统表先行落地，意味着阶段 3 之后数据库会同时存在“业务 schema”与“迁移元数据”两层结构；两者职责必须保持分离，不能让系统表退化成万能配置桶。
+- 针对已有数据库的升级路径采用“升级前快照备份 + 每条迁移单独事务 + 显式恢复入口”的组合，比单纯依赖 SQLite 自动回滚更稳妥：事务负责阻止半条迁移落库，快照负责跨版本失败后的人工恢复，恢复函数负责把回滚动作编码成可复用实现而不是口头知识。
+- 在 Tauri `setup` 阶段先执行数据库初始化，意味着后续 Step 19 到 Step 24 的任何前端查询接线都可以假定“本地 schema 已经收敛”；这避免了 React 层在首屏期间自己判断建库、补表和升级状态，从架构上阻止数据访问逻辑回流到前端壳层。
+- 当前将数据库文件与备份目录先固定为 `app_local_data_dir()/database/*`，是对阶段 3 Step 22 的前置约束：先把“数据库主文件”与“升级恢复产物”独立出来，后续再把正文缓存、媒体缓存、导出物与日志扩展为更完整的数据目录结构。
 
 ## 14. 当前文档职责
 

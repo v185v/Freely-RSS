@@ -15,4 +15,5 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+freelyrss-core-domain = { path = "../../../crates/core-domain" }
 tauri = { version = "2", features = [] }

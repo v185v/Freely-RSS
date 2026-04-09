@@ -1,1 +1,3 @@
-//! Core domain models for FreelyRSS.
+//! Core domain models and storage primitives for FreelyRSS.
+
+pub mod sqlite;
