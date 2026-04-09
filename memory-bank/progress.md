@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-- 阶段：阶段 3 Step 18 已完成，SQLite 迁移机制、系统表、自恢复备份入口与桌面宿主启动接线已落地；下一步进入阶段 3 Step 19 的核心业务表建模与首批 schema 迁移
+- 阶段：阶段 3 Step 19 已完成，核心业务表已通过统一 SQLite 迁移链路落地；下一步进入阶段 3 Step 20 的索引与约束补齐
 - 最后更新：2026-04-09
-- 风险状态：已从“在桌面壳中引入迁移机制而不破坏 route / store / query / accessibility 分层”推进到“迁移框架已固定，下一风险转为在 Step 19 中把完整业务表通过同一迁移链路落地，同时保持字段命名与 `architecture.md` 完全一致”
+- 风险状态：已从“通过统一迁移链路落地完整业务表并保持字段命名与 `architecture.md` 一致”推进到“在 Step 20 中补齐唯一索引、查询索引与剩余数据库级约束，同时不破坏 Step 19 已固定的表名、字段序列与桌面宿主启动链路”
 
 ## 已确认决策
 
@@ -20,7 +20,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 3 Step 19 需要沿用已落地的迁移框架，把 `Feed`、`Folder`、`Tag`、`Article` 等核心业务表与约束一次性写入迁移文件，同时避免把数据库访问细节重新耦合回桌面宿主或前端壳层。
+- 当前无阻塞；下一步风险点是阶段 3 Step 20 需要在不重写 Step 19 业务表的前提下补齐 `feed_url` 唯一性、`feed_id + source_guid` 联合索引、时间字段索引、状态字段索引与关联表索引，并继续把数据库访问细节留在 `core-domain/sqlite` 而不是回流到桌面宿主或前端壳层。
 
 ## 本次执行记录
 
@@ -263,7 +263,24 @@
 - 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，确认新增数据库初始化接线后，前端构建、Tauri 宿主装配与 Rust 入口链路仍可端到端打通，生成 `apps/desktop/src-tauri/target/debug/freelyrss-desktop.exe`。
 - 当前验证结论：Step 18 通过，可进入阶段 3 Step 19“实现核心业务表”。
 
+### 2026-04-09 - 阶段 3 Step 19：实现核心业务表
+
+- 已把嵌入式迁移 SQL 从 `crates/core-domain/src/sqlite/migrations.rs` 中抽离为独立版本化文件：`crates/core-domain/src/sqlite/migrations/001_bootstrap_metadata.sql` 继续承载 bootstrap 元数据，`crates/core-domain/src/sqlite/migrations/002_core_business_tables.sql` 新增核心业务 schema，避免后续数据库演进继续堆进 Rust 多行字符串。
+- 已在 `002_core_business_tables.sql` 中通过同一条迁移链路落地 `Folder`、`Tag`、`Feed`、`Article`、`FeedTag`、`ArticleTag`、`Attachment`、`UserState`、`Annotation`、`Rule`、`SmartFolder`、`AIArtifact` 与 `SyncEvent` 13 张业务表，表名与字段命名严格对齐 `architecture.md` 当前 schema 基线。
+- 已把 Step 19 阶段就必须固定的数据库语义直接编码进业务表定义：主键、核心外键、联结表复合主键、布尔位 `CHECK`、受控枚举 `CHECK`、`UserState.reading_progress` 合法区间以及 `CURRENT_TIMESTAMP` 默认值，避免后续为补这些基础约束而重建整表。
+- 已保持阶段边界：本次没有引入 `feed_url` 唯一索引、`feed_id + source_guid` 联合索引或时间/状态查询索引；这些补强继续留给 Step 20，避免把“建表”和“查询优化/唯一性补齐”混成同一步。
+- 已在 `crates/core-domain/src/sqlite/mod.rs` 增加 schema 验收测试，逐表验证 13 张业务表的字段序列与 `architecture.md` 完全一致；同时同步更新空库初始化测试，使首次建库现在明确会应用 `v1 + v2` 两条迁移。
+
+### 验证结果
+
+- 已执行 `cargo fmt --all` 与 `cargo fmt --all --check`，确认 Step 19 新增迁移文件与 Rust 测试满足仓库 Rust 格式要求。
+- 已执行 `cargo test -p freelyrss-core-domain`，6 个迁移相关测试全部通过；新增验收覆盖 13 张业务表存在性与字段序列校验，既保留 Step 18 的迁移安全测试，也补上 Step 19 的 schema 基线验证。
+- 已执行 `cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --message-format short`，确认桌面宿主对更新后的 `freelyrss-core-domain` 迁移集接线可编译，`setup` 阶段不会因 schema 版本提升而失效。
+- 已执行 `corepack pnpm run verify`，结果通过；其中 `test:rust`、`test:desktop`、共享查询/类型/配置校验与文档链接检查全部通过，证明 Step 19 已进入仓库统一质量门禁。
+- 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，确认业务 schema 接入后前端构建、Tauri 宿主装配与 Rust 入口链路仍可端到端打通，生成 `apps/desktop/src-tauri/target/debug/freelyrss-desktop.exe`。
+- 当前验证结论：Step 19 通过，可进入阶段 3 Step 20“补齐索引与约束”。
+
 ## 下一步
 
-- 按 `implementation-plan.md` 执行阶段 3 Step 19，通过已落地的迁移机制创建 `Feed`、`Folder`、`Tag`、`FeedTag`、`ArticleTag`、`Article`、`Attachment`、`UserState`、`Annotation`、`Rule`、`SmartFolder`、`AIArtifact` 与 `SyncEvent` 业务表。
-- 在推进 Step 19 时继续保持当前边界：`core-domain/sqlite` 负责迁移编排、版本历史与恢复策略；`src-tauri/storage.rs` 只负责桌面本地路径与启动接线；前端壳继续停留在 route / store / query / accessibility 分层，不提前拉入直接 SQL 访问。
+- 按 `implementation-plan.md` 执行阶段 3 Step 20，为 Step 19 已落地的业务表补齐 `feed_url` 唯一性、`feed_id + source_guid` 联合索引、时间字段索引、状态字段索引以及关联表外键/查询索引。
+- 在推进 Step 20 时继续保持当前边界：`core-domain/sqlite` 负责迁移编排、schema 历史与约束/索引演进；`src-tauri/storage.rs` 只负责桌面本地路径与启动接线；前端壳继续停留在 route / store / query / accessibility 分层，不提前引入直接 SQL 执行。

@@ -824,8 +824,10 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `crates/*/src/lib.rs`：各 Rust crate 的最小库入口，当前只承担可编译占位职责；后续应逐步承接真实领域逻辑与测试。
 - `crates/core-domain/Cargo.toml`：核心领域 crate 的清单文件；从阶段 3 Step 18 起，它不再只是占位，而是显式声明 `rusqlite`、`thiserror` 与本地数据库迁移所需依赖，固定“迁移语义属于共享 Rust 边界，而不是桌面宿主私有细节”。
 - `crates/core-domain/src/lib.rs`：核心领域 crate 的根入口，当前负责导出 `sqlite` 模块，使桌面宿主与后续其他 Rust 模块都能沿同一入口消费数据库 bootstrap 与迁移能力。
-- `crates/core-domain/src/sqlite/mod.rs`：SQLite 迁移编排入口，负责准备连接 pragma、校验迁移集、计算待执行迁移、串行提交事务并返回迁移报告，是阶段 3 Step 18 的核心实现文件。
-- `crates/core-domain/src/sqlite/migrations.rs`：嵌入式迁移定义与迁移历史校验文件，负责固化迁移版本/名称序列、维护 `schema_migrations` 系统表并拒绝不连续或被篡改的迁移历史。
+- `crates/core-domain/src/sqlite/mod.rs`：SQLite 迁移编排入口，负责准备连接 pragma、校验迁移集、计算待执行迁移、串行提交事务并返回迁移报告；当前还内含迁移级验收测试，直接校验空库初始化、回滚恢复与业务表字段序列。
+- `crates/core-domain/src/sqlite/migrations.rs`：嵌入式迁移注册表与迁移历史校验文件，负责把版本号/迁移名绑定到外部 `.sql` 资产、维护 `schema_migrations` 系统表并拒绝不连续或被篡改的迁移历史。
+- `crates/core-domain/src/sqlite/migrations/001_bootstrap_metadata.sql`：数据库 `v1` bootstrap 迁移文件，负责创建 `app_metadata` 系统表并写入 `schema.bootstrap=ready` 元数据，是空库初始化的最小持久化入口。
+- `crates/core-domain/src/sqlite/migrations/002_core_business_tables.sql`：数据库 `v2` 业务 schema 迁移文件，负责一次性落地 `Folder`、`Tag`、`Feed`、`Article`、`FeedTag`、`ArticleTag`、`Attachment`、`UserState`、`Annotation`、`Rule`、`SmartFolder`、`AIArtifact` 与 `SyncEvent` 13 张核心业务表，并固定基础主键、外键、枚举/布尔约束与默认值边界。
 - `crates/core-domain/src/sqlite/backup.rs`：数据库快照备份与恢复辅助文件，负责在升级前通过 `VACUUM INTO` 生成备份，并提供从快照恢复主数据库与清理 sidecar 文件的入口。
 - `crates/core-domain/src/sqlite/error.rs`：SQLite 迁移错误模型文件，负责把 IO、SQLite、迁移序列不一致与路径错误收敛为结构化错误边界。
 - `apps/desktop/src-tauri/Cargo.toml`：桌面宿主 crate 清单；从阶段 3 Step 18 起显式依赖 `freelyrss-core-domain`，让“启动时先收敛本地 schema”成为宿主构建边界的一部分。
@@ -888,6 +890,10 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - 针对已有数据库的升级路径采用“升级前快照备份 + 每条迁移单独事务 + 显式恢复入口”的组合，比单纯依赖 SQLite 自动回滚更稳妥：事务负责阻止半条迁移落库，快照负责跨版本失败后的人工恢复，恢复函数负责把回滚动作编码成可复用实现而不是口头知识。
 - 在 Tauri `setup` 阶段先执行数据库初始化，意味着后续 Step 19 到 Step 24 的任何前端查询接线都可以假定“本地 schema 已经收敛”；这避免了 React 层在首屏期间自己判断建库、补表和升级状态，从架构上阻止数据访问逻辑回流到前端壳层。
 - 当前将数据库文件与备份目录先固定为 `app_local_data_dir()/database/*`，是对阶段 3 Step 22 的前置约束：先把“数据库主文件”与“升级恢复产物”独立出来，后续再把正文缓存、媒体缓存、导出物与日志扩展为更完整的数据目录结构。
+- Step 19 的关键价值不是“把表名补齐”，而是把 `shared-query` 已经约定的 `Feed`、`Article`、`UserState`、`Attachment`、`Tag` 等实体命名真正落实到 SQLite schema 中；自此查询语义层与本地持久化层开始围绕同一套实体词汇表演进，而不是各自发明表名。
+- 把迁移 SQL 从 `migrations.rs` 抽离到版本化 `.sql` 文件，不只是为了可读性；更重要的是让后续 SQLite 特有的“重建表式迁移”也能以独立、可审阅、可回放的资产存在，而不是继续埋在 Rust 字符串常量里。
+- 在 `v2` 业务表中先固定主键、核心外键、布尔位约束、受控枚举与阅读进度范围，意味着 Step 20 可以专注于唯一性和查询索引补强，而不必为补基础表约束回退到整表重建；这对 SQLite 迁移成本控制非常关键。
+- `core-domain/sqlite` 现在不仅是“迁移执行器”，也开始承担“schema 基线守门人”的职责：迁移测试直接校验 13 张业务表与字段序列是否和 `architecture.md` 一致，把架构文档中的 schema 从口头约束提升为自动化验收边界。
 
 ## 14. 当前文档职责
 

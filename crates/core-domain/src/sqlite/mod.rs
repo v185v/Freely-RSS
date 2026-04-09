@@ -166,7 +166,7 @@ mod tests {
             .expect("database initialization should succeed");
 
         assert_eq!(report.current_version, latest_schema_version());
-        assert_eq!(report.applied_versions, vec![1]);
+        assert_eq!(report.applied_versions, vec![1, 2]);
         assert!(database_path.exists());
 
         let connection = Connection::open(&database_path).expect("open database");
@@ -185,8 +185,156 @@ mod tests {
             )
             .expect("bootstrap metadata should be present");
 
-        assert_eq!(recorded_version, 1);
+        assert_eq!(recorded_version, 2);
         assert_eq!(bootstrap_value, "ready");
+    }
+
+    #[test]
+    fn initializes_all_core_business_tables_with_expected_columns() {
+        let temp_dir = tempdir().expect("tempdir");
+        let database_path = temp_dir.path().join("freelyrss.sqlite3");
+
+        initialize_database(&database_path, &DatabaseInitializationOptions::default())
+            .expect("database initialization should succeed");
+
+        let connection = Connection::open(&database_path).expect("open database");
+        let expected_tables = [
+            (
+                "Folder",
+                vec!["id", "name", "parent_id", "sort_order", "kind"],
+            ),
+            ("Tag", vec!["id", "name", "scope", "color", "created_at"]),
+            (
+                "Feed",
+                vec![
+                    "id",
+                    "title",
+                    "site_url",
+                    "feed_url",
+                    "format",
+                    "icon",
+                    "folder_id",
+                    "custom_name",
+                    "sort_order",
+                    "update_interval",
+                    "health_status",
+                    "last_checked_at",
+                    "last_success_at",
+                    "etag",
+                    "last_modified",
+                ],
+            ),
+            (
+                "Article",
+                vec![
+                    "id",
+                    "feed_id",
+                    "source_guid",
+                    "title",
+                    "author",
+                    "summary",
+                    "content_raw",
+                    "content_extracted",
+                    "canonical_url",
+                    "original_url",
+                    "published_at",
+                    "fetched_at",
+                    "language",
+                    "thumbnail",
+                    "word_count",
+                    "content_hash",
+                ],
+            ),
+            ("FeedTag", vec!["feed_id", "tag_id"]),
+            ("ArticleTag", vec!["article_id", "tag_id"]),
+            (
+                "Attachment",
+                vec![
+                    "id",
+                    "article_id",
+                    "type",
+                    "url",
+                    "mime_type",
+                    "duration",
+                    "size",
+                    "local_cache_path",
+                ],
+            ),
+            (
+                "UserState",
+                vec![
+                    "article_id",
+                    "read_state",
+                    "starred",
+                    "liked",
+                    "importance",
+                    "read_later",
+                    "reading_progress",
+                    "last_opened_at",
+                ],
+            ),
+            (
+                "Annotation",
+                vec![
+                    "id",
+                    "article_id",
+                    "type",
+                    "selected_text",
+                    "anchor",
+                    "note",
+                    "color",
+                    "created_at",
+                ],
+            ),
+            (
+                "Rule",
+                vec![
+                    "id",
+                    "name",
+                    "enabled",
+                    "priority",
+                    "conditions",
+                    "actions",
+                    "scope",
+                ],
+            ),
+            (
+                "SmartFolder",
+                vec!["id", "name", "query_definition", "sort_definition"],
+            ),
+            (
+                "AIArtifact",
+                vec![
+                    "id",
+                    "article_id",
+                    "kind",
+                    "provider",
+                    "input_hash",
+                    "result",
+                    "created_at",
+                ],
+            ),
+            (
+                "SyncEvent",
+                vec![
+                    "id",
+                    "entity_type",
+                    "entity_id",
+                    "change_type",
+                    "payload",
+                    "device_id",
+                    "created_at",
+                ],
+            ),
+        ];
+
+        for (table, expected_columns) in expected_tables {
+            let actual_columns = table_columns(&connection, table);
+            assert_eq!(
+                actual_columns, expected_columns,
+                "table {table} should expose the schema columns defined in architecture.md"
+            );
+        }
     }
 
     #[test]
@@ -342,5 +490,18 @@ mod tests {
             .expect("read restored row");
 
         assert_eq!(restored_value, "before");
+    }
+
+    fn table_columns(connection: &Connection, table_name: &str) -> Vec<String> {
+        let pragma = format!("PRAGMA table_info('{table_name}')");
+        let mut statement = connection
+            .prepare(&pragma)
+            .expect("prepare table info query");
+        let rows = statement
+            .query_map([], |row| row.get(1))
+            .expect("read table columns");
+
+        rows.collect::<Result<Vec<String>, _>>()
+            .expect("collect table columns")
     }
 }

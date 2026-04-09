@@ -17,21 +17,18 @@ pub struct AppliedMigration {
     pub name: String,
 }
 
-const EMBEDDED_MIGRATIONS: [EmbeddedMigration; 1] = [EmbeddedMigration {
-    version: 1,
-    name: "bootstrap_metadata",
-    sql: r#"
-CREATE TABLE IF NOT EXISTS app_metadata (
-  key TEXT PRIMARY KEY,
-  value TEXT NOT NULL,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-) STRICT;
-
-INSERT INTO app_metadata (key, value)
-VALUES ('schema.bootstrap', 'ready')
-ON CONFLICT(key) DO NOTHING;
-"#,
-}];
+const EMBEDDED_MIGRATIONS: [EmbeddedMigration; 2] = [
+    EmbeddedMigration {
+        version: 1,
+        name: "bootstrap_metadata",
+        sql: include_str!("migrations/001_bootstrap_metadata.sql"),
+    },
+    EmbeddedMigration {
+        version: 2,
+        name: "core_business_tables",
+        sql: include_str!("migrations/002_core_business_tables.sql"),
+    },
+];
 
 pub fn embedded_migrations() -> &'static [EmbeddedMigration] {
     &EMBEDDED_MIGRATIONS
