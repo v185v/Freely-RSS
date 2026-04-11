@@ -678,7 +678,46 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `payload` 保存实体变更或操作日志。
 - 当前阶段保留表结构，但首发版本不启用远程同步。
 
-### 12.14 关系与索引基线
+### 12.14 全文搜索结构
+
+#### 12.14.1 `ArticleSearchSource`
+
+- `article_rowid`
+- `article_id`
+- `feed_id`
+- `title`
+- `summary`
+- `content`
+- `author`
+- `feed_title`
+- `tag_names`
+
+约束建议：
+
+- `ArticleSearchSource` 是只读投影视图，不承载业务写入。
+- `content` 优先消费 `Article.content_extracted`，缺失时回退到 `Article.content_raw`。
+- `feed_title` 优先消费 `Feed.custom_name`，缺失时回退到 `Feed.title`。
+- `tag_names` 只聚合 `Tag.scope = 'article'` 的标签名，用于搜索索引拼装而不是业务事实存储。
+
+#### 12.14.2 `ArticleSearch`
+
+- `article_id`
+- `feed_id`
+- `title`
+- `summary`
+- `content`
+- `author`
+- `feed_title`
+- `tag_names`
+
+约束建议：
+
+- `ArticleSearch` 使用 SQLite FTS5 虚拟表承载全文索引，不替代 `Article` 业务表。
+- `article_id` 与 `feed_id` 作为未分词元数据保留，供后续结果映射与过滤组合使用。
+- FTS 行的生命周期必须跟随 `Article.rowid` 收敛，避免宿主层自行维护第二套搜索主键。
+- 索引更新由数据库触发器负责，不允许桌面宿主层或前端壳绕过迁移层直接补写搜索表。
+
+### 12.15 关系与索引基线
 
 - `Folder` 通过 `parent_id` 形成树结构。
 - `Feed` 通过 `folder_id` 归属到订阅树节点。
@@ -689,7 +728,8 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `SyncEvent` 是同步日志，不是业务读取主表。
 - 阶段 3 应优先为 `feed_url`、`feed_id + source_guid`、`published_at`、`fetched_at`、状态字段和关联表外键补齐索引。
 - 阶段 3 Step 20 已通过数据库 `v3` 迁移落地唯一索引与查询索引基线：`Feed.feed_url`、`Tag.scope + name`、`Article.feed_id + source_guid`、`Article.published_at` / `Article.fetched_at`、`Feed.health_status`、`UserState` 状态字段、`FeedTag` / `ArticleTag` 反向关联、`Attachment.article_id`、`Annotation.article_id`、`AIArtifact.article_id` 以及 `SyncEvent` 的实体/设备查询路径都已拥有显式索引入口。
-- 当前约束策略是“基础语义进表定义、唯一性与查询优化走独立迁移”：主键、外键、受控枚举、布尔位和区间约束保留在 `v2` 建表迁移中，唯一索引与查询索引收敛到 `v3`，避免后续 SQLite 演进为了补查询能力而回退到整表重建。
+- 阶段 3 Step 21 已通过数据库 `v4` 迁移补齐全文搜索基线：`ArticleSearchSource` 负责搜索文档投影，`ArticleSearch` 负责 FTS5 索引，`Article` / `Feed` / `ArticleTag` / `Tag` 的变更通过数据库触发器同步更新全文索引。
+- 当前约束策略是“基础语义进表定义、唯一性与查询优化走独立迁移、全文搜索走独立索引迁移”：主键、外键、受控枚举、布尔位和区间约束保留在 `v2` 建表迁移中，唯一索引与查询索引收敛到 `v3`，FTS5 结构、投影视图与同步触发器收敛到 `v4`，避免后续 SQLite 演进为了补查询能力而回退到整表重建。
 
 ## 13. 当前工程骨架与模块职责
 
@@ -726,7 +766,7 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 
 ### 13.5 当前工作区清单与文件职责
 
-当前阶段已经从“纯目录占位”推进到“可被工具链识别的工作区骨架 + 可构建的桌面端应用壳 + 可被桌面壳消费的共享 UI / 共享类型 / 共享查询包 + 已落地的三栏阅读器骨架 + 已收敛到 `v3` 的本地 SQLite schema 基线”。这些文件的职责应明确，避免后续把配置、样式、组件、视图状态、数据库迁移与类型契约堆进单一根文件或单一应用。
+当前阶段已经从“纯目录占位”推进到“可被工具链识别的工作区骨架 + 可构建的桌面端应用壳 + 可被桌面壳消费的共享 UI / 共享类型 / 共享查询包 + 已落地的三栏阅读器骨架 + 已收敛到 `v4` 的本地 SQLite schema 基线”。这些文件的职责应明确，避免后续把配置、样式、组件、视图状态、数据库迁移与类型契约堆进单一根文件或单一应用。
 
 - `package.json`：JS/TS 根工作区入口，声明仓库为私有 workspace、固定 `pnpm` 版本，并集中定义 `Biome`、共享配置测试、共享类型检查、共享查询测试、桌面壳测试、Rust 检查、文档链接检查与 `verify` 等统一脚本；当前还补充了 `desktop:dev`、`desktop:build`、`desktop:tauri:dev`、`desktop:tauri:build` 与 `test:desktop`，避免桌面运行与验收命令继续散落到应用目录内。
 - `pnpm-workspace.yaml`：声明 `apps/*` 与 `packages/*` 为 JS/TS 工作区扫描边界，让桌面端、Web 端、移动端和共享包在单仓下统一发现。
@@ -826,11 +866,12 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `crates/*/src/lib.rs`：各 Rust crate 的最小库入口，当前只承担可编译占位职责；后续应逐步承接真实领域逻辑与测试。
 - `crates/core-domain/Cargo.toml`：核心领域 crate 的清单文件；从阶段 3 Step 18 起，它不再只是占位，而是显式声明 `rusqlite`、`thiserror` 与本地数据库迁移所需依赖，固定“迁移语义属于共享 Rust 边界，而不是桌面宿主私有细节”。
 - `crates/core-domain/src/lib.rs`：核心领域 crate 的根入口，当前负责导出 `sqlite` 模块，使桌面宿主与后续其他 Rust 模块都能沿同一入口消费数据库 bootstrap 与迁移能力。
-- `crates/core-domain/src/sqlite/mod.rs`：SQLite 迁移编排入口，负责准备连接 pragma、校验迁移集、计算待执行迁移、串行提交事务并返回迁移报告；当前还内含迁移级验收测试，直接校验空库初始化、回滚恢复、业务表字段序列、索引存在性与数据库级约束拒绝非法写入。
-- `crates/core-domain/src/sqlite/migrations.rs`：嵌入式迁移注册表与迁移历史校验文件，负责把版本号/迁移名绑定到外部 `.sql` 资产、维护 `schema_migrations` 系统表并拒绝不连续或被篡改的迁移历史；当前已把本地 schema 基线推进到 `v3`。
+- `crates/core-domain/src/sqlite/mod.rs`：SQLite 迁移编排入口，负责准备连接 pragma、校验迁移集、计算待执行迁移、串行提交事务并返回迁移报告；当前还内含迁移级验收测试，直接校验空库初始化、回滚恢复、业务表字段序列、索引存在性、FTS 结构存在性以及数据库级约束和搜索索引同步行为。
+- `crates/core-domain/src/sqlite/migrations.rs`：嵌入式迁移注册表与迁移历史校验文件，负责把版本号/迁移名绑定到外部 `.sql` 资产、维护 `schema_migrations` 系统表并拒绝不连续或被篡改的迁移历史；当前已把本地 schema 基线推进到 `v4`。
 - `crates/core-domain/src/sqlite/migrations/001_bootstrap_metadata.sql`：数据库 `v1` bootstrap 迁移文件，负责创建 `app_metadata` 系统表并写入 `schema.bootstrap=ready` 元数据，是空库初始化的最小持久化入口。
 - `crates/core-domain/src/sqlite/migrations/002_core_business_tables.sql`：数据库 `v2` 业务 schema 迁移文件，负责一次性落地 `Folder`、`Tag`、`Feed`、`Article`、`FeedTag`、`ArticleTag`、`Attachment`、`UserState`、`Annotation`、`Rule`、`SmartFolder`、`AIArtifact` 与 `SyncEvent` 13 张核心业务表，并固定基础主键、外键、枚举/布尔约束与默认值边界。
 - `crates/core-domain/src/sqlite/migrations/003_core_business_indexes.sql`：数据库 `v3` 索引与唯一性迁移文件，负责为 `Feed`、`Tag`、`Article`、`UserState`、关联表、附件/批注表与同步表补齐唯一索引和常用查询索引，把 Step 20 的数据库级优化与约束收敛为独立可审阅资产。
+- `crates/core-domain/src/sqlite/migrations/004_article_search_fts.sql`：数据库 `v4` 全文搜索迁移文件，负责创建 `ArticleSearchSource` 搜索投影视图、`ArticleSearch` FTS5 虚拟表，并把文章、来源标题与文章标签的变更同步规则收敛为数据库触发器，避免搜索索引维护逻辑回流到宿主层。
 - `crates/core-domain/src/sqlite/backup.rs`：数据库快照备份与恢复辅助文件，负责在升级前通过 `VACUUM INTO` 生成备份，并提供从快照恢复主数据库与清理 sidecar 文件的入口。
 - `crates/core-domain/src/sqlite/error.rs`：SQLite 迁移错误模型文件，负责把 IO、SQLite、迁移序列不一致与路径错误收敛为结构化错误边界。
 - `apps/desktop/src-tauri/Cargo.toml`：桌面宿主 crate 清单；从阶段 3 Step 18 起显式依赖 `freelyrss-core-domain`，让“启动时先收敛本地 schema”成为宿主构建边界的一部分。
@@ -901,6 +942,10 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `003_core_business_indexes.sql` 把 `feed_url` 唯一性、`Tag.scope + name` 唯一性、文章时间排序、阅读状态过滤与多对多反向查询这些高频路径集中收敛到同一迁移文件，意味着后续开发者查数据库性能或唯一性问题时，有单一审阅入口，而不是在表定义、宿主代码和测试里分散寻找。
 - 在 `mod.rs` 中把“索引存在”和“非法写入被拒绝”直接纳入迁移测试，说明 FreelyRSS 现在把数据库级行为视作可回归的架构边界，而不只是实现细节；这会显著降低后续 Step 21 以后因 FTS、抓取写入或状态更新引入的隐性 schema 漂移风险。
 - 当前 `v2` / `v3` 的分层也进一步证明了 `src-tauri/storage.rs` 只应该决定数据库文件放在哪里，而不应该决定数据库长什么样：路径策略留给宿主，schema 语义、唯一性和索引规划留给 `core-domain/sqlite`，这是桌面壳与共享 Rust 边界继续保持清晰的关键。
+- Step 21 的关键价值不是“把 SQLite FTS5 打开”，而是把“搜索文档如何从业务表投影出来”也正式收敛成 schema 资产：`ArticleSearchSource` 视图定义了标题、摘要、正文、来源标题和标签名的统一拼装边界，后续搜索执行层可以消费这个稳定投影，而不必在 Rust 或前端里复制字段拼装逻辑。
+- `004_article_search_fts.sql` 同时承载 FTS 表、回填语句和同步触发器，意味着“建立索引”“升级既有数据”“维持后续一致性”三个动作拥有同一个可审阅入口；这比把初始建表留在迁移里、把同步逻辑散落在宿主写入路径里更稳妥。
+- 让 `Feed.title/custom_name` 与 `Tag.name/scope` 的变化也能触发全文索引重建，说明 FreelyRSS 已把搜索视为跨实体投影，而不是只依附于 `Article` 单表的附属能力；这为后续搜索结果中的来源过滤、高亮片段和智能文件夹复用打下了一致的数据基础。
+- 在 `mod.rs` 中新增 `v3 -> v4` 升级回填测试与变更同步测试，意味着 FreelyRSS 不再只验证“空库初始化后 schema 正确”，而是开始验证“真实升级路径中的索引投影是否正确收敛”；这对后续已有用户数据库的平滑演进非常关键。
 
 ## 14. 当前文档职责
 

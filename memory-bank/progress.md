@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-- 阶段：阶段 3 Step 20 已完成，核心业务表的唯一性约束与查询索引已通过统一 SQLite 迁移链路补齐；下一步进入阶段 3 Step 21 的全文搜索表与同步更新机制
+- 阶段：阶段 3 Step 21 已完成，全文搜索表、搜索文档投影视图与同步更新触发器已通过统一 SQLite 迁移链路落地；下一步进入阶段 3 Step 22 的本地缓存目录结构
 - 最后更新：2026-04-11
-- 风险状态：已从“在 Step 20 中补齐唯一索引、查询索引与剩余数据库级约束，同时不破坏 Step 19 已固定的表名、字段序列与桌面宿主启动链路”推进到“在 Step 21 中引入 FTS5 表与更新机制，同时继续保持查询语义层、SQLite 迁移层与桌面宿主路径装配层解耦”
+- 风险状态：已从“在 Step 21 中引入 FTS5 表与更新机制，同时继续保持查询语义层、SQLite 迁移层与桌面宿主路径装配层解耦”推进到“在 Step 22 中扩展数据库文件之外的本地缓存目录分层，同时继续保持 `core-domain/sqlite` 只负责 schema、`src-tauri/storage.rs` 只负责路径装配”
 
 ## 已确认决策
 
@@ -20,7 +20,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 3 Step 21 需要在不破坏已落地 `v1 + v2 + v3` schema 基线的前提下引入 FTS5 表、索引更新链路与搜索同步机制，并继续把数据库结构演进留在 `core-domain/sqlite` 而不是回流到桌面宿主或前端壳层。
+- 当前无阻塞；下一步风险点是阶段 3 Step 22 需要在不破坏已落地 `v1 + v2 + v3 + v4` schema 基线和现有桌面启动链路的前提下，把数据库、备份、正文缓存、媒体缓存与导出产物的目录边界继续收敛清楚，而不是重新把路径策略散落到宿主层各处。
 
 ## 本次执行记录
 
@@ -294,7 +294,23 @@
 - 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，确认数据库 schema 提升到 `v3` 后，桌面前端构建、Tauri 宿主装配与 Rust 入口链路仍可端到端打通，生成 `apps/desktop/src-tauri/target/debug/freelyrss-desktop.exe`。
 - 当前验证结论：Step 20 通过，可进入阶段 3 Step 21“建立全文搜索表与同步更新机制”。
 
+### 2026-04-11 - 阶段 3 Step 21：建立全文搜索表与同步更新机制
+
+- 已新增 `crates/core-domain/src/sqlite/migrations/004_article_search_fts.sql` 作为数据库 `v4` 迁移文件，集中落地 `ArticleSearchSource` 搜索文档投影视图、`ArticleSearch` FTS5 虚拟表，以及围绕 `Article`、`Feed`、`ArticleTag`、`Tag` 的同步更新触发器。
+- 已把文章搜索文档的组装边界固定在迁移层：标题、摘要、正文、作者、来源标题和文章标签名统一从 `ArticleSearchSource` 投影生成，避免后续搜索索引拼装逻辑回流到桌面宿主层或前端壳层。
+- 已更新 `crates/core-domain/src/sqlite/migrations.rs`，将本地数据库 schema 版本从 `v3` 推进到 `v4`，继续保持版本号、迁移名与外部 `.sql` 资产一一对应。
+- 已扩展 `crates/core-domain/src/sqlite/mod.rs` 中的迁移验收测试：新增 FTS 结构存在性校验、`v3 -> v4` 升级回填验证，以及“文章内容更新、来源标题更新、标签增删改、文章删除后搜索索引同步收敛”的数据库级回归场景。
+- 本次实现继续保持既有边界：`core-domain/sqlite` 负责 FTS 结构与触发器演进，`apps/desktop/src-tauri/src/storage.rs` 继续只负责本地路径与启动接线，前端壳仍未提前接入直接 SQL 执行或真实搜索 UI。
+
+### 验证结果
+
+- 已执行 `cargo test -p freelyrss-core-domain`，11 个迁移相关测试全部通过；新增覆盖 FTS 表/视图/触发器存在性、`v3 -> v4` 升级回填以及文章/来源/标签变更后的索引同步场景。
+- 已执行 `corepack pnpm run verify`，结果通过；其中包含 `format:check`、`lint`、`test:config`、`test:types`、`test:query`、`test:desktop`、`rust:fmt:check`、`rust:clippy`、`test:rust` 与 `docs:links`，证明 Step 21 已纳入仓库统一质量门禁。
+- 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，确认数据库 schema 提升到 `v4` 后，桌面前端构建、Tauri 宿主装配与 Rust 入口链路仍可端到端打通，生成 `apps/desktop/src-tauri/target/debug/freelyrss-desktop.exe`。
+- 已在验证通过后同步回写 `memory-bank/progress.md` 与 `memory-bank/architecture.md`，补齐阶段 3 Step 21 的交接记录、FTS schema 基线、文件职责说明与新的架构边界见解。
+- 当前验证结论：Step 21 通过，可进入阶段 3 Step 22“建立本地缓存目录结构”。
+
 ## 下一步
 
-- 按 `implementation-plan.md` 执行阶段 3 Step 21，为当前 `v3` schema 基线补齐 FTS5 表、全文索引同步更新机制与搜索入口所需的迁移验证。
-- 在推进 Step 21 时继续保持当前边界：`core-domain/sqlite` 负责迁移编排、schema 历史、索引与 FTS 结构演进；`src-tauri/storage.rs` 只负责桌面本地路径与启动接线；前端壳继续停留在 route / store / query / accessibility 分层，不提前引入直接 SQL 执行。
+- 按 `implementation-plan.md` 执行阶段 3 Step 22，在当前 `v4` schema 基线之上补齐数据库文件、备份目录、正文缓存、媒体缓存、导出产物与日志目录的本地分层约定。
+- 在推进 Step 22 时继续保持当前边界：`core-domain/sqlite` 负责迁移编排、schema 历史、索引与 FTS 结构演进；`src-tauri/storage.rs` 继续只负责桌面本地路径与启动接线；前端壳继续停留在 route / store / query / accessibility 分层，不提前引入直接 SQL 执行。

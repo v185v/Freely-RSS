@@ -166,7 +166,7 @@ mod tests {
             .expect("database initialization should succeed");
 
         assert_eq!(report.current_version, latest_schema_version());
-        assert_eq!(report.applied_versions, vec![1, 2, 3]);
+        assert_eq!(report.applied_versions, vec![1, 2, 3, 4]);
         assert!(database_path.exists());
 
         let connection = Connection::open(&database_path).expect("open database");
@@ -185,7 +185,7 @@ mod tests {
             )
             .expect("bootstrap metadata should be present");
 
-        assert_eq!(recorded_version, 3);
+        assert_eq!(recorded_version, 4);
         assert_eq!(bootstrap_value, "ready");
     }
 
@@ -520,6 +520,233 @@ mod tests {
     }
 
     #[test]
+    fn initializes_article_search_structures() {
+        let temp_dir = tempdir().expect("tempdir");
+        let database_path = temp_dir.path().join("freelyrss.sqlite3");
+
+        initialize_database(&database_path, &DatabaseInitializationOptions::default())
+            .expect("database initialization should succeed");
+
+        let connection = Connection::open(&database_path).expect("open database");
+        let expected_columns = vec![
+            "article_id",
+            "feed_id",
+            "title",
+            "summary",
+            "content",
+            "author",
+            "feed_title",
+            "tag_names",
+        ];
+        let expected_triggers = [
+            "article_search_after_article_insert",
+            "article_search_after_article_update",
+            "article_search_after_article_delete",
+            "article_search_after_feed_label_update",
+            "article_search_after_article_tag_insert",
+            "article_search_after_article_tag_delete",
+            "article_search_after_article_tag_update",
+            "article_search_after_article_tag_scope_update",
+        ];
+
+        assert_eq!(
+            table_columns(&connection, "ArticleSearch"),
+            expected_columns
+        );
+        assert_schema_object_exists(&connection, "view", "ArticleSearchSource");
+        assert_schema_object_exists(&connection, "table", "ArticleSearch");
+
+        for trigger_name in expected_triggers {
+            assert_schema_object_exists(&connection, "trigger", trigger_name);
+        }
+    }
+
+    #[test]
+    fn backfills_article_search_rows_when_upgrading_from_v3_to_v4() {
+        let temp_dir = tempdir().expect("tempdir");
+        let database_path = temp_dir.path().join("freelyrss.sqlite3");
+        let backup_dir = temp_dir.path().join("backups");
+        let mut connection = Connection::open(&database_path).expect("open database");
+
+        prepare_connection(&connection).expect("prepare connection");
+        apply_migration_set(
+            &mut connection,
+            &database_path,
+            &DatabaseInitializationOptions::default(),
+            &embedded_migrations()[..3],
+        )
+        .expect("apply v1-v3 migrations");
+
+        insert_feed(
+            &connection,
+            "feed-upgrade",
+            "Upgrade Feed",
+            "https://example.com/upgrade.xml",
+        );
+        insert_article(
+            &connection,
+            "article-upgrade",
+            "feed-upgrade",
+            "Upgrade-safe search",
+            Some("This article should be backfilled into FTS on migration."),
+            Some("Backfill content for migration verification."),
+            Some("Upgrade Author"),
+        );
+        connection
+            .execute(
+                "INSERT INTO Tag (id, name, scope) VALUES (?1, ?2, ?3)",
+                params!["tag-upgrade", "migration", "article"],
+            )
+            .expect("insert tag");
+        connection
+            .execute(
+                "INSERT INTO ArticleTag (article_id, tag_id) VALUES (?1, ?2)",
+                params!["article-upgrade", "tag-upgrade"],
+            )
+            .expect("link article tag");
+
+        let report = apply_migration_set(
+            &mut connection,
+            &database_path,
+            &DatabaseInitializationOptions::new().with_backup_dir(&backup_dir),
+            embedded_migrations(),
+        )
+        .expect("apply v4 migration");
+
+        assert_eq!(report.current_version, 4);
+        assert_eq!(report.applied_versions, vec![4]);
+        assert!(report.backup_path.is_some());
+        assert_eq!(
+            match_article_search(&connection, "backfill"),
+            vec!["article-upgrade"]
+        );
+        assert_eq!(
+            match_article_search(&connection, "migration"),
+            vec!["article-upgrade"]
+        );
+        assert_eq!(
+            match_article_search(&connection, "\"Upgrade Feed\""),
+            vec!["article-upgrade"]
+        );
+    }
+
+    #[test]
+    fn keeps_article_search_index_in_sync_for_article_feed_and_tag_changes() {
+        let temp_dir = tempdir().expect("tempdir");
+        let database_path = temp_dir.path().join("freelyrss.sqlite3");
+
+        initialize_database(&database_path, &DatabaseInitializationOptions::default())
+            .expect("database initialization should succeed");
+
+        let connection = Connection::open(&database_path).expect("open database");
+        prepare_connection(&connection).expect("prepare connection");
+
+        insert_feed(
+            &connection,
+            "feed-search",
+            "Systems Digest",
+            "https://example.com/systems.xml",
+        );
+        insert_article(
+            &connection,
+            "article-search",
+            "feed-search",
+            "SQLite launch plan",
+            Some("A brief note about search indexing."),
+            Some("This article explains tokenizer choices and ranking strategy."),
+            Some("Ada Lovelace"),
+        );
+
+        assert_eq!(
+            match_article_search(&connection, "launch"),
+            vec!["article-search"]
+        );
+        assert_eq!(
+            match_article_search(&connection, "tokenizer"),
+            vec!["article-search"]
+        );
+        assert_eq!(
+            match_article_search(&connection, "\"Systems Digest\""),
+            vec!["article-search"]
+        );
+
+        connection
+            .execute(
+                "UPDATE Article SET title = ?1, content_extracted = ?2 WHERE id = ?3",
+                params![
+                    "SQLite release plan",
+                    "This updated copy focuses on snippet assembly.",
+                    "article-search"
+                ],
+            )
+            .expect("update article");
+
+        assert!(match_article_search(&connection, "launch").is_empty());
+        assert_eq!(
+            match_article_search(&connection, "snippet"),
+            vec!["article-search"]
+        );
+
+        connection
+            .execute(
+                "UPDATE Feed SET custom_name = ?1 WHERE id = ?2",
+                params!["Infra notebook", "feed-search"],
+            )
+            .expect("update feed label");
+        assert!(match_article_search(&connection, "\"Systems Digest\"").is_empty());
+        assert_eq!(
+            match_article_search(&connection, "\"Infra notebook\""),
+            vec!["article-search"]
+        );
+
+        connection
+            .execute(
+                "INSERT INTO Tag (id, name, scope) VALUES (?1, ?2, ?3)",
+                params!["tag-search", "opslabel", "article"],
+            )
+            .expect("insert tag");
+        connection
+            .execute(
+                "INSERT INTO ArticleTag (article_id, tag_id) VALUES (?1, ?2)",
+                params!["article-search", "tag-search"],
+            )
+            .expect("link article tag");
+        assert_eq!(
+            match_article_search(&connection, "opslabel"),
+            vec!["article-search"]
+        );
+
+        connection
+            .execute(
+                "UPDATE Tag SET name = ?1 WHERE id = ?2",
+                params!["signalmark", "tag-search"],
+            )
+            .expect("rename tag");
+        assert!(match_article_search(&connection, "opslabel").is_empty());
+        assert_eq!(
+            match_article_search(&connection, "signalmark"),
+            vec!["article-search"]
+        );
+
+        connection
+            .execute(
+                "DELETE FROM ArticleTag WHERE article_id = ?1 AND tag_id = ?2",
+                params!["article-search", "tag-search"],
+            )
+            .expect("delete article tag");
+        assert!(match_article_search(&connection, "signalmark").is_empty());
+
+        connection
+            .execute(
+                "DELETE FROM Article WHERE id = ?1",
+                params!["article-search"],
+            )
+            .expect("delete article");
+        assert!(match_article_search(&connection, "snippet").is_empty());
+        assert!(match_article_search(&connection, "\"Infra notebook\"").is_empty());
+    }
+
+    #[test]
     fn rejects_duplicate_unique_values_and_invalid_business_records() {
         let temp_dir = tempdir().expect("tempdir");
         let database_path = temp_dir.path().join("freelyrss.sqlite3");
@@ -809,6 +1036,75 @@ mod tests {
 
         rows.collect::<Result<Vec<String>, _>>()
             .expect("collect index columns")
+    }
+
+    fn assert_schema_object_exists(connection: &Connection, object_type: &str, object_name: &str) {
+        let exists: bool = connection
+            .query_row(
+                "SELECT EXISTS(
+                    SELECT 1
+                    FROM sqlite_master
+                    WHERE type = ?1 AND name = ?2
+                )",
+                params![object_type, object_name],
+                |row| row.get(0),
+            )
+            .expect("query sqlite_master");
+
+        assert!(
+            exists,
+            "schema object {object_type}:{object_name} should exist after initialization"
+        );
+    }
+
+    fn insert_feed(connection: &Connection, id: &str, title: &str, feed_url: &str) {
+        connection
+            .execute(
+                "INSERT INTO Feed (id, title, feed_url, format) VALUES (?1, ?2, ?3, ?4)",
+                params![id, title, feed_url, "rss"],
+            )
+            .expect("insert feed");
+    }
+
+    fn insert_article(
+        connection: &Connection,
+        id: &str,
+        feed_id: &str,
+        title: &str,
+        summary: Option<&str>,
+        content_extracted: Option<&str>,
+        author: Option<&str>,
+    ) {
+        connection
+            .execute(
+                "INSERT INTO Article (
+                    id,
+                    feed_id,
+                    title,
+                    summary,
+                    content_extracted,
+                    author
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![id, feed_id, title, summary, content_extracted, author],
+            )
+            .expect("insert article");
+    }
+
+    fn match_article_search(connection: &Connection, query: &str) -> Vec<String> {
+        let mut statement = connection
+            .prepare(
+                "SELECT article_id
+                FROM ArticleSearch
+                WHERE ArticleSearch MATCH ?1
+                ORDER BY article_id ASC",
+            )
+            .expect("prepare article search query");
+        let rows = statement
+            .query_map(params![query], |row| row.get(0))
+            .expect("execute article search query");
+
+        rows.collect::<Result<Vec<String>, _>>()
+            .expect("collect article search rows")
     }
 
     fn assert_constraint_violation(result: rusqlite::Result<usize>) {
