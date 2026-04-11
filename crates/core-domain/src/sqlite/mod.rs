@@ -3,6 +3,7 @@
 mod backup;
 mod error;
 mod migrations;
+mod records;
 
 use std::{
     fs,

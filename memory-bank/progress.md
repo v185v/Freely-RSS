@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-- 阶段：阶段 3 Step 23 已完成，`crates/feed-engine` 已补齐标准化固定样本集、样本清单与测试自校验；下一步进入阶段 3 Step 24 的 Rust 领域模型
+- 阶段：阶段 3 Step 24 已完成，`crates/core-domain` 已补齐与 `v4` schema 对齐的 Rust 领域实体、值对象、状态枚举与存储记录映射测试；下一步进入阶段 4 Step 25 的抓取器抽象
 - 最后更新：2026-04-11
-- 风险状态：已从“在 Step 23 中补齐 RSS / Atom / JSON Feed 与富媒体场景的固定测试样本，同时避免把测试样本耦合进运行时实现边界”推进到“在 Step 24 中把领域实体、值对象与状态枚举对齐到当前 `v4` schema 与共享命名体系，同时继续保持测试样本停留在 `feed-engine` 的测试边界”
+- 风险状态：已从“在 Step 24 中把领域实体、值对象与状态枚举对齐到当前 `v4` schema 与共享命名体系，同时继续保持测试样本停留在 `feed-engine` 的测试边界”推进到“在 Step 25 中建立抓取器抽象时继续保持 `core-domain/model` 只承载领域语义、`core-domain/sqlite` 只承载持久化与迁移、固定样本继续只服务 `feed-engine` 测试边界”
 
 ## 已确认决策
 
@@ -20,7 +20,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 3 Step 24 需要在不破坏已落地 `v4` schema、FTS 结构、本地目录布局和现有桌面启动链路的前提下，补齐与数据库字段一一对齐的 Rust 领域模型，并明确哪些类型只服务内部持久化、哪些类型可以继续向前端或后续引擎暴露。
+- 当前无阻塞；下一步风险点是阶段 4 Step 25 需要在不把抓取实现直接写回 UI、宿主层或 `core-domain/model` 的前提下，为 `feed-engine` 建立可被固定样本和后续网络层共同消费的抓取边界。
 
 ## 本次执行记录
 
@@ -343,7 +343,25 @@
 - 已在验证通过后同步回写 `memory-bank/progress.md` 与 `memory-bank/architecture.md`，补齐阶段 3 Step 23 的交接记录、测试样本文件职责说明与新的架构边界见解。
 - 当前验证结论：Step 23 通过，可进入阶段 3 Step 24“建立 Rust 领域模型”。
 
+### 2026-04-11 - 阶段 3 Step 24：建立 Rust 领域模型
+
+- 已在 `crates/core-domain/src/model/` 下新增 `mod.rs`、`error.rs`、`ids.rs`、`primitives.rs`、`enums.rs`、`organization.rs`、`feed.rs`、`article.rs` 与 `automation.rs`，把领域层拆分为实体、值对象、受控枚举与错误模型四类边界，而不是继续把领域语义混在 `sqlite` 迁移模块里。
+- 已在 `crates/core-domain/src/lib.rs` 中同时导出 `model` 与 `sqlite`，使 `freelyrss-core-domain` 从“只暴露迁移能力”推进为“同时暴露领域语义与持久化边界”的共享 Rust 入口。
+- 已在 `crates/core-domain/Cargo.toml` 中补齐 `serde` 与 `serde_json` 依赖，使 typed id、字符串值对象与 JSON 值对象都能保持稳定序列化能力，为后续桌面宿主、抓取引擎和查询/同步层复用这些模型预留一致的数据表示。
+- 已新增 `crates/core-domain/src/sqlite/records.rs`，把 SQLite 记录层显式收敛为存储侧翻译边界：它负责把 `0/1` 布尔位、JSON 文本列与字符串枚举转换为领域层的 `bool`、`JsonBlob` 与受控枚举，避免这些 SQLite 专有表示泄漏进 `core-domain/model`。
+- 已把 `UserState.reading_progress` 的合法区间校验前移到领域层 `UserState::validate()`，证明 Step 24 的目标不是“列出 struct”，而是把数据库语义中会继续影响业务逻辑的约束显式固定到领域模型。
+- 已在 `crates/core-domain/src/sqlite/records.rs` 中补齐 record/domain 往返测试与非法值拒绝测试，覆盖组织类实体、Feed/Article、附件/状态/批注、规则/智能文件夹/AI 产物/同步事件四组模型，验证“字段不丢失、JSON 语义不变、非法布尔位/非法枚举/非法 JSON 不会漏进领域层”。
+- 本次实现继续保持既有边界：`core-domain/model` 只表达领域语义与共享命名，`core-domain/sqlite` 继续负责迁移与存储翻译，`feed-engine` 的固定样本仍停留在测试目录，桌面宿主与前端壳没有提前接入任何真实抓取或查询执行逻辑。
+
+### 验证结果
+
+- 已执行 `cargo fmt --all`、`cargo test -p freelyrss-core-domain`、`cargo clippy -p freelyrss-core-domain --all-targets -- -D warnings` 与 `cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --message-format short`，确认 Step 24 的领域模型、记录映射测试与桌面宿主接线全部通过。
+- 已执行 `corepack pnpm run verify`，结果通过；其中 `format:check`、`lint`、`test:config`、`test:types`、`test:query`、`test:desktop`、`rust:fmt:check`、`rust:clippy`、`test:rust` 与 `docs:links` 全部通过，证明 Step 24 已纳入仓库统一质量门禁。
+- 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，确认新增领域层与存储翻译层后，桌面前端构建、Tauri 宿主装配与 Rust 入口链路仍可端到端打通，生成 `apps/desktop/src-tauri/target/debug/freelyrss-desktop.exe`。
+- 已在验证通过后同步回写 `memory-bank/progress.md` 与 `memory-bank/architecture.md`，补齐阶段 3 Step 24 的交接记录、领域模型文件职责说明与新的架构边界见解。
+- 当前验证结论：Step 24 通过，可进入阶段 4 Step 25“建立抓取器抽象”。
+
 ## 下一步
 
-- 按 `implementation-plan.md` 执行阶段 3 Step 24，在 `crates/core-domain` 中建立与当前 `v4` schema 对齐的 Rust 领域实体、值对象与状态枚举。
-- 在推进 Step 24 时继续保持当前边界：Step 23 的固定样本继续只服务 `feed-engine` 测试、回归与后续抓取/解析验收，不反向混入 `src-tauri` 宿主路径层、`core-domain/sqlite` schema 层或当前前端壳的 route / store / query / accessibility 组合层。
+- 按 `implementation-plan.md` 执行阶段 4 Step 25，在 `crates/feed-engine` 中建立 HTTP 获取、解析、标准化与持久化之间的抓取器抽象。
+- 在推进 Step 25 时继续保持当前边界：Step 24 已落地的 `core-domain/model` 继续只承载领域语义，`core-domain/sqlite` 继续只承载 schema/记录翻译，Step 23 的固定样本继续只服务 `feed-engine` 测试与后续抓取/解析验收，不反向混入桌面宿主或前端壳层。

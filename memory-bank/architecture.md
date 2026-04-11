@@ -864,9 +864,19 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `packages/shared-config/src/config.test.js`：共享配置的 Node 原生测试，覆盖桌面开发环境、桌面测试环境和缺失必填配置时的失败路径，用作阶段 1 Step 10 的自动化验收。
 - `crates/*/Cargo.toml`：各 Rust crate 的边界声明文件，用于把抓取、搜索、规则、同步等能力维持在独立模块，而不是回退成单体 Rust 包。
 - `crates/*/src/lib.rs`：各 Rust crate 的最小库入口，当前只承担可编译占位职责；后续应逐步承接真实领域逻辑与测试。
-- `crates/core-domain/Cargo.toml`：核心领域 crate 的清单文件；从阶段 3 Step 18 起，它不再只是占位，而是显式声明 `rusqlite`、`thiserror` 与本地数据库迁移所需依赖，固定“迁移语义属于共享 Rust 边界，而不是桌面宿主私有细节”。
-- `crates/core-domain/src/lib.rs`：核心领域 crate 的根入口，当前负责导出 `sqlite` 模块，使桌面宿主与后续其他 Rust 模块都能沿同一入口消费数据库 bootstrap 与迁移能力。
+- `crates/core-domain/Cargo.toml`：核心领域 crate 的清单文件；从阶段 3 Step 18 起，它不再只是占位，而是显式声明 `rusqlite`、`thiserror` 与本地数据库迁移所需依赖；到阶段 3 Step 24 又补齐 `serde` 与 `serde_json`，把“共享领域模型可序列化”也固定为 crate 契约的一部分。
+- `crates/core-domain/src/lib.rs`：核心领域 crate 的根入口，当前同时导出 `model` 与 `sqlite` 模块，使桌面宿主与后续其他 Rust 模块都能沿同一入口消费领域语义、数据库 bootstrap 与迁移能力。
+- `crates/core-domain/src/model/mod.rs`：领域模型聚合入口，负责把实体、值对象、枚举与错误模型收敛为单一共享导出面，避免桌面宿主或后续抓取引擎深链到具体子文件。
+- `crates/core-domain/src/model/error.rs`：领域模型错误边界文件，负责把空值、非法枚举、非法布尔位、非法 JSON 与阅读进度越界收敛为结构化错误，供领域构造与存储翻译层共用。
+- `crates/core-domain/src/model/ids.rs`：typed id 值对象文件，负责为 `FeedId`、`ArticleId`、`TagId`、`DeviceId` 等核心标识建立强类型边界，避免共享 Rust 代码继续以裸 `String` 传递跨实体 id。
+- `crates/core-domain/src/model/primitives.rs`：基础值对象文件，负责定义 `IsoDateTime`、`UrlString`、`LanguageCode`、`HexColor`、`CachePath` 与 `JsonBlob`，把 schema 中频繁重复出现的文本/JSON 语义从业务实体里抽离出来。
+- `crates/core-domain/src/model/enums.rs`：受控枚举文件，负责承接 `FeedFormat`、`FeedHealthStatus`、`TagScope`、`ReadState`、`ImportanceLevel` 等 schema 受控值，保持领域语义与 SQLite `CHECK` 约束使用同一套词汇。
+- `crates/core-domain/src/model/organization.rs`：组织类实体文件，负责定义 `Folder`、`Tag`、`FeedTag` 与 `ArticleTag`，收敛订阅树与标签归属的领域表示。
+- `crates/core-domain/src/model/feed.rs`：Feed 实体文件，负责表达订阅源的领域状态与抓取元数据，而不包含任何 SQLite 迁移或查询执行逻辑。
+- `crates/core-domain/src/model/article.rs`：文章域实体文件，负责定义 `Article`、`Attachment`、`UserState` 与 `Annotation`，并把 `reading_progress` 合法区间校验前移到领域层。
+- `crates/core-domain/src/model/automation.rs`：自动化相关实体文件，负责定义 `Rule`、`SmartFolder`、`AIArtifact` 与 `SyncEvent`，把规则、智能文件夹、AI 产物与同步事件统一纳入领域命名体系。
 - `crates/core-domain/src/sqlite/mod.rs`：SQLite 迁移编排入口，负责准备连接 pragma、校验迁移集、计算待执行迁移、串行提交事务并返回迁移报告；当前还内含迁移级验收测试，直接校验空库初始化、回滚恢复、业务表字段序列、索引存在性、FTS 结构存在性以及数据库级约束和搜索索引同步行为。
+- `crates/core-domain/src/sqlite/records.rs`：SQLite 记录翻译文件，负责把数据库记录与 `core-domain/model` 之间的表示差异显式收敛起来，包括 `0/1` 布尔位、JSON 文本列、字符串枚举和值对象转换；同时承担 Step 24 的往返转换与非法值拒绝测试，证明“存储表示”和“领域表示”已经被正式解耦。
 - `crates/core-domain/src/sqlite/migrations.rs`：嵌入式迁移注册表与迁移历史校验文件，负责把版本号/迁移名绑定到外部 `.sql` 资产、维护 `schema_migrations` 系统表并拒绝不连续或被篡改的迁移历史；当前已把本地 schema 基线推进到 `v4`。
 - `crates/core-domain/src/sqlite/migrations/001_bootstrap_metadata.sql`：数据库 `v1` bootstrap 迁移文件，负责创建 `app_metadata` 系统表并写入 `schema.bootstrap=ready` 元数据，是空库初始化的最小持久化入口。
 - `crates/core-domain/src/sqlite/migrations/002_core_business_tables.sql`：数据库 `v2` 业务 schema 迁移文件，负责一次性落地 `Folder`、`Tag`、`Feed`、`Article`、`FeedTag`、`ArticleTag`、`Attachment`、`UserState`、`Annotation`、`Rule`、`SmartFolder`、`AIArtifact` 与 `SyncEvent` 13 张核心业务表，并固定基础主键、外键、枚举/布尔约束与默认值边界。
@@ -983,3 +993,8 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - 当前阶段已经完成 JS/TS 工作区的版本治理基线，但同步协议号与数据库 schema 号仍应留在各自的实现边界中演进，不能被 npm 包版本替代。
 - 从 Step 23 开始，FreelyRSS 不再只有“schema 可回归”，也开始拥有“解析输入资产可回归”的边界：固定 feed 样本成为与迁移 SQL、宿主目录契约同级的长期验收资产。
 - 把样本清单和样本文件一起放进 `feed-engine` 的测试目录，而不是新建仓库级 `fixtures/` 杂项目录，能持续强化“抓取/解析问题回到抓取/解析模块解决”的所有权边界。
+- Step 24 的关键价值不是“把 schema 抄成 Rust struct”，而是把 `core-domain` 正式拆成“领域语义层”和“SQLite 存储翻译层”两类边界：前者负责 typed id、值对象、受控枚举与实体约束，后者才负责数据库专有表示。
+- `core-domain/model` 与 `core-domain/sqlite/records.rs` 的分离，意味着 `bool`、JSON 文本、字符串枚举和未来可能出现的 SQLite 特定列编码不再直接泄漏给抓取引擎、桌面宿主或后续同步层；这些模块现在可以围绕稳定领域对象演进，而不是围绕 SQLite 原始列值演进。
+- 把 `UserState.reading_progress` 校验放到 `UserState::validate()`，证明 FreelyRSS 已开始把“会影响业务语义的数据库约束”前移到领域层，而不是只在迁移 SQL 中被动兜底；这为后续抓取、状态更新和同步合并复用同一合法性规则打下基础。
+- `ids.rs` 与 `primitives.rs` 把“共享命名体系”从文档和 TypeScript DTO 扩展到了 Rust 领域边界，说明阶段 3 之后 FreelyRSS 的核心词汇表已经同时在架构文档、SQLite schema、共享 TS 类型与共享 Rust 模型中收敛一致。
+- `sqlite/records.rs` 中对 record/domain 往返和非法值拒绝的测试，意味着 Step 24 并不是把数据库测试替换成单纯的类型定义，而是新增了一层“持久化表示是否会误伤领域语义”的自动化验收边界；这会降低 Step 25 以后抓取写入和 Step 43 以后状态写入时的字段语义漂移风险。
