@@ -152,7 +152,7 @@ fn apply_migration_set(
 mod tests {
     use std::fs;
 
-    use rusqlite::Connection;
+    use rusqlite::{Connection, ErrorCode, params};
     use tempfile::tempdir;
 
     use super::*;
@@ -166,7 +166,7 @@ mod tests {
             .expect("database initialization should succeed");
 
         assert_eq!(report.current_version, latest_schema_version());
-        assert_eq!(report.applied_versions, vec![1, 2]);
+        assert_eq!(report.applied_versions, vec![1, 2, 3]);
         assert!(database_path.exists());
 
         let connection = Connection::open(&database_path).expect("open database");
@@ -185,7 +185,7 @@ mod tests {
             )
             .expect("bootstrap metadata should be present");
 
-        assert_eq!(recorded_version, 2);
+        assert_eq!(recorded_version, 3);
         assert_eq!(bootstrap_value, "ready");
     }
 
@@ -335,6 +335,258 @@ mod tests {
                 "table {table} should expose the schema columns defined in architecture.md"
             );
         }
+    }
+
+    #[test]
+    fn initializes_expected_indexes_for_core_business_tables() {
+        let temp_dir = tempdir().expect("tempdir");
+        let database_path = temp_dir.path().join("freelyrss.sqlite3");
+
+        initialize_database(&database_path, &DatabaseInitializationOptions::default())
+            .expect("database initialization should succeed");
+
+        let connection = Connection::open(&database_path).expect("open database");
+        let expected_indexes = [
+            IndexExpectation {
+                table: "Tag",
+                name: "ux_tag_scope_name",
+                unique: true,
+                partial: false,
+                columns: &["scope", "name"],
+            },
+            IndexExpectation {
+                table: "Feed",
+                name: "ux_feed_feed_url",
+                unique: true,
+                partial: false,
+                columns: &["feed_url"],
+            },
+            IndexExpectation {
+                table: "Folder",
+                name: "idx_folder_parent_id_sort_order",
+                unique: false,
+                partial: false,
+                columns: &["parent_id", "sort_order"],
+            },
+            IndexExpectation {
+                table: "Feed",
+                name: "idx_feed_folder_id_sort_order",
+                unique: false,
+                partial: false,
+                columns: &["folder_id", "sort_order"],
+            },
+            IndexExpectation {
+                table: "Feed",
+                name: "idx_feed_health_status_last_checked_at",
+                unique: false,
+                partial: false,
+                columns: &["health_status", "last_checked_at"],
+            },
+            IndexExpectation {
+                table: "Article",
+                name: "idx_article_feed_id_source_guid",
+                unique: false,
+                partial: true,
+                columns: &["feed_id", "source_guid"],
+            },
+            IndexExpectation {
+                table: "Article",
+                name: "idx_article_feed_id_published_at",
+                unique: false,
+                partial: false,
+                columns: &["feed_id", "published_at"],
+            },
+            IndexExpectation {
+                table: "Article",
+                name: "idx_article_fetched_at",
+                unique: false,
+                partial: false,
+                columns: &["fetched_at"],
+            },
+            IndexExpectation {
+                table: "Attachment",
+                name: "idx_attachment_article_id",
+                unique: false,
+                partial: false,
+                columns: &["article_id"],
+            },
+            IndexExpectation {
+                table: "Annotation",
+                name: "idx_annotation_article_id_created_at",
+                unique: false,
+                partial: false,
+                columns: &["article_id", "created_at"],
+            },
+            IndexExpectation {
+                table: "UserState",
+                name: "idx_user_state_read_state_article_id",
+                unique: false,
+                partial: false,
+                columns: &["read_state", "article_id"],
+            },
+            IndexExpectation {
+                table: "UserState",
+                name: "idx_user_state_starred_article_id",
+                unique: false,
+                partial: false,
+                columns: &["starred", "article_id"],
+            },
+            IndexExpectation {
+                table: "UserState",
+                name: "idx_user_state_liked_article_id",
+                unique: false,
+                partial: false,
+                columns: &["liked", "article_id"],
+            },
+            IndexExpectation {
+                table: "UserState",
+                name: "idx_user_state_read_later_article_id",
+                unique: false,
+                partial: false,
+                columns: &["read_later", "article_id"],
+            },
+            IndexExpectation {
+                table: "UserState",
+                name: "idx_user_state_importance_article_id",
+                unique: false,
+                partial: false,
+                columns: &["importance", "article_id"],
+            },
+            IndexExpectation {
+                table: "FeedTag",
+                name: "idx_feed_tag_tag_id_feed_id",
+                unique: false,
+                partial: false,
+                columns: &["tag_id", "feed_id"],
+            },
+            IndexExpectation {
+                table: "ArticleTag",
+                name: "idx_article_tag_tag_id_article_id",
+                unique: false,
+                partial: false,
+                columns: &["tag_id", "article_id"],
+            },
+            IndexExpectation {
+                table: "AIArtifact",
+                name: "idx_ai_artifact_article_id_created_at",
+                unique: false,
+                partial: false,
+                columns: &["article_id", "created_at"],
+            },
+            IndexExpectation {
+                table: "SyncEvent",
+                name: "idx_sync_event_entity_created_at",
+                unique: false,
+                partial: false,
+                columns: &["entity_type", "entity_id", "created_at"],
+            },
+            IndexExpectation {
+                table: "SyncEvent",
+                name: "idx_sync_event_device_created_at",
+                unique: false,
+                partial: false,
+                columns: &["device_id", "created_at"],
+            },
+        ];
+
+        for expected_index in expected_indexes {
+            let actual_indexes = table_indexes(&connection, expected_index.table);
+            let actual_index = actual_indexes
+                .iter()
+                .find(|index| index.name == expected_index.name)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "table {} should expose index {} but only had {:?}",
+                        expected_index.table, expected_index.name, actual_indexes
+                    )
+                });
+
+            assert_eq!(
+                actual_index.unique, expected_index.unique,
+                "index {} should have the expected uniqueness",
+                expected_index.name
+            );
+            assert_eq!(
+                actual_index.partial, expected_index.partial,
+                "index {} should have the expected partial-index flag",
+                expected_index.name
+            );
+            assert_eq!(
+                actual_index.columns, expected_index.columns,
+                "index {} should expose the columns defined for Step 20",
+                expected_index.name
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_duplicate_unique_values_and_invalid_business_records() {
+        let temp_dir = tempdir().expect("tempdir");
+        let database_path = temp_dir.path().join("freelyrss.sqlite3");
+
+        initialize_database(&database_path, &DatabaseInitializationOptions::default())
+            .expect("database initialization should succeed");
+
+        let connection = Connection::open(&database_path).expect("open database");
+        prepare_connection(&connection).expect("prepare connection");
+
+        connection
+            .execute(
+                "INSERT INTO Feed (id, title, feed_url, format) VALUES (?1, ?2, ?3, ?4)",
+                params!["feed-1", "Feed One", "https://example.com/feed.xml", "rss"],
+            )
+            .expect("insert first feed");
+
+        let duplicate_feed = connection.execute(
+            "INSERT INTO Feed (id, title, feed_url, format) VALUES (?1, ?2, ?3, ?4)",
+            params!["feed-2", "Feed Two", "https://example.com/feed.xml", "rss"],
+        );
+        assert_constraint_violation(duplicate_feed);
+
+        connection
+            .execute(
+                "INSERT INTO Tag (id, name, scope) VALUES (?1, ?2, ?3)",
+                params!["tag-1", "Focus", "article"],
+            )
+            .expect("insert first tag");
+
+        let duplicate_tag = connection.execute(
+            "INSERT INTO Tag (id, name, scope) VALUES (?1, ?2, ?3)",
+            params!["tag-2", "Focus", "article"],
+        );
+        assert_constraint_violation(duplicate_tag);
+
+        connection
+            .execute(
+                "INSERT INTO Tag (id, name, scope) VALUES (?1, ?2, ?3)",
+                params!["tag-3", "Focus", "feed"],
+            )
+            .expect("same tag name should be allowed in a different scope");
+
+        let invalid_feed_folder = connection.execute(
+            "INSERT INTO Feed (id, title, feed_url, format, folder_id) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                "feed-3",
+                "Broken Folder Feed",
+                "https://example.com/broken.xml",
+                "rss",
+                "missing-folder"
+            ],
+        );
+        assert_constraint_violation(invalid_feed_folder);
+
+        connection
+            .execute(
+                "INSERT INTO Article (id, feed_id, title) VALUES (?1, ?2, ?3)",
+                params!["article-1", "feed-1", "Hello world"],
+            )
+            .expect("insert article");
+
+        let invalid_user_state = connection.execute(
+            "INSERT INTO UserState (article_id, read_state) VALUES (?1, ?2)",
+            params!["article-1", "archived"],
+        );
+        assert_constraint_violation(invalid_user_state);
     }
 
     #[test]
@@ -492,6 +744,23 @@ mod tests {
         assert_eq!(restored_value, "before");
     }
 
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    struct TableIndex {
+        name: String,
+        unique: bool,
+        partial: bool,
+        columns: Vec<String>,
+    }
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    struct IndexExpectation {
+        table: &'static str,
+        name: &'static str,
+        unique: bool,
+        partial: bool,
+        columns: &'static [&'static str],
+    }
+
     fn table_columns(connection: &Connection, table_name: &str) -> Vec<String> {
         let pragma = format!("PRAGMA table_info('{table_name}')");
         let mut statement = connection
@@ -503,5 +772,53 @@ mod tests {
 
         rows.collect::<Result<Vec<String>, _>>()
             .expect("collect table columns")
+    }
+
+    fn table_indexes(connection: &Connection, table_name: &str) -> Vec<TableIndex> {
+        let pragma = format!("PRAGMA index_list('{table_name}')");
+        let mut statement = connection
+            .prepare(&pragma)
+            .expect("prepare index list query");
+        let rows = statement
+            .query_map([], |row| {
+                let name: String = row.get(1)?;
+                let unique = row.get::<_, i64>(2)? != 0;
+                let partial = row.get::<_, i64>(4)? != 0;
+
+                Ok(TableIndex {
+                    columns: index_columns(connection, &name),
+                    name,
+                    unique,
+                    partial,
+                })
+            })
+            .expect("read index list");
+
+        rows.collect::<Result<Vec<TableIndex>, _>>()
+            .expect("collect index list")
+    }
+
+    fn index_columns(connection: &Connection, index_name: &str) -> Vec<String> {
+        let pragma = format!("PRAGMA index_info('{index_name}')");
+        let mut statement = connection
+            .prepare(&pragma)
+            .expect("prepare index info query");
+        let rows = statement
+            .query_map([], |row| row.get(2))
+            .expect("read index columns");
+
+        rows.collect::<Result<Vec<String>, _>>()
+            .expect("collect index columns")
+    }
+
+    fn assert_constraint_violation(result: rusqlite::Result<usize>) {
+        let error = result.expect_err("operation should violate a constraint");
+
+        match error {
+            rusqlite::Error::SqliteFailure(sqlite_error, _) => {
+                assert_eq!(sqlite_error.code, ErrorCode::ConstraintViolation);
+            }
+            other => panic!("expected sqlite constraint violation, got {other:?}"),
+        }
     }
 }

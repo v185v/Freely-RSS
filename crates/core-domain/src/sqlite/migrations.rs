@@ -17,7 +17,7 @@ pub struct AppliedMigration {
     pub name: String,
 }
 
-const EMBEDDED_MIGRATIONS: [EmbeddedMigration; 2] = [
+const EMBEDDED_MIGRATIONS: [EmbeddedMigration; 3] = [
     EmbeddedMigration {
         version: 1,
         name: "bootstrap_metadata",
@@ -27,6 +27,11 @@ const EMBEDDED_MIGRATIONS: [EmbeddedMigration; 2] = [
         version: 2,
         name: "core_business_tables",
         sql: include_str!("migrations/002_core_business_tables.sql"),
+    },
+    EmbeddedMigration {
+        version: 3,
+        name: "core_business_indexes",
+        sql: include_str!("migrations/003_core_business_indexes.sql"),
     },
 ];
 

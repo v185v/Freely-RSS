@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-- 阶段：阶段 3 Step 19 已完成，核心业务表已通过统一 SQLite 迁移链路落地；下一步进入阶段 3 Step 20 的索引与约束补齐
-- 最后更新：2026-04-09
-- 风险状态：已从“通过统一迁移链路落地完整业务表并保持字段命名与 `architecture.md` 一致”推进到“在 Step 20 中补齐唯一索引、查询索引与剩余数据库级约束，同时不破坏 Step 19 已固定的表名、字段序列与桌面宿主启动链路”
+- 阶段：阶段 3 Step 20 已完成，核心业务表的唯一性约束与查询索引已通过统一 SQLite 迁移链路补齐；下一步进入阶段 3 Step 21 的全文搜索表与同步更新机制
+- 最后更新：2026-04-11
+- 风险状态：已从“在 Step 20 中补齐唯一索引、查询索引与剩余数据库级约束，同时不破坏 Step 19 已固定的表名、字段序列与桌面宿主启动链路”推进到“在 Step 21 中引入 FTS5 表与更新机制，同时继续保持查询语义层、SQLite 迁移层与桌面宿主路径装配层解耦”
 
 ## 已确认决策
 
@@ -20,7 +20,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 3 Step 20 需要在不重写 Step 19 业务表的前提下补齐 `feed_url` 唯一性、`feed_id + source_guid` 联合索引、时间字段索引、状态字段索引与关联表索引，并继续把数据库访问细节留在 `core-domain/sqlite` 而不是回流到桌面宿主或前端壳层。
+- 当前无阻塞；下一步风险点是阶段 3 Step 21 需要在不破坏已落地 `v1 + v2 + v3` schema 基线的前提下引入 FTS5 表、索引更新链路与搜索同步机制，并继续把数据库结构演进留在 `core-domain/sqlite` 而不是回流到桌面宿主或前端壳层。
 
 ## 本次执行记录
 
@@ -280,7 +280,21 @@
 - 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，确认业务 schema 接入后前端构建、Tauri 宿主装配与 Rust 入口链路仍可端到端打通，生成 `apps/desktop/src-tauri/target/debug/freelyrss-desktop.exe`。
 - 当前验证结论：Step 19 通过，可进入阶段 3 Step 20“补齐索引与约束”。
 
+### 2026-04-11 - 阶段 3 Step 20：补齐索引与约束
+
+- 已新增 `crates/core-domain/src/sqlite/migrations/003_core_business_indexes.sql` 作为数据库 `v3` 迁移文件，在不重写 Step 19 业务表的前提下补齐 `Feed.feed_url` 唯一索引、`Tag.scope + name` 唯一索引、`Article.feed_id + source_guid` 联合索引、文章时间字段索引、状态字段索引以及关联表/同步表查询索引。
+- 已更新 `crates/core-domain/src/sqlite/migrations.rs` 的嵌入式迁移注册表，使本地数据库初始化链路从 `v1 + v2` 推进为 `v1 + v2 + v3`，继续保持版本号、迁移名与外部 `.sql` 资产一一对应。
+- 已扩展 `crates/core-domain/src/sqlite/mod.rs` 中的迁移验收测试：除保留 Step 18 / Step 19 的建库、回滚、备份与字段序列验证外，新增索引存在性校验，以及“重复 `feed_url`、重复 `scope + name` 标签、非法外键、非法状态值会被 SQLite 拒绝”的数据库级约束验收。
+- 本次索引补齐继续保持既有边界：`core-domain/sqlite` 负责 schema 演进与数据库级约束，`apps/desktop/src-tauri/src/storage.rs` 继续只负责桌面本地路径与启动接线，前端壳未提前引入任何直接 SQL 执行逻辑。
+
+### 验证结果
+
+- 已执行 `cargo fmt --all` 与 `cargo test -p freelyrss-core-domain`，8 个迁移相关测试全部通过；新增覆盖索引存在性与约束拒绝非法写入的验收场景。
+- 已执行 `corepack pnpm run verify`，结果通过；其中包含 `test:desktop`、`test:query`、`test:types`、`test:config`、`rust:clippy`、`test:rust` 与文档链接检查，证明 Step 20 已进入仓库统一质量门禁。
+- 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，确认数据库 schema 提升到 `v3` 后，桌面前端构建、Tauri 宿主装配与 Rust 入口链路仍可端到端打通，生成 `apps/desktop/src-tauri/target/debug/freelyrss-desktop.exe`。
+- 当前验证结论：Step 20 通过，可进入阶段 3 Step 21“建立全文搜索表与同步更新机制”。
+
 ## 下一步
 
-- 按 `implementation-plan.md` 执行阶段 3 Step 20，为 Step 19 已落地的业务表补齐 `feed_url` 唯一性、`feed_id + source_guid` 联合索引、时间字段索引、状态字段索引以及关联表外键/查询索引。
-- 在推进 Step 20 时继续保持当前边界：`core-domain/sqlite` 负责迁移编排、schema 历史与约束/索引演进；`src-tauri/storage.rs` 只负责桌面本地路径与启动接线；前端壳继续停留在 route / store / query / accessibility 分层，不提前引入直接 SQL 执行。
+- 按 `implementation-plan.md` 执行阶段 3 Step 21，为当前 `v3` schema 基线补齐 FTS5 表、全文索引同步更新机制与搜索入口所需的迁移验证。
+- 在推进 Step 21 时继续保持当前边界：`core-domain/sqlite` 负责迁移编排、schema 历史、索引与 FTS 结构演进；`src-tauri/storage.rs` 只负责桌面本地路径与启动接线；前端壳继续停留在 route / store / query / accessibility 分层，不提前引入直接 SQL 执行。
