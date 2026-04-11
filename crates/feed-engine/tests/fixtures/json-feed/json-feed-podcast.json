@@ -1,0 +1,57 @@
+{
+  "version": "https://jsonfeed.org/version/1.1",
+  "title": "FreelyRSS JSON Feed Podcast",
+  "home_page_url": "https://example.com/podcasts/freelyrss",
+  "feed_url": "https://example.com/feeds/podcast.json",
+  "description": "JSON Feed fixture with attachments for rich-media normalization tests.",
+  "_fixtureScenarios": ["json-feed", "rich-media"],
+  "items": [
+    {
+      "id": "json-media-1",
+      "url": "https://example.com/podcasts/dispatch-1",
+      "title": "Audio dispatch with transcript",
+      "summary": "A short audio item with transcript text and cover art.",
+      "content_text": "This entry is meant to exercise JSON Feed parsing, attachment discovery, and audio metadata normalization without relying on remote media files.",
+      "date_published": "2026-04-11T06:30:00Z",
+      "authors": [
+        {
+          "name": "Podcast Desk"
+        }
+      ],
+      "attachments": [
+        {
+          "url": "https://media.example.com/audio/dispatch-1.mp3",
+          "mime_type": "audio/mpeg",
+          "size_in_bytes": 1024000,
+          "duration_in_seconds": 1260
+        },
+        {
+          "url": "https://media.example.com/images/dispatch-cover.jpg",
+          "mime_type": "image/jpeg",
+          "size_in_bytes": 45012
+        }
+      ]
+    },
+    {
+      "id": "json-media-2",
+      "url": "https://example.com/podcasts/dispatch-2",
+      "title": "Video dispatch with show notes",
+      "summary": "A companion item that keeps JSON Feed coverage multi-item.",
+      "content_html": "<p>The second JSON Feed item includes HTML content and a video attachment so future tests can verify that attachment extraction is not audio-only.</p>",
+      "date_published": "2026-04-11T07:10:00Z",
+      "authors": [
+        {
+          "name": "Video Desk"
+        }
+      ],
+      "attachments": [
+        {
+          "url": "https://media.example.com/video/dispatch-2.mp4",
+          "mime_type": "video/mp4",
+          "size_in_bytes": 8421042,
+          "duration_in_seconds": 420
+        }
+      ]
+    }
+  ]
+}

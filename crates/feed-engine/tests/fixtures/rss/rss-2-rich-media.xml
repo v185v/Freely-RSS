@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+  xmlns:content="http://purl.org/rss/1.0/modules/content/"
+  xmlns:media="http://search.yahoo.com/mrss/">
+  <channel>
+    <title>FreelyRSS Rich Media Lab</title>
+    <link>https://example.com/feeds/rich-media</link>
+    <description>RSS 2.0 fixture with enclosure and media payloads.</description>
+    <language>en-us</language>
+    <lastBuildDate>Sat, 11 Apr 2026 08:00:00 GMT</lastBuildDate>
+
+    <!-- freelyrss-fixture-scenario: rich-media -->
+    <item>
+      <guid isPermaLink="false">rss-rich-media-1</guid>
+      <title>Podcast launch recap</title>
+      <link>https://example.com/articles/podcast-launch-recap</link>
+      <author>audio@example.com (Audio Desk)</author>
+      <pubDate>Sat, 11 Apr 2026 07:30:00 GMT</pubDate>
+      <description>A short release recap with an attached MP3 enclosure.</description>
+      <enclosure
+        url="https://media.example.com/podcast/ep1.mp3"
+        length="18204421"
+        type="audio/mpeg" />
+      <media:thumbnail
+        url="https://media.example.com/images/podcast-cover.jpg"
+        width="1200"
+        height="1200" />
+    </item>
+
+    <item>
+      <guid isPermaLink="false">rss-rich-media-2</guid>
+      <title>Launch gallery</title>
+      <link>https://example.com/articles/launch-gallery</link>
+      <author>visual@example.com (Visual Desk)</author>
+      <pubDate>Sat, 11 Apr 2026 07:50:00 GMT</pubDate>
+      <description>Image-rich launch notes with embedded media metadata.</description>
+      <media:content
+        url="https://media.example.com/images/launch-diagram.png"
+        medium="image"
+        type="image/png"
+        width="1600"
+        height="900" />
+      <content:encoded><![CDATA[
+        <p>The gallery article keeps one inline image and one caption block so later
+        normalization tests can verify rich-media extraction without depending on live
+        network content.</p>
+        <img src="https://media.example.com/images/launch-diagram.png" alt="Launch diagram" />
+      ]]></content:encoded>
+    </item>
+  </channel>
+</rss>

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en">
+  <title>FreelyRSS Longform Field Guide</title>
+  <subtitle>Atom 1.0 fixture for longform and multilingual parsing scenarios.</subtitle>
+  <id>tag:example.com,2026:feed-longform</id>
+  <updated>2026-04-11T08:20:00Z</updated>
+  <link rel="self" href="https://example.com/feeds/atom-longform.xml" />
+  <link rel="alternate" href="https://example.com/series/longform" />
+
+  <!-- freelyrss-fixture-scenario: longform -->
+  <!-- freelyrss-fixture-scenario: multilingual -->
+  <entry>
+    <id>tag:example.com,2026:entry-longform-1</id>
+    <title>Longform note for cross-language readers</title>
+    <updated>2026-04-11T08:15:00Z</updated>
+    <published>2026-04-11T07:55:00Z</published>
+    <author>
+      <name>Research Desk</name>
+    </author>
+    <summary>A deliberate longform entry that mixes multiple languages in one article body.</summary>
+    <content type="xhtml">
+      <div xmlns="http://www.w3.org/1999/xhtml">
+        <p>FreelyRSS uses this entry to validate that longform extraction does not collapse after a few paragraphs. The text is intentionally denser than the placeholder content used elsewhere so future parser tests can measure truncation, whitespace cleanup, and reading-mode conversion on something closer to a real essay.</p>
+        <p>中文段落：离线优先阅读器需要在没有网络的情况下仍然保持结构稳定，因此这里放入一段包含中文标点、全角字符与完整句子的正文，确保后续规范化流程不会错误截断多字节字符。</p>
+        <p>日本語の段落: 多言語の長文検証では、段落区切り、句読点、そして英数字が混在したときの整形結果が重要になる。このサンプルは、その後の本文抽出テストで再利用する前提で十分な長さを確保している。</p>
+        <p>فقرة عربية: هذا النص يختبر التعامل مع اتجاهات الكتابة المختلفة، ومع وجود علامات ترقيم ومسافات متعددة داخل نفس المقالة الطويلة، حتى لا تنكسر طبقة التطبيع أو الفهرسة عند إدخال العربية مع لغات أخرى.</p>
+        <p>The final paragraph closes the article with another English segment so downstream tests can verify that longform content remains ordered, readable, and lossless after HTML cleanup, Atom content parsing, and future storage projection.</p>
+      </div>
+    </content>
+  </entry>
+
+  <entry>
+    <id>tag:example.com,2026:entry-longform-2</id>
+    <title>多言語の長文検証メモ</title>
+    <updated>2026-04-11T08:18:00Z</updated>
+    <author>
+      <name>Localization Desk</name>
+    </author>
+    <summary>Secondary Atom entry used to keep multilingual coverage from depending on only one article.</summary>
+    <content type="html"><![CDATA[
+      <p>Español: este segundo artículo añade otra combinación de scripts para que el conjunto no dependa de un único documento de referencia.</p>
+      <p>Français : il sert aussi de garde-fou contre les normalisations qui supposent une seule langue par flux.</p>
+    ]]></content>
+  </entry>
+</feed>

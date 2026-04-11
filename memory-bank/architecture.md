@@ -878,6 +878,16 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `apps/desktop/src-tauri/src/lib.rs`：桌面宿主入口；当前通过 `setup_local_storage` 钩子先创建受管本地目录布局并触发数据库初始化，再进入窗口运行链路，保证后续任何前端数据消费都建立在已收敛 schema 与已准备好的本地目录结构之上。
 - `apps/desktop/src-tauri/src/storage.rs`：桌面宿主本地存储装配文件，负责把 `app_local_data_dir` 映射为 `database/`、`database/backups/`、`cache/content/`、`cache/media/`、`exports/` 与 `logs/` 目录，并把路径策略、目录创建和数据库迁移调用隔离出 `lib.rs`，避免宿主入口重新膨胀为单体文件。
 
+- `crates/feed-engine/Cargo.toml`：Feed 引擎 crate 清单；阶段 3 Step 23 起仅额外引入测试期 `serde` / `serde_json` 依赖，用于样本清单校验，保持运行时抓取与解析实现尚未提前耦合第三方解析栈。
+- `crates/feed-engine/tests/fixture_catalog.rs`：Feed 固定样本目录的自动化验收文件，负责校验样本清单 JSON、必需场景覆盖、文件签名、条目数、marker 与路径边界，避免固定样本退化为无人维护的散落资产。
+- `crates/feed-engine/tests/fixtures/README.md`：Feed 固定样本目录的贡献者说明，明确这些 XML/JSON 文件只服务测试、回归与后续抓取/解析验收，不进入运行时模块边界。
+- `crates/feed-engine/tests/fixtures/manifest.json`：Feed 固定样本清单文件，负责为每个样本声明格式、相对路径、条目数、场景覆盖与关键 marker，是后续解析回归测试复用这些样本的唯一目录入口。
+- `crates/feed-engine/tests/fixtures/rss/rss-2-rich-media.xml`：RSS 2.0 富媒体样本，负责提供 enclosure、缩略图与内嵌媒体内容场景，供后续 RSS 解析、附件识别与内容标准化验收复用。
+- `crates/feed-engine/tests/fixtures/rss/rss-2-duplicates-and-missing-fields.xml`：RSS 2.0 去重与缺字段样本，负责提供重复 canonical link 候选与缺失 guid/author/pubDate 的稀疏文章场景，供后续去重与容错解析验收复用。
+- `crates/feed-engine/tests/fixtures/rss/rss-0.91-legacy.xml`：Legacy RSS 0.91 样本，负责在真正实现 RSS 0.9x 解析前先固定兼容性输入资产，避免后续支持 legacy feed 时重新发明测试数据。
+- `crates/feed-engine/tests/fixtures/atom/atom-longform-multilingual.xml`：Atom 1.0 长文多语言样本，负责提供 XHTML 正文、长段落与中日阿等多语种混合内容，供后续正文抽取、排版清洗与多语言索引验收复用。
+- `crates/feed-engine/tests/fixtures/json-feed/json-feed-podcast.json`：JSON Feed 1.1 富媒体样本，负责提供音频/视频 attachments 与文本正文混合输入，供后续 JSON Feed 解析与附件标准化验收复用。
+
 当前架构见解：
 
 - Step 6 的关键价值不是“把包管理器跑起来”，而是把 JS/TS 与 Rust 两条工具链的边界固定下来，这决定了后续共享代码如何演进。
@@ -950,6 +960,10 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `apps/desktop/src-tauri/src/storage.rs` 在 Step 22 中同时承担“路径推导”“目录预创建”和“数据库初始化接线”三件宿主私有工作，但仍刻意不触碰 schema、索引、FTS 或缓存内容格式；这进一步巩固了“路径策略属于宿主，数据语义属于 `core-domain/sqlite`”的边界。
 - 在 Tauri `setup` 阶段先完成完整目录布局，再调用 `initialize_database`，意味着后续 Step 23 到 Step 59 的测试样本、抓取缓存、媒体落盘、导出产物和任务日志都可以假定本地目录契约已经稳定存在，而不必在各自模块里重复决定路径或临时补目录。
 - 把宿主本地目录契约的自动化验收放进 `apps/desktop/src-tauri` 自己的单元测试，而不是只依赖根级 `verify`，说明 FreelyRSS 已开始把“宿主层文件系统布局”也视为一等架构边界；这能减少未来因平台路径调整或缓存目录扩展带来的静默回归。
+- Step 23 的关键价值不是“先堆几份 XML/JSON 样本”，而是先把抓取与解析阶段未来要长期复用的验收输入资产固定下来：在真正编写 parser 之前，就先约定好场景覆盖、样本路径和校验方式，避免 Step 25 之后继续用临时内联字符串推动实现。
+- 把固定样本放在 `crates/feed-engine/tests/fixtures/`、并通过 `fixture_catalog.rs` + `manifest.json` 管理，意味着 FreelyRSS 明确把“解析回归资产”视为 `feed-engine` 模块边界的一部分，而不是把样本散落到 `core-domain`、桌面宿主或前端壳层。
+- `manifest.json` 同时声明格式、场景、条目数与 marker，说明 FreelyRSS 不准备把测试数据集仅仅当作“能打开的文件集合”；它从 Step 23 开始就是可审阅、可扩展、可自动验收的契约资产，这对后续 Step 26 到 Step 30 的解析、去重与内容标准化测试非常关键。
+- 在 Step 23 就额外纳入 `rss-0.91-legacy.xml`，虽然超出“最少满足当前步骤”的字面要求，但符合实施计划里对 RSS 0.9x 支持的前置需要：先把 legacy 输入固定为回归资产，再进入真正的兼容实现，比等到解析器落地后临时补样本更稳妥。
 
 ## 14. 当前文档职责
 
@@ -967,3 +981,5 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - 目录骨架先行是必要步骤，因为后续 `pnpm workspace`、`Cargo workspace`、CI、changesets 和数据库迁移都会依赖这套边界。
 - 即使还未开始建表，数据库 schema 也必须先固化在架构文档中，这样后续迁移、领域模型和共享类型才能围绕同一命名体系演进。
 - 当前阶段已经完成 JS/TS 工作区的版本治理基线，但同步协议号与数据库 schema 号仍应留在各自的实现边界中演进，不能被 npm 包版本替代。
+- 从 Step 23 开始，FreelyRSS 不再只有“schema 可回归”，也开始拥有“解析输入资产可回归”的边界：固定 feed 样本成为与迁移 SQL、宿主目录契约同级的长期验收资产。
+- 把样本清单和样本文件一起放进 `feed-engine` 的测试目录，而不是新建仓库级 `fixtures/` 杂项目录，能持续强化“抓取/解析问题回到抓取/解析模块解决”的所有权边界。

@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-- 阶段：阶段 3 Step 22 已完成，桌面宿主已把本地数据目录扩展为数据库、备份、正文缓存、媒体缓存、导出产物与日志的分层布局；下一步进入阶段 3 Step 23 的标准化测试数据集
+- 阶段：阶段 3 Step 23 已完成，`crates/feed-engine` 已补齐标准化固定样本集、样本清单与测试自校验；下一步进入阶段 3 Step 24 的 Rust 领域模型
 - 最后更新：2026-04-11
-- 风险状态：已从“在 Step 22 中扩展数据库文件之外的本地缓存目录分层，同时继续保持 `core-domain/sqlite` 只负责 schema、`src-tauri/storage.rs` 只负责路径装配”推进到“在 Step 23 中补齐 RSS / Atom / JSON Feed 与富媒体场景的固定测试样本，同时避免把测试样本耦合进运行时实现边界”
+- 风险状态：已从“在 Step 23 中补齐 RSS / Atom / JSON Feed 与富媒体场景的固定测试样本，同时避免把测试样本耦合进运行时实现边界”推进到“在 Step 24 中把领域实体、值对象与状态枚举对齐到当前 `v4` schema 与共享命名体系，同时继续保持测试样本停留在 `feed-engine` 的测试边界”
 
 ## 已确认决策
 
@@ -20,7 +20,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 3 Step 23 需要在不破坏已落地 `v4` schema 基线、宿主本地目录布局和现有桌面启动链路的前提下，补齐 RSS / Atom / JSON Feed、富媒体、重复文章与缺字段文章的固定样本，并保持这些样本只服务测试与验收，而不回流到运行时代码路径。
+- 当前无阻塞；下一步风险点是阶段 3 Step 24 需要在不破坏已落地 `v4` schema、FTS 结构、本地目录布局和现有桌面启动链路的前提下，补齐与数据库字段一一对齐的 Rust 领域模型，并明确哪些类型只服务内部持久化、哪些类型可以继续向前端或后续引擎暴露。
 
 ## 本次执行记录
 
@@ -326,7 +326,24 @@
 - 已在验证通过后同步回写 `memory-bank/progress.md` 与 `memory-bank/architecture.md`，补齐阶段 3 Step 22 的交接记录、本地目录职责说明与新的架构边界见解。
 - 当前验证结论：Step 22 通过，可进入阶段 3 Step 23“准备标准化测试数据集”。
 
+### 2026-04-11 - 阶段 3 Step 23：准备标准化测试数据集
+
+- 已在 `crates/feed-engine/tests/fixtures/` 下建立固定样本目录，并新增 `manifest.json` 作为样本清单入口，集中声明 RSS、Atom、JSON Feed、富媒体、重复文章、缺字段文章、长文与多语言场景的覆盖关系。
+- 已新增测试专用文档 `crates/feed-engine/tests/fixtures/README.md`，明确这些样本只服务解析、标准化、回归与后续抓取验收，不进入 `src/` 运行时边界。
+- 已补齐 5 份固定样本文件：`rss/rss-2-rich-media.xml`、`rss/rss-2-duplicates-and-missing-fields.xml`、`rss/rss-0.91-legacy.xml`、`atom/atom-longform-multilingual.xml` 与 `json-feed/json-feed-podcast.json`；其中额外纳入 RSS 0.91 兼容样本，为后续 Step 26 的 legacy RSS 解析预留回归资产。
+- 已新增 `crates/feed-engine/tests/fixture_catalog.rs`，把“样本场景覆盖完整”“路径仍停留在测试目录”“文件签名与条目数符合声明”“关键 marker 未丢失”收敛为自动化测试，而不是依赖人工逐个检查 XML/JSON 文件。
+- 已在 `crates/feed-engine/Cargo.toml` 中仅补齐测试期 `serde` / `serde_json` 依赖，并同步更新根 `Cargo.lock`；运行时库入口 `crates/feed-engine/src/lib.rs` 仍保持最小边界，未提前引入抓取或解析实现。
+- 本次实现继续保持既有边界：固定样本全部停留在 `feed-engine` 的 `tests/` 范围；`core-domain/sqlite` 继续只负责 schema、索引与 FTS；`src-tauri` 宿主路径层与前端壳层没有消费这些测试资产。
+
+### 验证结果
+
+- 已执行 `cargo test -p freelyrss-feed-engine`，3 个样本目录校验测试全部通过，确认 manifest、样本文件、marker 与场景覆盖声明一致。
+- 已执行 `corepack pnpm run verify`，结果通过；其中新增的 `freelyrss-feed-engine` 测试已纳入根级 `test:rust` 链路，证明 Step 23 已进入仓库统一质量门禁。
+- 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，确认新增测试样本与 Rust 测试依赖未破坏桌面前端构建、Tauri 宿主装配与 Rust 入口链路，生成 `apps/desktop/src-tauri/target/debug/freelyrss-desktop.exe`。
+- 已在验证通过后同步回写 `memory-bank/progress.md` 与 `memory-bank/architecture.md`，补齐阶段 3 Step 23 的交接记录、测试样本文件职责说明与新的架构边界见解。
+- 当前验证结论：Step 23 通过，可进入阶段 3 Step 24“建立 Rust 领域模型”。
+
 ## 下一步
 
-- 按 `implementation-plan.md` 执行阶段 3 Step 23，建立覆盖 RSS、Atom、JSON Feed、富媒体、重复文章、缺字段文章、长文与多语言文章的标准化固定样本集。
-- 在推进 Step 23 时继续保持当前边界：固定样本只服务测试、回归与后续抓取/解析验收，不反向混入 `src-tauri` 宿主路径层、`core-domain/sqlite` schema 层或当前前端壳的 route / store / query / accessibility 组合层。
+- 按 `implementation-plan.md` 执行阶段 3 Step 24，在 `crates/core-domain` 中建立与当前 `v4` schema 对齐的 Rust 领域实体、值对象与状态枚举。
+- 在推进 Step 24 时继续保持当前边界：Step 23 的固定样本继续只服务 `feed-engine` 测试、回归与后续抓取/解析验收，不反向混入 `src-tauri` 宿主路径层、`core-domain/sqlite` schema 层或当前前端壳的 route / store / query / accessibility 组合层。

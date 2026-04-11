@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "requiredScenarios": [
+    "rss",
+    "atom",
+    "json-feed",
+    "rich-media",
+    "duplicate-articles",
+    "missing-fields",
+    "longform",
+    "multilingual"
+  ],
+  "fixtures": [
+    {
+      "id": "rss-rich-media",
+      "format": "rss",
+      "path": "rss/rss-2-rich-media.xml",
+      "articleCount": 2,
+      "scenarios": ["rss", "rich-media"],
+      "markers": [
+        "<!-- freelyrss-fixture-scenario: rich-media -->",
+        "https://media.example.com/podcast/ep1.mp3",
+        "https://media.example.com/images/launch-diagram.png"
+      ]
+    },
+    {
+      "id": "rss-duplicates-and-missing-fields",
+      "format": "rss",
+      "path": "rss/rss-2-duplicates-and-missing-fields.xml",
+      "articleCount": 3,
+      "scenarios": ["rss", "duplicate-articles", "missing-fields"],
+      "markers": [
+        "<!-- freelyrss-fixture-scenario: duplicate-articles -->",
+        "<!-- freelyrss-fixture-scenario: missing-fields -->",
+        "https://example.com/articles/duplicate-story"
+      ]
+    },
+    {
+      "id": "rss-091-legacy",
+      "format": "rss",
+      "path": "rss/rss-0.91-legacy.xml",
+      "articleCount": 1,
+      "scenarios": ["rss", "legacy-rss-0.91"],
+      "markers": [
+        "<!-- freelyrss-fixture-scenario: legacy-rss-0.91 -->",
+        "Legacy Netscape-style channel"
+      ]
+    },
+    {
+      "id": "atom-longform-multilingual",
+      "format": "atom",
+      "path": "atom/atom-longform-multilingual.xml",
+      "articleCount": 2,
+      "scenarios": ["atom", "longform", "multilingual"],
+      "markers": [
+        "<!-- freelyrss-fixture-scenario: longform -->",
+        "<!-- freelyrss-fixture-scenario: multilingual -->",
+        "离线优先阅读器",
+        "多言語の長文検証"
+      ]
+    },
+    {
+      "id": "json-feed-podcast",
+      "format": "json-feed",
+      "path": "json-feed/json-feed-podcast.json",
+      "articleCount": 2,
+      "scenarios": ["json-feed", "rich-media"],
+      "markers": [
+        "\"_fixtureScenarios\": [\"json-feed\", \"rich-media\"]",
+        "https://media.example.com/audio/dispatch-1.mp3",
+        "https://media.example.com/images/dispatch-cover.jpg"
+      ]
+    }
+  ]
+}
