@@ -1,4 +1,5 @@
 mod atom;
+mod json_feed;
 mod rss;
 
 use std::str;
@@ -24,9 +25,7 @@ impl FeedParser for DefaultFeedParser {
         let source = source.trim_start_matches('\u{feff}').trim();
 
         if source.starts_with('{') {
-            return Err(FeedEngineError::parse(
-                "JSON Feed parsing is not implemented until Step 27",
-            ));
+            return json_feed::parse(source);
         }
 
         let document = Document::parse_with_options(

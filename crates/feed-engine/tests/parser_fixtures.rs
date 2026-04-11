@@ -125,6 +125,53 @@ fn default_parser_reads_atom_longform_fixture() {
 }
 
 #[test]
+fn default_parser_reads_json_feed_fixture() {
+    let parser = DefaultFeedParser;
+    let fetched = fetched_fixture("json-feed/json-feed-podcast.json", "application/feed+json");
+
+    let parsed = parser
+        .parse(&fetched)
+        .expect("JSON Feed fixture should parse");
+
+    assert_eq!(parsed.format, FeedFormat::JsonFeed);
+    assert_eq!(parsed.title.as_deref(), Some("FreelyRSS JSON Feed Podcast"));
+    assert_eq!(
+        parsed.site_url,
+        Some(url("https://example.com/podcasts/freelyrss"))
+    );
+    assert_eq!(parsed.articles.len(), 2);
+
+    let first = &parsed.articles[0];
+    assert_eq!(first.source_guid.as_deref(), Some("json-media-1"));
+    assert_eq!(first.author.as_deref(), Some("Podcast Desk"));
+    assert_eq!(first.published_at, Some(timestamp("2026-04-11T06:30:00Z")));
+    assert_eq!(
+        first.content_extracted.as_deref(),
+        Some(
+            "This entry is meant to exercise JSON Feed parsing, attachment discovery, and audio metadata normalization without relying on remote media files."
+        )
+    );
+    assert_eq!(
+        first.thumbnail,
+        Some(url("https://media.example.com/images/dispatch-cover.jpg"))
+    );
+    assert_eq!(first.attachments.len(), 2);
+    assert_eq!(first.attachments[0].attachment_type, AttachmentType::Audio);
+    assert_eq!(first.attachments[0].duration, Some(1_260));
+    assert_eq!(first.attachments[1].attachment_type, AttachmentType::Image);
+
+    let second = &parsed.articles[1];
+    assert_eq!(second.author.as_deref(), Some("Video Desk"));
+    assert_eq!(second.published_at, Some(timestamp("2026-04-11T07:10:00Z")));
+    assert!(second.content_raw.as_deref().is_some_and(|content| {
+        content.contains("<p>") && content.contains("video attachment")
+    }));
+    assert_eq!(second.attachments.len(), 1);
+    assert_eq!(second.attachments[0].attachment_type, AttachmentType::Video);
+    assert_eq!(second.attachments[0].size, Some(8_421_042));
+}
+
+#[test]
 fn default_normalizer_projects_parsed_feed_into_normalized_records() {
     let parser = DefaultFeedParser;
     let normalizer = DefaultFeedNormalizer;
@@ -161,6 +208,38 @@ fn default_normalizer_projects_parsed_feed_into_normalized_records() {
     assert_eq!(
         normalized.articles[2].fetched_at,
         timestamp("2026-04-11T12:30:00Z")
+    );
+}
+
+#[test]
+fn default_normalizer_projects_json_feed_into_normalized_records() {
+    let parser = DefaultFeedParser;
+    let normalizer = DefaultFeedNormalizer;
+    let fetched = fetched_fixture("json-feed/json-feed-podcast.json", "application/feed+json");
+    let parsed = parser
+        .parse(&fetched)
+        .expect("JSON Feed fixture should parse");
+    let context = NormalizeContext::from_fetched_feed(&fetched);
+
+    let normalized = normalizer
+        .normalize(parsed, &context)
+        .expect("JSON Feed should normalize");
+
+    assert_eq!(normalized.feed.feed_id, Some(feed_id("feed-rss")));
+    assert_eq!(normalized.feed.format, FeedFormat::JsonFeed);
+    assert_eq!(normalized.feed.title, "FreelyRSS JSON Feed Podcast");
+    assert_eq!(normalized.articles.len(), 2);
+    assert_eq!(
+        normalized.articles[0].canonical_url,
+        Some(url("https://example.com/podcasts/dispatch-1"))
+    );
+    assert_eq!(
+        normalized.articles[0].thumbnail,
+        Some(url("https://media.example.com/images/dispatch-cover.jpg"))
+    );
+    assert_eq!(
+        normalized.articles[1].attachments[0].attachment_type,
+        AttachmentType::Video
     );
 }
 

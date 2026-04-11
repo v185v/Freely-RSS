@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-- 阶段：阶段 4 Step 26 已完成，`crates/feed-engine` 已补齐 RSS 2.0、RSS 0.9x 与 Atom 1.0 的默认解析器、标准化器与固定样本回归测试；下一步进入阶段 4 Step 27 的 JSON Feed 解析
+- 阶段：阶段 4 Step 27 已完成，`crates/feed-engine` 已补齐 JSON Feed 默认解析路径，并继续与 RSS / Atom 共享统一 `ParsedFeedDocument` / `NormalizedFeedBatch` 契约；下一步进入阶段 4 Step 28 的网页 feed 自动发现
 - 最后更新：2026-04-11
-- 风险状态：已从“在 Step 26 中补齐 RSS / Atom 解析时继续保持 `FeedFetcher` 只负责编排、`transport` / `parser` / `normalizer` / `repository` 四段端口继续可替换、固定样本继续只服务 `feed-engine` 测试与解析验收”推进到“在 Step 27 中补齐 JSON Feed 解析时继续保持 XML parser 与 JSON parser 共享同一 `ParsedFeedDocument` / `NormalizedFeedBatch` 契约，且不把格式分支逻辑回流到桌面宿主或 UI”
+- 风险状态：已从“在 Step 27 中补齐 JSON Feed 解析时继续保持 XML parser 与 JSON parser 共享同一 `ParsedFeedDocument` / `NormalizedFeedBatch` 契约，且不把格式分支逻辑回流到桌面宿主或 UI”推进到“在 Step 28 中补齐网页 feed 自动发现时继续保持 HTML 发现逻辑只新增为 `feed-engine` 内部的解析前置分支，不让桌面宿主或前端壳层直接承担网页抓取结果判定”
 
 ## 已确认决策
 
@@ -20,7 +20,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 4 Step 27 需要在不破坏 Step 26 已落地 XML 解析边界的前提下，为 JSON Feed 1.1 补齐解析与标准化路径，并继续复用 Step 23 固定样本与 Step 26 的默认标准化器作为统一验收基线。
+- 当前无阻塞；下一步风险点是阶段 4 Step 28 需要在不破坏 Step 25 至 Step 27 已落地的 transport / parser / normalizer / repository 分层前提下，为普通网页补齐 feed 自动发现路径，并明确“发现多个候选 feed”“未发现任何 feed”的返回边界。
 
 ## 本次执行记录
 
@@ -393,7 +393,25 @@
 - 已在验证通过后同步回写 `memory-bank/progress.md` 与 `memory-bank/architecture.md`，补齐阶段 4 Step 26 的交接记录、默认 parser / normalizer 文件职责说明与新的架构边界见解。
 - 当前验证结论：Step 26 通过，可进入阶段 4 Step 27“支持 JSON Feed 解析”。
 
+### 2026-04-11 - 阶段 4 Step 27：支持 JSON Feed 解析
+
+- 已在 `crates/feed-engine/src/parser/json_feed.rs` 新增 JSON Feed 默认解析模块，使用 `serde` / `serde_json` 把 JSON Feed 1.1（兼容 version 1 / 1.1）收敛到与 RSS / Atom 相同的 `ParsedFeedDocument` / `ParsedArticle` / `ParsedAttachment` 契约，而不是在宿主层引入 JSON 专用分支。
+- 已更新 `crates/feed-engine/src/parser/mod.rs`，把默认 parser 的格式分发从“仅支持 XML”推进为“JSON 走 `json_feed`，XML 继续走 `rss` / `atom`”；`FeedFetcher`、`FeedNormalizer` 与四段端口接口保持不变，Step 25 的编排边界没有回流。
+- 已更新 `crates/feed-engine/Cargo.toml`，将 `serde` / `serde_json` 从仅测试依赖推进为运行时依赖，使 JSON Feed 解析能力属于 `feed-engine` crate 的正式默认实现，而不再只是固定样本目录校验工具链的一部分。
+- 已扩展 `crates/feed-engine/tests/parser_fixtures.rs`，新增 JSON Feed 样本的解析回归与标准化回归，覆盖文本正文、HTML 正文、音频 / 视频 / 图片 attachments、缩略图回退与发布时间映射，继续复用 Step 23 已固定的 `json-feed/json-feed-podcast.json` 样本资产。
+- 本次实现继续保持既有边界：`FeedFetcher` 继续只负责编排，`DefaultFeedNormalizer` 继续只消费统一解析结果并投影为统一标准化结果，JSON Feed 固定样本继续只停留在 `feed-engine/tests/fixtures/`，没有反向混入桌面宿主、前端壳层或 `core-domain/model`。
+
+### 验证结果
+
+- 已执行 `cargo fmt --all`，确认新增 JSON Feed parser 与测试文件格式化通过。
+- 已执行 `cargo test -p freelyrss-feed-engine`，结果通过；其中包含 Step 25 抓取器接线测试、Step 23 样本目录验收，以及新增的 2 个 JSON Feed 解析 / 标准化回归测试。
+- 已执行 `cargo clippy -p freelyrss-feed-engine --all-targets -- -D warnings`，结果通过，确认 Step 27 未引入新的 Rust 静态分析问题。
+- 已执行 `corepack pnpm run verify`，结果通过；其中 `format:check`、`lint`、`test:config`、`test:types`、`test:query`、`test:desktop`、`rust:fmt:check`、`rust:clippy`、`test:rust` 与 `docs:links` 全部通过，证明 Step 27 已纳入仓库统一质量门禁。
+- 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，确认 `feed-engine` 新增 JSON 运行时依赖与默认 parser 后，桌面前端构建、Tauri 宿主装配与 Rust 入口链路仍可端到端打通，生成 `apps/desktop/src-tauri/target/debug/freelyrss-desktop.exe`。
+- 已在验证通过后同步回写 `memory-bank/progress.md` 与 `memory-bank/architecture.md`，补齐阶段 4 Step 27 的交接记录、JSON parser 文件职责说明与新的架构边界见解。
+- 当前验证结论：Step 27 通过，可进入阶段 4 Step 28“支持网页 feed 自动发现”。
+
 ## 下一步
 
-- 按 `implementation-plan.md` 执行阶段 4 Step 27，在 `crates/feed-engine` 中补齐 JSON Feed 1.1 的解析和标准化输出。
-- 在推进 Step 27 时继续保持当前边界：Step 25 已落地的 `FeedFetcher` 继续只承载编排职责，Step 26 已落地的 `DefaultFeedParser` / `DefaultFeedNormalizer` 继续只消费与产出统一阶段契约，JSON Feed 固定样本继续只服务 `feed-engine` 的解析回归与后续抓取验收，不反向混入桌面宿主或前端壳层。
+- 按 `implementation-plan.md` 执行阶段 4 Step 28，在 `crates/feed-engine` 中补齐从普通网页 HTML 自动发现 feed 链接的能力，并区分“发现多个候选源”和“未发现任何源”的返回结果。
+- 在推进 Step 28 时继续保持当前边界：Step 25 已落地的 `FeedFetcher` 继续只承载编排职责，Step 26 / Step 27 已落地的默认 parser / normalizer 继续只消费与产出统一阶段契约，HTML 自动发现样本与验收继续只服务 `feed-engine`，不反向混入桌面宿主或前端壳层。
