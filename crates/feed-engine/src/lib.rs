@@ -3,6 +3,8 @@
 mod error;
 mod fetcher;
 mod model;
+mod normalizer;
+mod parser;
 mod ports;
 
 pub use error::FeedEngineError;
@@ -12,4 +14,6 @@ pub use model::{
     NormalizedAttachmentRecord, NormalizedFeedBatch, NormalizedFeedRecord, ParsedArticle,
     ParsedAttachment, ParsedFeedDocument, PersistedFeedBatch,
 };
+pub use normalizer::DefaultFeedNormalizer;
+pub use parser::DefaultFeedParser;
 pub use ports::{FeedNormalizer, FeedParser, FeedRepository, FeedTransport};

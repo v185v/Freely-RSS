@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-- 阶段：阶段 4 Step 25 已完成，`crates/feed-engine` 已补齐获取、解析、标准化与持久化之间的抓取器抽象、公共模型与空实现接线测试；下一步进入阶段 4 Step 26 的 RSS / Atom 解析
+- 阶段：阶段 4 Step 26 已完成，`crates/feed-engine` 已补齐 RSS 2.0、RSS 0.9x 与 Atom 1.0 的默认解析器、标准化器与固定样本回归测试；下一步进入阶段 4 Step 27 的 JSON Feed 解析
 - 最后更新：2026-04-11
-- 风险状态：已从“在 Step 25 中建立抓取器抽象时继续保持 `core-domain/model` 只承载领域语义、`core-domain/sqlite` 只承载持久化与迁移、固定样本继续只服务 `feed-engine` 测试边界”推进到“在 Step 26 中补齐 RSS / Atom 解析时继续保持 `FeedFetcher` 只负责编排、`transport` / `parser` / `normalizer` / `repository` 四段端口继续可替换、固定样本继续只服务 `feed-engine` 测试与解析验收”
+- 风险状态：已从“在 Step 26 中补齐 RSS / Atom 解析时继续保持 `FeedFetcher` 只负责编排、`transport` / `parser` / `normalizer` / `repository` 四段端口继续可替换、固定样本继续只服务 `feed-engine` 测试与解析验收”推进到“在 Step 27 中补齐 JSON Feed 解析时继续保持 XML parser 与 JSON parser 共享同一 `ParsedFeedDocument` / `NormalizedFeedBatch` 契约，且不把格式分支逻辑回流到桌面宿主或 UI”
 
 ## 已确认决策
 
@@ -20,7 +20,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 4 Step 26 需要在不破坏 Step 25 新建抓取器抽象的前提下，为 RSS 2.0、RSS 0.9x 与 Atom 1.0 落地真正的解析与标准化路径，并复用 Step 23 固定样本作为首批解析回归资产。
+- 当前无阻塞；下一步风险点是阶段 4 Step 27 需要在不破坏 Step 26 已落地 XML 解析边界的前提下，为 JSON Feed 1.1 补齐解析与标准化路径，并继续复用 Step 23 固定样本与 Step 26 的默认标准化器作为统一验收基线。
 
 ## 本次执行记录
 
@@ -377,7 +377,23 @@
 - 已在验证通过后同步回写 `memory-bank/progress.md` 与 `memory-bank/architecture.md`，补齐阶段 4 Step 25 的交接记录、抓取器抽象文件职责说明与新的架构边界见解。
 - 当前验证结论：Step 25 通过，可进入阶段 4 Step 26“支持 RSS 与 Atom 解析”。
 
+### 2026-04-11 - 阶段 4 Step 26：支持 RSS 与 Atom 解析
+
+- 已在 `crates/feed-engine/src/` 下新增 `normalizer.rs` 与 `parser/` 目录，把 Step 25 预留的 `FeedParser` / `FeedNormalizer` 端口收敛为默认实现：`DefaultFeedParser` 负责格式探测与 XML 解析分发，`DefaultFeedNormalizer` 负责把解析结果投影到统一 `NormalizedFeedBatch`，避免调用方在宿主层手工拼接默认标准化逻辑。
+- 已在 `crates/feed-engine/src/parser/mod.rs` 中实现 UTF-8 检查、XML 根节点探测、RFC 3339 / RFC 2822 时间规范化与 URL / 语言值对象转换，并把 RSS 与 Atom 的具体字段映射继续拆分到 `parser/rss.rs` 和 `parser/atom.rs`，保持格式分支不回流到 `fetcher.rs`、宿主层或 UI。
+- 已在 `crates/feed-engine/src/parser/rss.rs` 中补齐 RSS 2.0 与 RSS 0.9x 解析路径，覆盖 `channel/item`、`guid`、`link`、`author`、`description`、`content:encoded`、`enclosure`、`media:thumbnail` 与 `media:content` 等字段，并把 enclosure / media 统一投影为 `ParsedAttachment`。
+- 已在 `crates/feed-engine/src/parser/atom.rs` 中补齐 Atom 1.0 解析路径，覆盖 `feed/entry`、`link rel`、`author`、`summary`、`content type=xhtml|html`、`published` / `updated` 与 `xml:lang` 继承，并保留 XHTML / HTML 正文入口，供后续正文抽取与内容清洗继续复用。
+- 已新增 `crates/feed-engine/tests/parser_fixtures.rs`，用 Step 23 固定样本对 RSS 2.0 富媒体、RSS 0.91 兼容、Atom 长文多语言与默认标准化输出做回归验收；本次实现继续保持既有边界：解析样本仍只停留在 `feed-engine/tests/fixtures/`，`FeedFetcher` 继续只负责编排四段端口，桌面宿主与前端壳层没有提前引入真实 feed 解析分支。
+
+### 验证结果
+
+- 已执行 `cargo fmt --all`、`cargo clippy -p freelyrss-feed-engine --all-targets -- -D warnings` 与 `cargo test -p freelyrss-feed-engine`，确认新增默认 parser / normalizer、4 个样本回归测试以及既有 Step 25/Step 23 验收测试全部通过。
+- 已执行 `corepack pnpm run verify`，结果通过；其中 `format:check`、`lint`、`test:config`、`test:types`、`test:query`、`test:desktop`、`rust:fmt:check`、`rust:clippy`、`test:rust` 与 `docs:links` 全部通过，证明 Step 26 已纳入仓库统一质量门禁。
+- 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，确认新增 `roxmltree` / `chrono` 依赖与 `feed-engine` 默认解析实现后，桌面前端构建、Tauri 宿主装配与 Rust 入口链路仍可端到端打通，生成 `apps/desktop/src-tauri/target/debug/freelyrss-desktop.exe`。
+- 已在验证通过后同步回写 `memory-bank/progress.md` 与 `memory-bank/architecture.md`，补齐阶段 4 Step 26 的交接记录、默认 parser / normalizer 文件职责说明与新的架构边界见解。
+- 当前验证结论：Step 26 通过，可进入阶段 4 Step 27“支持 JSON Feed 解析”。
+
 ## 下一步
 
-- 按 `implementation-plan.md` 执行阶段 4 Step 26，在 `crates/feed-engine` 中补齐 RSS 2.0、RSS 0.9x 与 Atom 1.0 的解析和标准化输出。
-- 在推进 Step 26 时继续保持当前边界：Step 25 已落地的 `FeedFetcher` 继续只承载编排职责，`transport` / `parser` / `normalizer` / `repository` 四段端口继续保持可替换，Step 23 的固定样本继续只服务 `feed-engine` 的解析回归与后续抓取验收，不反向混入桌面宿主或前端壳层。
+- 按 `implementation-plan.md` 执行阶段 4 Step 27，在 `crates/feed-engine` 中补齐 JSON Feed 1.1 的解析和标准化输出。
+- 在推进 Step 27 时继续保持当前边界：Step 25 已落地的 `FeedFetcher` 继续只承载编排职责，Step 26 已落地的 `DefaultFeedParser` / `DefaultFeedNormalizer` 继续只消费与产出统一阶段契约，JSON Feed 固定样本继续只服务 `feed-engine` 的解析回归与后续抓取验收，不反向混入桌面宿主或前端壳层。
