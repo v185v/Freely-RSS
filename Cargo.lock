@@ -95,8 +95,10 @@ dependencies = [
 name = "freelyrss-feed-engine"
 version = "0.1.0"
 dependencies = [
+ "freelyrss-core-domain",
  "serde",
  "serde_json",
+ "thiserror",
 ]
 
 [[package]]

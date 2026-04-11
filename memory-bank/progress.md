@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-- 阶段：阶段 3 Step 24 已完成，`crates/core-domain` 已补齐与 `v4` schema 对齐的 Rust 领域实体、值对象、状态枚举与存储记录映射测试；下一步进入阶段 4 Step 25 的抓取器抽象
+- 阶段：阶段 4 Step 25 已完成，`crates/feed-engine` 已补齐获取、解析、标准化与持久化之间的抓取器抽象、公共模型与空实现接线测试；下一步进入阶段 4 Step 26 的 RSS / Atom 解析
 - 最后更新：2026-04-11
-- 风险状态：已从“在 Step 24 中把领域实体、值对象与状态枚举对齐到当前 `v4` schema 与共享命名体系，同时继续保持测试样本停留在 `feed-engine` 的测试边界”推进到“在 Step 25 中建立抓取器抽象时继续保持 `core-domain/model` 只承载领域语义、`core-domain/sqlite` 只承载持久化与迁移、固定样本继续只服务 `feed-engine` 测试边界”
+- 风险状态：已从“在 Step 25 中建立抓取器抽象时继续保持 `core-domain/model` 只承载领域语义、`core-domain/sqlite` 只承载持久化与迁移、固定样本继续只服务 `feed-engine` 测试边界”推进到“在 Step 26 中补齐 RSS / Atom 解析时继续保持 `FeedFetcher` 只负责编排、`transport` / `parser` / `normalizer` / `repository` 四段端口继续可替换、固定样本继续只服务 `feed-engine` 测试与解析验收”
 
 ## 已确认决策
 
@@ -20,7 +20,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 4 Step 25 需要在不把抓取实现直接写回 UI、宿主层或 `core-domain/model` 的前提下，为 `feed-engine` 建立可被固定样本和后续网络层共同消费的抓取边界。
+- 当前无阻塞；下一步风险点是阶段 4 Step 26 需要在不破坏 Step 25 新建抓取器抽象的前提下，为 RSS 2.0、RSS 0.9x 与 Atom 1.0 落地真正的解析与标准化路径，并复用 Step 23 固定样本作为首批解析回归资产。
 
 ## 本次执行记录
 
@@ -361,7 +361,23 @@
 - 已在验证通过后同步回写 `memory-bank/progress.md` 与 `memory-bank/architecture.md`，补齐阶段 3 Step 24 的交接记录、领域模型文件职责说明与新的架构边界见解。
 - 当前验证结论：Step 24 通过，可进入阶段 4 Step 25“建立抓取器抽象”。
 
+### 2026-04-11 - 阶段 4 Step 25：建立抓取器抽象
+
+- 已在 `crates/feed-engine/src/` 下新增 `error.rs`、`model.rs`、`ports.rs` 与 `fetcher.rs`，把抓取链路拆分为统一错误模型、阶段间公共数据模型、`transport / parser / normalizer / repository` 四段端口，以及只负责调用编排的 `FeedFetcher`，避免在还没有真实网络和解析实现前就把抓取逻辑直接写回 UI、宿主层或 `core-domain/model`。
+- 已在 `crates/feed-engine/src/lib.rs` 中集中导出 Step 25 的公共入口，使后续调度层、桌面宿主或解析实现可以只消费 `freelyrss-feed-engine` 的稳定 API，而不必深链具体模块文件。
+- 已在 `crates/feed-engine/Cargo.toml` 中补齐运行时 `freelyrss-core-domain` 与 `thiserror` 依赖，让 `FeedFormat`、`FeedId`、`UrlString`、`IsoDateTime` 等共享 Rust 领域类型可以直接进入抓取器边界，同时保持 crate 尚未提前引入任何真实 HTTP 客户端或 XML/JSON 解析库。
+- 已新增 `crates/feed-engine/tests/fetcher_pipeline.rs`，通过 stub `transport`、stub `parser`、stub `normalizer` 与 stub `repository` 建立空实现接线测试，验证“无真实网络请求时抓取编排仍能闭环”和“解析阶段失败后不会错误进入标准化 / 持久化阶段”两类核心场景。
+- 本次实现继续保持既有边界：`FeedFetcher` 只负责按顺序编排四段端口，不承担网络细节、格式解析或存储实现；`core-domain/model` 继续只承载稳定领域语义；Step 23 的固定样本仍停留在 `feed-engine/tests/fixtures/`，为 Step 26 之后的真实解析验收预留输入资产，而没有回流到桌面宿主或前端壳层。
+
+### 验证结果
+
+- 已执行 `cargo fmt --all` 与 `cargo test -p freelyrss-feed-engine`，确认 Step 25 新增的 2 个抓取器接线测试和既有 3 个样本目录校验测试全部通过。
+- 已执行 `corepack pnpm run verify`，结果通过；其中 `format:check`、`lint`、`test:config`、`test:types`、`test:query`、`test:desktop`、`rust:fmt:check`、`rust:clippy`、`test:rust` 与 `docs:links` 全部通过，证明 Step 25 已纳入仓库统一质量门禁。
+- 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，确认新增抓取器抽象与 `feed-engine` 运行时依赖后，桌面前端构建、Tauri 宿主装配与 Rust 入口链路仍可端到端打通，生成 `apps/desktop/src-tauri/target/debug/freelyrss-desktop.exe`。
+- 已在验证通过后同步回写 `memory-bank/progress.md` 与 `memory-bank/architecture.md`，补齐阶段 4 Step 25 的交接记录、抓取器抽象文件职责说明与新的架构边界见解。
+- 当前验证结论：Step 25 通过，可进入阶段 4 Step 26“支持 RSS 与 Atom 解析”。
+
 ## 下一步
 
-- 按 `implementation-plan.md` 执行阶段 4 Step 25，在 `crates/feed-engine` 中建立 HTTP 获取、解析、标准化与持久化之间的抓取器抽象。
-- 在推进 Step 25 时继续保持当前边界：Step 24 已落地的 `core-domain/model` 继续只承载领域语义，`core-domain/sqlite` 继续只承载 schema/记录翻译，Step 23 的固定样本继续只服务 `feed-engine` 测试与后续抓取/解析验收，不反向混入桌面宿主或前端壳层。
+- 按 `implementation-plan.md` 执行阶段 4 Step 26，在 `crates/feed-engine` 中补齐 RSS 2.0、RSS 0.9x 与 Atom 1.0 的解析和标准化输出。
+- 在推进 Step 26 时继续保持当前边界：Step 25 已落地的 `FeedFetcher` 继续只承载编排职责，`transport` / `parser` / `normalizer` / `repository` 四段端口继续保持可替换，Step 23 的固定样本继续只服务 `feed-engine` 的解析回归与后续抓取验收，不反向混入桌面宿主或前端壳层。

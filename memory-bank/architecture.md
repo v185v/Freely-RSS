@@ -888,7 +888,13 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `apps/desktop/src-tauri/src/lib.rs`：桌面宿主入口；当前通过 `setup_local_storage` 钩子先创建受管本地目录布局并触发数据库初始化，再进入窗口运行链路，保证后续任何前端数据消费都建立在已收敛 schema 与已准备好的本地目录结构之上。
 - `apps/desktop/src-tauri/src/storage.rs`：桌面宿主本地存储装配文件，负责把 `app_local_data_dir` 映射为 `database/`、`database/backups/`、`cache/content/`、`cache/media/`、`exports/` 与 `logs/` 目录，并把路径策略、目录创建和数据库迁移调用隔离出 `lib.rs`，避免宿主入口重新膨胀为单体文件。
 
-- `crates/feed-engine/Cargo.toml`：Feed 引擎 crate 清单；阶段 3 Step 23 起仅额外引入测试期 `serde` / `serde_json` 依赖，用于样本清单校验，保持运行时抓取与解析实现尚未提前耦合第三方解析栈。
+- `crates/feed-engine/Cargo.toml`：Feed 引擎 crate 清单；阶段 3 Step 23 起先引入测试期 `serde` / `serde_json` 依赖用于样本清单校验，阶段 4 Step 25 再补齐运行时 `freelyrss-core-domain` 与 `thiserror` 依赖，用于建立共享领域类型驱动的抓取器抽象，同时继续保持 crate 尚未提前耦合真实 HTTP 客户端或 XML/JSON 解析栈。
+- `crates/feed-engine/src/lib.rs`：Feed 引擎公共入口文件，负责统一导出 Step 25 新增的错误模型、抓取器编排器、阶段间数据模型与四段端口接口，让调用方只依赖稳定 crate API 而不深链内部模块。
+- `crates/feed-engine/src/error.rs`：Feed 引擎错误边界文件，负责把抓取链路中的 fetch、parse、normalize 与 persist 四类阶段失败收敛为统一错误模型，避免后续调度层必须感知具体实现细节。
+- `crates/feed-engine/src/model.rs`：抓取链路阶段模型文件，负责定义 `FetchRequest`、`FetchedFeed`、`ParsedFeedDocument`、`NormalizeContext`、`NormalizedFeedBatch`、`PersistedFeedBatch` 与 `FetchRunReport` 等阶段间公共契约，避免未持久化的解析结果直接挤进 `core-domain/model`。
+- `crates/feed-engine/src/ports.rs`：抓取链路端口定义文件，负责声明 `FeedTransport`、`FeedParser`、`FeedNormalizer` 与 `FeedRepository` 四段接口，明确网络、解析、标准化与持久化的所有权边界。
+- `crates/feed-engine/src/fetcher.rs`：抓取器编排文件，负责实现只做调用顺序编排的 `FeedFetcher`，把 transport -> parser -> normalizer -> repository 的调用闭环固定在 `feed-engine` 内，而不是回流到桌面宿主或 UI。
+- `crates/feed-engine/tests/fetcher_pipeline.rs`：抓取器抽象的对外 API 验收文件，负责用空实现 / stub 组件验证“无真实网络请求时仍可闭环”和“阶段失败时会正确短路”，把 Step 25 的边界固化为自动化测试。
 - `crates/feed-engine/tests/fixture_catalog.rs`：Feed 固定样本目录的自动化验收文件，负责校验样本清单 JSON、必需场景覆盖、文件签名、条目数、marker 与路径边界，避免固定样本退化为无人维护的散落资产。
 - `crates/feed-engine/tests/fixtures/README.md`：Feed 固定样本目录的贡献者说明，明确这些 XML/JSON 文件只服务测试、回归与后续抓取/解析验收，不进入运行时模块边界。
 - `crates/feed-engine/tests/fixtures/manifest.json`：Feed 固定样本清单文件，负责为每个样本声明格式、相对路径、条目数、场景覆盖与关键 marker，是后续解析回归测试复用这些样本的唯一目录入口。
@@ -974,6 +980,11 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - 把固定样本放在 `crates/feed-engine/tests/fixtures/`、并通过 `fixture_catalog.rs` + `manifest.json` 管理，意味着 FreelyRSS 明确把“解析回归资产”视为 `feed-engine` 模块边界的一部分，而不是把样本散落到 `core-domain`、桌面宿主或前端壳层。
 - `manifest.json` 同时声明格式、场景、条目数与 marker，说明 FreelyRSS 不准备把测试数据集仅仅当作“能打开的文件集合”；它从 Step 23 开始就是可审阅、可扩展、可自动验收的契约资产，这对后续 Step 26 到 Step 30 的解析、去重与内容标准化测试非常关键。
 - 在 Step 23 就额外纳入 `rss-0.91-legacy.xml`，虽然超出“最少满足当前步骤”的字面要求，但符合实施计划里对 RSS 0.9x 支持的前置需要：先把 legacy 输入固定为回归资产，再进入真正的兼容实现，比等到解析器落地后临时补样本更稳妥。
+- Step 25 的关键价值不是“先做一个空壳抓取器”，而是先把 HTTP 获取、格式解析、标准化和持久化四段边界显式拆开：这样 Step 26 以后补真正的 RSS / Atom / JSON Feed 解析时，不需要再回头重写调用链归属。
+- `FeedFetcher` 只负责编排而不承担任何网络、格式或存储实现，意味着调度层未来只需要面向一个稳定入口，而不必自己串联 transport、parser、normalizer 与 repository；这比让宿主层充当“临时总控器”更容易保持模块边界长期清晰。
+- `model.rs` 中的 `ParsedFeedDocument` 与 `NormalizedFeedBatch` 同时存在，说明 FreelyRSS 已开始把“原始解析结果”和“准备落库的标准化结果”视为两类不同契约；这避免了未定稿的 parser 输出直接污染 `core-domain/model` 或 SQLite 记录层。
+- `ports.rs` 把四段接口定义为 `feed-engine` 内部的第一等资产，而不是等具体库选型后再反推抽象，意味着后续无论选 `reqwest`、第三方 RSS 解析库还是自研兼容层，都必须服从同一条抓取边界。
+- `tests/fetcher_pipeline.rs` 作为纯 stub 接线验收文件，证明 Step 25 的目标不是验证网络可达性，而是验证“调用闭环是否独立于真实基础设施存在”；这为后续 UI 调度接线、失败短路与离线测试提供了可复用的最小回归资产。
 
 ## 14. 当前文档职责
 
@@ -998,3 +1009,7 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - 把 `UserState.reading_progress` 校验放到 `UserState::validate()`，证明 FreelyRSS 已开始把“会影响业务语义的数据库约束”前移到领域层，而不是只在迁移 SQL 中被动兜底；这为后续抓取、状态更新和同步合并复用同一合法性规则打下基础。
 - `ids.rs` 与 `primitives.rs` 把“共享命名体系”从文档和 TypeScript DTO 扩展到了 Rust 领域边界，说明阶段 3 之后 FreelyRSS 的核心词汇表已经同时在架构文档、SQLite schema、共享 TS 类型与共享 Rust 模型中收敛一致。
 - `sqlite/records.rs` 中对 record/domain 往返和非法值拒绝的测试，意味着 Step 24 并不是把数据库测试替换成单纯的类型定义，而是新增了一层“持久化表示是否会误伤领域语义”的自动化验收边界；这会降低 Step 25 以后抓取写入和 Step 43 以后状态写入时的字段语义漂移风险。
+- Step 25 的关键价值不是“给抓取模块补几个 trait”，而是把 `feed-engine` 正式收敛成一个拥有稳定公共 API 的独立引擎：调用方只看 `FeedFetcher` 与四段端口，不再需要知道抓取链路内部将来选什么网络库、解析库或存储实现。
+- `crates/feed-engine/src/error.rs`、`model.rs`、`ports.rs` 与 `fetcher.rs` 的拆分，意味着 FreelyRSS 没有把 Step 25 继续堆进单一 `lib.rs`；抓取错误语义、阶段契约、端口边界和编排逻辑现在各自拥有独立文件与所有权。
+- 让 `feed-engine` 在 Step 25 直接依赖 `freelyrss-core-domain` 的 typed id、URL 与时间值对象，而不是重新发明一套本地字符串类型，说明抓取引擎与领域层已经开始围绕同一套共享词汇表演进，但 `ParsedFeedDocument` 这类未持久化中间态仍明确留在 `feed-engine` 内部。
+- `tests/fetcher_pipeline.rs` 把“无真实网络请求也能闭环”和“解析失败会在标准化之前短路”收敛为外部 API 级测试，意味着从 Step 25 起，FreelyRSS 已开始把抓取链路的编排正确性视为可回归的架构边界，而不是只等到真实 HTTP 与 parser 落地后再靠集成测试兜底。

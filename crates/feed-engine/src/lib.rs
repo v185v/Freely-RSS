@@ -1,1 +1,15 @@
 //! Feed fetching and normalization for FreelyRSS.
+
+mod error;
+mod fetcher;
+mod model;
+mod ports;
+
+pub use error::FeedEngineError;
+pub use fetcher::FeedFetcher;
+pub use model::{
+    FetchRequest, FetchRunReport, FetchedFeed, NormalizeContext, NormalizedArticleRecord,
+    NormalizedAttachmentRecord, NormalizedFeedBatch, NormalizedFeedRecord, ParsedArticle,
+    ParsedAttachment, ParsedFeedDocument, PersistedFeedBatch,
+};
+pub use ports::{FeedNormalizer, FeedParser, FeedRepository, FeedTransport};
