@@ -874,9 +874,9 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `crates/core-domain/src/sqlite/migrations/004_article_search_fts.sql`：数据库 `v4` 全文搜索迁移文件，负责创建 `ArticleSearchSource` 搜索投影视图、`ArticleSearch` FTS5 虚拟表，并把文章、来源标题与文章标签的变更同步规则收敛为数据库触发器，避免搜索索引维护逻辑回流到宿主层。
 - `crates/core-domain/src/sqlite/backup.rs`：数据库快照备份与恢复辅助文件，负责在升级前通过 `VACUUM INTO` 生成备份，并提供从快照恢复主数据库与清理 sidecar 文件的入口。
 - `crates/core-domain/src/sqlite/error.rs`：SQLite 迁移错误模型文件，负责把 IO、SQLite、迁移序列不一致与路径错误收敛为结构化错误边界。
-- `apps/desktop/src-tauri/Cargo.toml`：桌面宿主 crate 清单；从阶段 3 Step 18 起显式依赖 `freelyrss-core-domain`，让“启动时先收敛本地 schema”成为宿主构建边界的一部分。
-- `apps/desktop/src-tauri/src/lib.rs`：桌面宿主入口；当前通过 `setup` 钩子先触发本地数据库初始化，再进入窗口运行链路，保证后续任何前端数据消费都建立在已收敛 schema 之上。
-- `apps/desktop/src-tauri/src/storage.rs`：桌面宿主本地存储装配文件，负责把 `app_local_data_dir` 映射为数据库文件和备份目录，并把路径策略与迁移调用隔离出 `lib.rs`，避免宿主入口重新膨胀为单体文件。
+- `apps/desktop/src-tauri/Cargo.toml`：桌面宿主 crate 清单；从阶段 3 Step 18 起显式依赖 `freelyrss-core-domain`，并在阶段 3 Step 22 补齐 `tempfile` 测试依赖，让“启动时先收敛本地 schema”与“宿主本地路径契约可自动化验收”同时成为宿主构建边界的一部分。
+- `apps/desktop/src-tauri/src/lib.rs`：桌面宿主入口；当前通过 `setup_local_storage` 钩子先创建受管本地目录布局并触发数据库初始化，再进入窗口运行链路，保证后续任何前端数据消费都建立在已收敛 schema 与已准备好的本地目录结构之上。
+- `apps/desktop/src-tauri/src/storage.rs`：桌面宿主本地存储装配文件，负责把 `app_local_data_dir` 映射为 `database/`、`database/backups/`、`cache/content/`、`cache/media/`、`exports/` 与 `logs/` 目录，并把路径策略、目录创建和数据库迁移调用隔离出 `lib.rs`，避免宿主入口重新膨胀为单体文件。
 
 当前架构见解：
 
@@ -946,6 +946,10 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `004_article_search_fts.sql` 同时承载 FTS 表、回填语句和同步触发器，意味着“建立索引”“升级既有数据”“维持后续一致性”三个动作拥有同一个可审阅入口；这比把初始建表留在迁移里、把同步逻辑散落在宿主写入路径里更稳妥。
 - 让 `Feed.title/custom_name` 与 `Tag.name/scope` 的变化也能触发全文索引重建，说明 FreelyRSS 已把搜索视为跨实体投影，而不是只依附于 `Article` 单表的附属能力；这为后续搜索结果中的来源过滤、高亮片段和智能文件夹复用打下了一致的数据基础。
 - 在 `mod.rs` 中新增 `v3 -> v4` 升级回填测试与变更同步测试，意味着 FreelyRSS 不再只验证“空库初始化后 schema 正确”，而是开始验证“真实升级路径中的索引投影是否正确收敛”；这对后续已有用户数据库的平滑演进非常关键。
+- Step 22 的关键价值不是“多建几个目录”，而是把桌面端本地数据落点正式收敛为宿主层契约：数据库主文件与升级备份留在 `database/`，正文缓存与媒体缓存收敛到 `cache/`，导出产物和日志则各自拥有独立目录，避免后续抓取、导出、缓存清理与故障排查继续共享同一文件夹。
+- `apps/desktop/src-tauri/src/storage.rs` 在 Step 22 中同时承担“路径推导”“目录预创建”和“数据库初始化接线”三件宿主私有工作，但仍刻意不触碰 schema、索引、FTS 或缓存内容格式；这进一步巩固了“路径策略属于宿主，数据语义属于 `core-domain/sqlite`”的边界。
+- 在 Tauri `setup` 阶段先完成完整目录布局，再调用 `initialize_database`，意味着后续 Step 23 到 Step 59 的测试样本、抓取缓存、媒体落盘、导出产物和任务日志都可以假定本地目录契约已经稳定存在，而不必在各自模块里重复决定路径或临时补目录。
+- 把宿主本地目录契约的自动化验收放进 `apps/desktop/src-tauri` 自己的单元测试，而不是只依赖根级 `verify`，说明 FreelyRSS 已开始把“宿主层文件系统布局”也视为一等架构边界；这能减少未来因平台路径调整或缓存目录扩展带来的静默回归。
 
 ## 14. 当前文档职责
 

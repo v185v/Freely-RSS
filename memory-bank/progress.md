@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-- 阶段：阶段 3 Step 21 已完成，全文搜索表、搜索文档投影视图与同步更新触发器已通过统一 SQLite 迁移链路落地；下一步进入阶段 3 Step 22 的本地缓存目录结构
+- 阶段：阶段 3 Step 22 已完成，桌面宿主已把本地数据目录扩展为数据库、备份、正文缓存、媒体缓存、导出产物与日志的分层布局；下一步进入阶段 3 Step 23 的标准化测试数据集
 - 最后更新：2026-04-11
-- 风险状态：已从“在 Step 21 中引入 FTS5 表与更新机制，同时继续保持查询语义层、SQLite 迁移层与桌面宿主路径装配层解耦”推进到“在 Step 22 中扩展数据库文件之外的本地缓存目录分层，同时继续保持 `core-domain/sqlite` 只负责 schema、`src-tauri/storage.rs` 只负责路径装配”
+- 风险状态：已从“在 Step 22 中扩展数据库文件之外的本地缓存目录分层，同时继续保持 `core-domain/sqlite` 只负责 schema、`src-tauri/storage.rs` 只负责路径装配”推进到“在 Step 23 中补齐 RSS / Atom / JSON Feed 与富媒体场景的固定测试样本，同时避免把测试样本耦合进运行时实现边界”
 
 ## 已确认决策
 
@@ -20,7 +20,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 3 Step 22 需要在不破坏已落地 `v1 + v2 + v3 + v4` schema 基线和现有桌面启动链路的前提下，把数据库、备份、正文缓存、媒体缓存与导出产物的目录边界继续收敛清楚，而不是重新把路径策略散落到宿主层各处。
+- 当前无阻塞；下一步风险点是阶段 3 Step 23 需要在不破坏已落地 `v4` schema 基线、宿主本地目录布局和现有桌面启动链路的前提下，补齐 RSS / Atom / JSON Feed、富媒体、重复文章与缺字段文章的固定样本，并保持这些样本只服务测试与验收，而不回流到运行时代码路径。
 
 ## 本次执行记录
 
@@ -310,7 +310,23 @@
 - 已在验证通过后同步回写 `memory-bank/progress.md` 与 `memory-bank/architecture.md`，补齐阶段 3 Step 21 的交接记录、FTS schema 基线、文件职责说明与新的架构边界见解。
 - 当前验证结论：Step 21 通过，可进入阶段 3 Step 22“建立本地缓存目录结构”。
 
+### 2026-04-11 - 阶段 3 Step 22：建立本地缓存目录结构
+
+- 已扩展 `apps/desktop/src-tauri/src/storage.rs` 的宿主路径模型：在保留 `database/freelyrss.sqlite3` 与 `database/backups/` 的前提下，新增 `cache/content/`、`cache/media/`、`exports/` 与 `logs/` 目录约定，把桌面端本地数据分层从“只有数据库”推进为“数据库 + 缓存 + 导出 + 日志”的稳定布局。
+- 已将宿主启动入口从 `setup_local_database` 收敛为 `setup_local_storage`，使 `apps/desktop/src-tauri/src/lib.rs` 在 Tauri `setup` 阶段先创建完整目录布局，再继续沿用 `freelyrss-core-domain` 的 SQLite 初始化链路；数据库 schema 语义仍然完全留在 `core-domain/sqlite`。
+- 已在 `apps/desktop/src-tauri/src/storage.rs` 中新增宿主侧单元测试，覆盖路径推导、目录创建与“数据库文件必须落在受管 `database/` 目录内”的初始化验收，避免 Step 22 继续依赖人工检查本地目录。
+- 已在 `apps/desktop/src-tauri/Cargo.toml` 中补齐 `tempfile` 测试依赖，使桌面宿主私有路径契约拥有独立自动化验收入口，而不是只在根级 workspace 验证链中被间接覆盖。
+- 本次实现继续保持既有边界：`core-domain/sqlite` 仍只负责迁移编排、schema 历史、索引与 FTS 结构；`apps/desktop/src-tauri/src/storage.rs` 只负责桌面宿主本地路径装配与目录初始化；前端壳继续停留在 route / store / query / accessibility 分层，不提前引入 SQL 执行或缓存消费逻辑。
+
+### 验证结果
+
+- 已执行 `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml`，4 个宿主存储相关测试全部通过，覆盖数据库路径推导、完整目录布局创建以及数据库初始化落点校验。
+- 已执行 `corepack pnpm run verify`，结果通过；其中包含 `format:check`、`lint`、`test:config`、`test:types`、`test:query`、`test:desktop`、`rust:fmt:check`、`rust:clippy`、`test:rust` 与 `docs:links`，证明 Step 22 未破坏仓库既有质量门禁。
+- 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，确认宿主本地目录布局扩展后，桌面前端构建、Tauri 宿主装配与 Rust 入口链路仍可端到端打通，生成 `apps/desktop/src-tauri/target/debug/freelyrss-desktop.exe`。
+- 已在验证通过后同步回写 `memory-bank/progress.md` 与 `memory-bank/architecture.md`，补齐阶段 3 Step 22 的交接记录、本地目录职责说明与新的架构边界见解。
+- 当前验证结论：Step 22 通过，可进入阶段 3 Step 23“准备标准化测试数据集”。
+
 ## 下一步
 
-- 按 `implementation-plan.md` 执行阶段 3 Step 22，在当前 `v4` schema 基线之上补齐数据库文件、备份目录、正文缓存、媒体缓存、导出产物与日志目录的本地分层约定。
-- 在推进 Step 22 时继续保持当前边界：`core-domain/sqlite` 负责迁移编排、schema 历史、索引与 FTS 结构演进；`src-tauri/storage.rs` 继续只负责桌面本地路径与启动接线；前端壳继续停留在 route / store / query / accessibility 分层，不提前引入直接 SQL 执行。
+- 按 `implementation-plan.md` 执行阶段 3 Step 23，建立覆盖 RSS、Atom、JSON Feed、富媒体、重复文章、缺字段文章、长文与多语言文章的标准化固定样本集。
+- 在推进 Step 23 时继续保持当前边界：固定样本只服务测试、回归与后续抓取/解析验收，不反向混入 `src-tauri` 宿主路径层、`core-domain/sqlite` schema 层或当前前端壳的 route / store / query / accessibility 组合层。
