@@ -23,6 +23,38 @@ pub struct FetchedFeed {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ParsedSource {
+    Feed(ParsedFeedDocument),
+    Discovery(FeedDiscoveryResult),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FeedDiscoveryResult {
+    Single {
+        page_url: UrlString,
+        page_title: Option<String>,
+        candidate: DiscoveredFeed,
+    },
+    Multiple {
+        page_url: UrlString,
+        page_title: Option<String>,
+        candidates: Vec<DiscoveredFeed>,
+    },
+    None {
+        page_url: UrlString,
+        page_title: Option<String>,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DiscoveredFeed {
+    pub title: Option<String>,
+    pub feed_url: UrlString,
+    pub content_type: Option<String>,
+    pub format: Option<FeedFormat>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ParsedFeedDocument {
     pub format: FeedFormat,
     pub title: Option<String>,
@@ -144,4 +176,10 @@ pub struct FetchRunReport {
     pub parsed_article_count: usize,
     pub normalized_article_count: usize,
     pub stored_article_count: usize,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FetchRunOutput {
+    Persisted(FetchRunReport),
+    Discovery(FeedDiscoveryResult),
 }

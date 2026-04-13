@@ -2,10 +2,10 @@ use std::{cell::RefCell, rc::Rc};
 
 use freelyrss_core_domain::{AttachmentType, FeedFormat, FeedId, IsoDateTime, UrlString};
 use freelyrss_feed_engine::{
-    FeedEngineError, FeedFetcher, FeedNormalizer, FeedParser, FeedRepository, FeedTransport,
-    FetchRequest, FetchedFeed, NormalizeContext, NormalizedArticleRecord,
-    NormalizedAttachmentRecord, NormalizedFeedBatch, NormalizedFeedRecord, ParsedArticle,
-    ParsedAttachment, ParsedFeedDocument, PersistedFeedBatch,
+    DiscoveredFeed, FeedDiscoveryResult, FeedEngineError, FeedFetcher, FeedNormalizer, FeedParser,
+    FeedRepository, FeedTransport, FetchRequest, FetchRunOutput, FetchedFeed, NormalizeContext,
+    NormalizedArticleRecord, NormalizedAttachmentRecord, NormalizedFeedBatch, NormalizedFeedRecord,
+    ParsedArticle, ParsedAttachment, ParsedFeedDocument, ParsedSource, PersistedFeedBatch,
 };
 
 #[derive(Clone)]
@@ -52,17 +52,40 @@ impl FeedTransport for StubTransport {
     }
 }
 
+struct DiscoveryTransport {
+    calls: CallLog,
+}
+
+impl FeedTransport for DiscoveryTransport {
+    fn fetch(&self, request: &FetchRequest) -> Result<FetchedFeed, FeedEngineError> {
+        self.calls.push("fetch");
+        assert_eq!(request.feed_url, url("https://example.com"));
+        assert_eq!(request.feed_id, None);
+
+        Ok(FetchedFeed {
+            request: request.clone(),
+            final_url: url("https://example.com"),
+            status_code: 200,
+            content_type: Some("text/html; charset=utf-8".into()),
+            body: b"<!doctype html><title>Discovery</title>".to_vec(),
+            fetched_at: time("2026-04-11T12:00:00Z"),
+            etag: None,
+            last_modified: None,
+        })
+    }
+}
+
 struct StubParser {
     calls: CallLog,
 }
 
 impl FeedParser for StubParser {
-    fn parse(&self, fetched: &FetchedFeed) -> Result<ParsedFeedDocument, FeedEngineError> {
+    fn parse(&self, fetched: &FetchedFeed) -> Result<ParsedSource, FeedEngineError> {
         self.calls.push("parse");
         assert_eq!(fetched.final_url, url("https://cdn.example.com/feed.xml"));
         assert_eq!(fetched.body, b"<rss />".to_vec());
 
-        Ok(ParsedFeedDocument {
+        Ok(ParsedSource::Feed(ParsedFeedDocument {
             format: FeedFormat::Rss,
             title: Some("Example Feed".into()),
             site_url: Some(url("https://example.com")),
@@ -87,7 +110,7 @@ impl FeedParser for StubParser {
                     size: Some(4096),
                 }],
             }],
-        })
+        }))
     }
 }
 
@@ -169,9 +192,39 @@ struct FailingParser {
 }
 
 impl FeedParser for FailingParser {
-    fn parse(&self, _fetched: &FetchedFeed) -> Result<ParsedFeedDocument, FeedEngineError> {
+    fn parse(&self, _fetched: &FetchedFeed) -> Result<ParsedSource, FeedEngineError> {
         self.calls.push("parse");
         Err(FeedEngineError::parse("fixture parser failure"))
+    }
+}
+
+struct DiscoveryParser {
+    calls: CallLog,
+}
+
+impl FeedParser for DiscoveryParser {
+    fn parse(&self, fetched: &FetchedFeed) -> Result<ParsedSource, FeedEngineError> {
+        self.calls.push("parse");
+        assert_eq!(fetched.final_url, url("https://example.com"));
+
+        Ok(ParsedSource::Discovery(FeedDiscoveryResult::Multiple {
+            page_url: fetched.final_url.clone(),
+            page_title: Some("FreelyRSS Discovery Page".into()),
+            candidates: vec![
+                DiscoveredFeed {
+                    title: Some("RSS".into()),
+                    feed_url: url("https://example.com/rss.xml"),
+                    content_type: Some("application/rss+xml".into()),
+                    format: Some(FeedFormat::Rss),
+                },
+                DiscoveredFeed {
+                    title: Some("JSON Feed".into()),
+                    feed_url: url("https://example.com/feed.json"),
+                    content_type: Some("application/feed+json".into()),
+                    format: Some(FeedFormat::JsonFeed),
+                },
+            ],
+        }))
     }
 }
 
@@ -221,6 +274,9 @@ fn feed_fetcher_wires_all_stages_without_real_network_requests() {
             last_modified: Some("Thu, 10 Apr 2026 10:00:00 GMT".into()),
         })
         .expect("pipeline should complete");
+    let FetchRunOutput::Persisted(report) = report else {
+        panic!("normal feed parsing should continue through normalization and persistence");
+    };
 
     assert_eq!(
         calls.snapshot(),
@@ -262,6 +318,53 @@ fn feed_fetcher_stops_after_parse_failure() {
 
     assert_eq!(calls.snapshot(), vec!["fetch", "parse"]);
     assert_eq!(error, FeedEngineError::parse("fixture parser failure"));
+}
+
+#[test]
+fn feed_fetcher_returns_discovery_result_without_running_normalizer_or_repository() {
+    let calls = CallLog::new();
+    let fetcher = FeedFetcher::new(
+        DiscoveryTransport {
+            calls: calls.clone(),
+        },
+        DiscoveryParser {
+            calls: calls.clone(),
+        },
+        UnexpectedNormalizer,
+        UnexpectedRepository,
+    );
+
+    let outcome = fetcher
+        .run(FetchRequest {
+            feed_id: None,
+            feed_url: url("https://example.com"),
+            etag: None,
+            last_modified: None,
+        })
+        .expect("HTML discovery should be returned as a success outcome");
+
+    assert_eq!(calls.snapshot(), vec!["fetch", "parse"]);
+    assert_eq!(
+        outcome,
+        FetchRunOutput::Discovery(FeedDiscoveryResult::Multiple {
+            page_url: url("https://example.com"),
+            page_title: Some("FreelyRSS Discovery Page".into()),
+            candidates: vec![
+                DiscoveredFeed {
+                    title: Some("RSS".into()),
+                    feed_url: url("https://example.com/rss.xml"),
+                    content_type: Some("application/rss+xml".into()),
+                    format: Some(FeedFormat::Rss),
+                },
+                DiscoveredFeed {
+                    title: Some("JSON Feed".into()),
+                    feed_url: url("https://example.com/feed.json"),
+                    content_type: Some("application/feed+json".into()),
+                    format: Some(FeedFormat::JsonFeed),
+                },
+            ],
+        })
+    );
 }
 
 fn feed_id(value: &str) -> FeedId {

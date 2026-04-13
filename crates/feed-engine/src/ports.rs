@@ -1,6 +1,6 @@
 use crate::{
     FeedEngineError, FetchRequest, FetchedFeed, NormalizeContext, NormalizedFeedBatch,
-    ParsedFeedDocument, PersistedFeedBatch,
+    ParsedFeedDocument, ParsedSource, PersistedFeedBatch,
 };
 
 pub trait FeedTransport {
@@ -8,7 +8,7 @@ pub trait FeedTransport {
 }
 
 pub trait FeedParser {
-    fn parse(&self, fetched: &FetchedFeed) -> Result<ParsedFeedDocument, FeedEngineError>;
+    fn parse(&self, fetched: &FetchedFeed) -> Result<ParsedSource, FeedEngineError>;
 }
 
 pub trait FeedNormalizer {

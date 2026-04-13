@@ -1,6 +1,6 @@
 use crate::{
     FeedEngineError, FeedNormalizer, FeedParser, FeedRepository, FeedTransport, FetchRequest,
-    FetchRunReport, NormalizeContext,
+    FetchRunOutput, FetchRunReport, NormalizeContext, ParsedSource,
 };
 
 pub struct FeedFetcher<TTransport, TParser, TNormalizer, TRepository> {
@@ -32,9 +32,15 @@ where
         }
     }
 
-    pub fn run(&self, request: FetchRequest) -> Result<FetchRunReport, FeedEngineError> {
+    pub fn run(&self, request: FetchRequest) -> Result<FetchRunOutput, FeedEngineError> {
         let fetched = self.transport.fetch(&request)?;
-        let parsed = self.parser.parse(&fetched)?;
+        let parsed = match self.parser.parse(&fetched)? {
+            ParsedSource::Feed(parsed) => parsed,
+            ParsedSource::Discovery(discovery) => {
+                return Ok(FetchRunOutput::Discovery(discovery));
+            }
+        };
+
         let parsed_article_count = parsed.articles.len();
         let format = parsed.format;
         let context = NormalizeContext::from_fetched_feed(&fetched);
@@ -42,7 +48,7 @@ where
         let normalized_article_count = normalized.articles.len();
         let persisted = self.repository.persist(normalized)?;
 
-        Ok(FetchRunReport {
+        Ok(FetchRunOutput::Persisted(FetchRunReport {
             feed_id: persisted.feed_id,
             requested_url: request.feed_url,
             final_url: fetched.final_url,
@@ -52,6 +58,6 @@ where
             parsed_article_count,
             normalized_article_count,
             stored_article_count: persisted.stored_article_count,
-        })
+        }))
     }
 }

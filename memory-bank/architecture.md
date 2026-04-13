@@ -888,27 +888,31 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `apps/desktop/src-tauri/src/lib.rs`：桌面宿主入口；当前通过 `setup_local_storage` 钩子先创建受管本地目录布局并触发数据库初始化，再进入窗口运行链路，保证后续任何前端数据消费都建立在已收敛 schema 与已准备好的本地目录结构之上。
 - `apps/desktop/src-tauri/src/storage.rs`：桌面宿主本地存储装配文件，负责把 `app_local_data_dir` 映射为 `database/`、`database/backups/`、`cache/content/`、`cache/media/`、`exports/` 与 `logs/` 目录，并把路径策略、目录创建和数据库迁移调用隔离出 `lib.rs`，避免宿主入口重新膨胀为单体文件。
 
-- `crates/feed-engine/Cargo.toml`：Feed 引擎 crate 清单；阶段 3 Step 23 起先引入测试期 `serde` / `serde_json` 依赖用于样本清单校验，阶段 4 Step 25 再补齐运行时 `freelyrss-core-domain` 与 `thiserror` 依赖建立抓取器抽象，阶段 4 Step 26 继续补齐 `roxmltree` 与 `chrono` 依赖用于默认 XML parser，阶段 4 Step 27 再把 `serde` / `serde_json` 推进为运行时依赖以承载默认 JSON Feed parser，同时仍保持 crate 尚未提前耦合真实 HTTP 客户端。
-- `crates/feed-engine/src/lib.rs`：Feed 引擎公共入口文件，负责统一导出 Step 25 新增的错误模型、抓取器编排器、阶段间数据模型与四段端口接口，并在 Step 26 / Step 27 继续暴露 `DefaultFeedParser` 与 `DefaultFeedNormalizer`，让调用方只依赖稳定 crate API 而不深链内部模块。
+- `crates/feed-engine/Cargo.toml`：Feed 引擎 crate 清单；阶段 3 Step 23 起先引入测试期 `serde` / `serde_json` 依赖用于样本清单校验，阶段 4 Step 25 再补齐运行时 `freelyrss-core-domain` 与 `thiserror` 依赖建立抓取器抽象，阶段 4 Step 26 继续补齐 `roxmltree` 与 `chrono` 依赖用于默认 XML parser，阶段 4 Step 27 再把 `serde` / `serde_json` 推进为运行时依赖以承载默认 JSON Feed parser，阶段 4 Step 28 继续补齐 `scraper` 与 `url` 依赖以承载 HTML 自动发现与相对链接解析，同时仍保持 crate 尚未提前耦合真实 HTTP 客户端。
+- `crates/feed-engine/src/lib.rs`：Feed 引擎公共入口文件，负责统一导出 Step 25 新增的错误模型、抓取器编排器、阶段间数据模型与四段端口接口，并在 Step 26 / Step 27 继续暴露 `DefaultFeedParser` 与 `DefaultFeedNormalizer`；到 Step 28 又继续暴露 `DiscoveredFeed`、`FeedDiscoveryResult`、`ParsedSource` 与 `FetchRunOutput`，让调用方只依赖稳定 crate API 而不深链内部模块。
 - `crates/feed-engine/src/error.rs`：Feed 引擎错误边界文件，负责把抓取链路中的 fetch、parse、normalize 与 persist 四类阶段失败收敛为统一错误模型，避免后续调度层必须感知具体实现细节。
-- `crates/feed-engine/src/model.rs`：抓取链路阶段模型文件，负责定义 `FetchRequest`、`FetchedFeed`、`ParsedFeedDocument`、`NormalizeContext`、`NormalizedFeedBatch`、`PersistedFeedBatch` 与 `FetchRunReport` 等阶段间公共契约，避免未持久化的解析结果直接挤进 `core-domain/model`。
-- `crates/feed-engine/src/ports.rs`：抓取链路端口定义文件，负责声明 `FeedTransport`、`FeedParser`、`FeedNormalizer` 与 `FeedRepository` 四段接口，明确网络、解析、标准化与持久化的所有权边界。
-- `crates/feed-engine/src/fetcher.rs`：抓取器编排文件，负责实现只做调用顺序编排的 `FeedFetcher`，把 transport -> parser -> normalizer -> repository 的调用闭环固定在 `feed-engine` 内，而不是回流到桌面宿主或 UI。
+- `crates/feed-engine/src/model.rs`：抓取链路阶段模型文件，负责定义 `FetchRequest`、`FetchedFeed`、`ParsedFeedDocument`、`ParsedSource`、`DiscoveredFeed`、`FeedDiscoveryResult`、`NormalizeContext`、`NormalizedFeedBatch`、`PersistedFeedBatch`、`FetchRunReport` 与 `FetchRunOutput` 等阶段间公共契约，避免未持久化的解析结果或 HTML 自动发现结果直接挤进 `core-domain/model`。
+- `crates/feed-engine/src/ports.rs`：抓取链路端口定义文件，负责声明 `FeedTransport`、`FeedParser`、`FeedNormalizer` 与 `FeedRepository` 四段接口；到 Step 28 为止，`FeedParser` 的所有权边界已显式扩展为“返回已解析 feed 或返回 HTML 自动发现结果”，而不是继续让宿主用错误字符串猜测 parser 输出。
+- `crates/feed-engine/src/fetcher.rs`：抓取器编排文件，负责实现只做调用顺序编排的 `FeedFetcher`，把 transport -> parser -> normalizer -> repository 的调用闭环固定在 `feed-engine` 内；到 Step 28 为止，它在收到 discovery 结果时会于 parse 阶段后直接短路返回，而不是误进标准化或持久化。
 - `crates/feed-engine/src/normalizer.rs`：默认标准化器文件，负责把 `ParsedFeedDocument` 投影为 `NormalizedFeedBatch`，在不触碰持久化层的前提下统一填充 feed/article 默认标题、抓取时间与附件映射，避免不同格式 parser 各自发明落库前默认值规则。
-- `crates/feed-engine/src/parser/mod.rs`：默认 parser 总入口文件，负责完成 UTF-8 边界校验、JSON / XML 格式探测、时间与值对象转换，并把 RSS、Atom 与 JSON Feed 的具体解析继续分发给格式专属模块，而不是让 `fetcher.rs` 或宿主层承载格式分支。
+- `crates/feed-engine/src/parser/mod.rs`：默认 parser 总入口文件，负责完成 UTF-8 边界校验、JSON / XML / HTML 格式探测、时间与值对象转换，并把 RSS、Atom、JSON Feed 与 HTML 自动发现继续分发给格式专属模块，而不是让 `fetcher.rs` 或宿主层承载格式分支。
 - `crates/feed-engine/src/parser/rss.rs`：RSS parser 文件，负责处理 RSS 2.0 / RSS 0.9x 的 `channel/item` 结构、`content:encoded`、`enclosure`、`media:*` 与 legacy 场景，把 RSS 特有字段收敛为统一 `ParsedArticle` / `ParsedAttachment`。
 - `crates/feed-engine/src/parser/atom.rs`：Atom parser 文件，负责处理 Atom 1.0 的 `feed/entry`、`link rel`、`author`、`summary`、`content` 与 `xml:lang` 继承，把 XHTML / HTML 正文入口保留在解析层输出里供后续内容管线消费。
 - `crates/feed-engine/src/parser/json_feed.rs`：JSON Feed parser 文件，负责处理 JSON Feed 1.x 的 version 校验、top-level metadata、item 作者、文本 / HTML 正文、attachments、缩略图回退与发布时间映射，把 JSON Feed 特有字段收敛为统一 `ParsedArticle` / `ParsedAttachment`，避免在宿主层引入 JSON 专用契约。
-- `crates/feed-engine/tests/fetcher_pipeline.rs`：抓取器抽象的对外 API 验收文件，负责用空实现 / stub 组件验证“无真实网络请求时仍可闭环”和“阶段失败时会正确短路”，把 Step 25 的边界固化为自动化测试。
-- `crates/feed-engine/tests/parser_fixtures.rs`：默认 parser / normalizer 的样本回归验收文件，负责用固定 RSS 2.0、RSS 0.91、Atom 1.0 与 JSON Feed 1.1 样本校验解析字段、富媒体附件、正文入口、缩略图回退与标准化输出，确保真实 parser 落地后继续复用 Step 23 样本资产而不是退回内联字符串测试。
-- `crates/feed-engine/tests/fixture_catalog.rs`：Feed 固定样本目录的自动化验收文件，负责校验样本清单 JSON、必需场景覆盖、文件签名、条目数、marker 与路径边界，避免固定样本退化为无人维护的散落资产。
-- `crates/feed-engine/tests/fixtures/README.md`：Feed 固定样本目录的贡献者说明，明确这些 XML/JSON 文件只服务测试、回归与后续抓取/解析验收，不进入运行时模块边界。
-- `crates/feed-engine/tests/fixtures/manifest.json`：Feed 固定样本清单文件，负责为每个样本声明格式、相对路径、条目数、场景覆盖与关键 marker，是后续解析回归测试复用这些样本的唯一目录入口。
+- `crates/feed-engine/src/parser/html.rs`：HTML 自动发现模块，负责解析普通网页中的 `<link rel="alternate">` feed 链接、识别 RSS / Atom / JSON Feed `type`、处理 `<base href>` 与相对 URL 解析，并把“单个候选源”“多个候选源”“未发现任何源”统一收敛为 `FeedDiscoveryResult`，避免宿主层自己解析网页 HTML。
+- `crates/feed-engine/tests/fetcher_pipeline.rs`：抓取器抽象的对外 API 验收文件，负责用空实现 / stub 组件验证“无真实网络请求时仍可闭环”“阶段失败时会正确短路”，以及 Step 28 新增的“HTML discovery 结果会在 parse 阶段后直接返回、不进入 normalize / persist”，把抓取编排边界固化为自动化测试。
+- `crates/feed-engine/tests/parser_fixtures.rs`：默认 parser / normalizer 的样本回归验收文件，负责用固定 RSS 2.0、RSS 0.91、Atom 1.0、JSON Feed 1.1 与 HTML discovery 样本校验解析字段、富媒体附件、正文入口、缩略图回退、自动发现结果与标准化输出，确保真实 parser 落地后继续复用 Step 23 / Step 28 样本资产而不是退回内联字符串测试。
+- `crates/feed-engine/tests/fixture_catalog.rs`：Feed 固定样本目录的自动化验收文件，负责校验样本清单 JSON、必需场景覆盖、文件签名、条目数、marker 与路径边界；到 Step 28 为止，它已同时覆盖 XML / JSON feed 样本与 HTML discovery 页面样本，避免固定样本退化为无人维护的散落资产。
+- `crates/feed-engine/tests/fixtures/README.md`：Feed 固定样本目录的贡献者说明，明确这些 XML / JSON / HTML 文件只服务测试、回归与后续抓取/解析验收，不进入运行时模块边界。
+- `crates/feed-engine/tests/fixtures/manifest.json`：Feed 固定样本清单文件，负责为每个样本声明格式、相对路径、条目数、场景覆盖与关键 marker；到 Step 28 为止，它已把 HTML 单源发现、多源发现和无源页面纳入与 RSS / Atom / JSON Feed 同级的清单契约。
 - `crates/feed-engine/tests/fixtures/rss/rss-2-rich-media.xml`：RSS 2.0 富媒体样本，负责提供 enclosure、缩略图与内嵌媒体内容场景，供后续 RSS 解析、附件识别与内容标准化验收复用。
 - `crates/feed-engine/tests/fixtures/rss/rss-2-duplicates-and-missing-fields.xml`：RSS 2.0 去重与缺字段样本，负责提供重复 canonical link 候选与缺失 guid/author/pubDate 的稀疏文章场景，供后续去重与容错解析验收复用。
 - `crates/feed-engine/tests/fixtures/rss/rss-0.91-legacy.xml`：Legacy RSS 0.91 样本，负责在真正实现 RSS 0.9x 解析前先固定兼容性输入资产，避免后续支持 legacy feed 时重新发明测试数据。
 - `crates/feed-engine/tests/fixtures/atom/atom-longform-multilingual.xml`：Atom 1.0 长文多语言样本，负责提供 XHTML 正文、长段落与中日阿等多语种混合内容，供后续正文抽取、排版清洗与多语言索引验收复用。
 - `crates/feed-engine/tests/fixtures/json-feed/json-feed-podcast.json`：JSON Feed 1.1 富媒体样本，负责提供音频/视频 attachments 与文本正文混合输入，供后续 JSON Feed 解析与附件标准化验收复用。
+- `crates/feed-engine/tests/fixtures/html/html-single-feed.html`：HTML 单源发现样本，负责固定“普通网页中只有一个 RSS 候选源”的场景，并验证 `<base href>` 与相对链接解析不会回流到宿主层处理。
+- `crates/feed-engine/tests/fixtures/html/html-multiple-feeds.html`：HTML 多源发现样本，负责固定“普通网页中同时暴露 RSS / Atom / JSON Feed 多个候选源”的场景，并验证候选源去重与顺序保持。
+- `crates/feed-engine/tests/fixtures/html/html-no-feed.html`：HTML 无源页面样本，负责固定“普通网页没有任何 discoverable feed 链接”的场景，验证 parser 会返回显式 `FeedDiscoveryResult::None` 而不是把正常业务分支伪装成解析错误。
 
 当前架构见解：
 
@@ -999,6 +1003,10 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `parser/json_feed.rs` 的落地说明 FreelyRSS 已把“格式差异”控制在 parser 私有边界内：JSON 的 authors、content_text、content_html、attachments、image 与 version 兼容策略都在 parser 内收敛，宿主层与后续持久化层只消费统一语义对象。
 - 把 `serde` / `serde_json` 正式移入 `crates/feed-engine` 运行时依赖，意味着 JSON Feed 不再只是固定样本目录里“未来要支持的格式”，而是已经成为默认解析链路的正式能力；依赖边界也因此继续留在 `feed-engine`，没有扩散到桌面壳或 `core-domain`。
 - `tests/parser_fixtures.rs` 在 Step 27 新增 JSON Feed 解析与标准化回归，说明 FreelyRSS 现在把“同一份固定样本必须同时覆盖 parse correctness 与 normalize correctness”视为架构约束；这能显著降低后续 Step 29 持久化接线时因为某一种 feed 格式字段投影不一致而产生的隐性回归。
+- Step 28 的关键价值不是“把 HTML 也读一遍”，而是把“用户输入的是网页而不是 feed 地址”正式提升为 parser 成功路径中的第一等结果：`ParsedSource` 与 `FetchRunOutput` 把“已解析 feed 文档”和“HTML 自动发现结果”拆成显式契约，而不是继续依赖错误字符串或宿主层猜测控制流。
+- `parser/html.rs` 的落地说明 FreelyRSS 已把 `<link rel="alternate">` 识别、`type` 判定、`<base href>` 处理与相对链接解析全部封装在 `feed-engine` 内部；未来桌面壳、同步层或导入流程只需要消费 `FeedDiscoveryResult`，不需要自己重新解析网页 HTML。
+- `fetcher.rs` 在 Step 28 中新增“收到 discovery 结果后于 parse 阶段后直接短路返回”的行为，证明 Step 25 建立的编排边界仍然成立：HTML 自动发现是 parser 的成功分支，不是 normalizer 或 repository 的职责，也不是持久化层的特殊异常路径。
+- 把 `html-single-feed.html`、`html-multiple-feeds.html` 与 `html-no-feed.html` 纳入同一份 `manifest.json` 和 `fixture_catalog.rs`，意味着 FreelyRSS 现在把 HTML discovery 页面视为与 RSS / Atom / JSON Feed 同级的长期回归资产；这能显著降低后续 Step 29 接持久化流程时把 discovery 结果误当作解析错误或误当作可直接落库 feed 的风险。
 
 ## 14. 当前文档职责
 

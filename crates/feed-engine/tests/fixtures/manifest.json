@@ -8,7 +8,10 @@
     "duplicate-articles",
     "missing-fields",
     "longform",
-    "multilingual"
+    "multilingual",
+    "html-single-feed",
+    "html-multiple-feeds",
+    "html-no-feed"
   ],
   "fixtures": [
     {
@@ -69,6 +72,43 @@
         "\"_fixtureScenarios\": [\"json-feed\", \"rich-media\"]",
         "https://media.example.com/audio/dispatch-1.mp3",
         "https://media.example.com/images/dispatch-cover.jpg"
+      ]
+    },
+    {
+      "id": "html-single-feed",
+      "format": "html",
+      "path": "html/html-single-feed.html",
+      "articleCount": 1,
+      "scenarios": ["html-single-feed"],
+      "markers": [
+        "freelyrss-fixture-scenario: html-single-feed",
+        "FreelyRSS Journal RSS",
+        "/feeds/journal.xml"
+      ]
+    },
+    {
+      "id": "html-multiple-feeds",
+      "format": "html",
+      "path": "html/html-multiple-feeds.html",
+      "articleCount": 4,
+      "scenarios": ["html-multiple-feeds"],
+      "markers": [
+        "freelyrss-fixture-scenario: html-multiple-feeds",
+        "Labs RSS",
+        "Labs Atom",
+        "https://feeds.example.net/labs/feed.json"
+      ]
+    },
+    {
+      "id": "html-no-feed",
+      "format": "html",
+      "path": "html/html-no-feed.html",
+      "articleCount": 0,
+      "scenarios": ["html-no-feed"],
+      "markers": [
+        "freelyrss-fixture-scenario: html-no-feed",
+        "FreelyRSS About",
+        "Plain HTML page fixture without any discoverable feed links."
       ]
     }
   ]

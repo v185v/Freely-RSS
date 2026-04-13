@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-- 阶段：阶段 4 Step 27 已完成，`crates/feed-engine` 已补齐 JSON Feed 默认解析路径，并继续与 RSS / Atom 共享统一 `ParsedFeedDocument` / `NormalizedFeedBatch` 契约；下一步进入阶段 4 Step 28 的网页 feed 自动发现
-- 最后更新：2026-04-11
-- 风险状态：已从“在 Step 27 中补齐 JSON Feed 解析时继续保持 XML parser 与 JSON parser 共享同一 `ParsedFeedDocument` / `NormalizedFeedBatch` 契约，且不把格式分支逻辑回流到桌面宿主或 UI”推进到“在 Step 28 中补齐网页 feed 自动发现时继续保持 HTML 发现逻辑只新增为 `feed-engine` 内部的解析前置分支，不让桌面宿主或前端壳层直接承担网页抓取结果判定”
+- 阶段：阶段 4 Step 28 已完成，`crates/feed-engine` 已补齐普通网页 HTML 的 feed 自动发现路径，并把“已解析 feed 文档”和“HTML 自动发现结果”显式区分为稳定阶段契约；下一步进入阶段 4 Step 29 的订阅源持久化流程
+- 最后更新：2026-04-13
+- 风险状态：已从“在 Step 28 中补齐网页 feed 自动发现时继续保持 HTML 发现逻辑只新增为 `feed-engine` 内部的解析前置分支，不让桌面宿主或前端壳层直接承担网页抓取结果判定”推进到“在 Step 29 中把新建订阅与首批文章写入数据库时，继续保持 `FeedFetcher` 只负责编排，发现结果在 normalize / persist 前短路，且不把 HTML 判定或去重逻辑回流到宿主或 UI”
 
 ## 已确认决策
 
@@ -20,7 +20,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 4 Step 28 需要在不破坏 Step 25 至 Step 27 已落地的 transport / parser / normalizer / repository 分层前提下，为普通网页补齐 feed 自动发现路径，并明确“发现多个候选 feed”“未发现任何 feed”的返回边界。
+- 当前无阻塞；下一步风险点是阶段 4 Step 29 需要在不破坏 Step 25 至 Step 28 已落地的 transport / parser / normalizer / repository 分层与 discovery 短路边界前提下，把“抓取成功进入落库”和“网页自动发现仅返回候选源”两条路径分别接入持久化层。
 
 ## 本次执行记录
 
@@ -411,7 +411,25 @@
 - 已在验证通过后同步回写 `memory-bank/progress.md` 与 `memory-bank/architecture.md`，补齐阶段 4 Step 27 的交接记录、JSON parser 文件职责说明与新的架构边界见解。
 - 当前验证结论：Step 27 通过，可进入阶段 4 Step 28“支持网页 feed 自动发现”。
 
+### 2026-04-13 - 阶段 4 Step 28：支持网页 feed 自动发现
+
+- 已在 `crates/feed-engine/src/model.rs` 中新增 `ParsedSource`、`FeedDiscoveryResult`、`DiscoveredFeed` 与 `FetchRunOutput`，把 parser / fetcher 的公共契约从“只能成功返回 feed 文档”推进为“可以返回已解析 feed 文档，或返回网页自动发现结果”，避免用错误字符串承载“多个候选 feed / 未发现 feed”这类正常控制流。
+- 已更新 `crates/feed-engine/src/ports.rs` 与 `crates/feed-engine/src/fetcher.rs`，使 `FeedParser` 端口显式返回 `ParsedSource`，并让 `FeedFetcher` 在收到 discovery 结果时于 parse 阶段后直接短路返回，不再误进 normalize / persist；这继续保持 Step 25 确立的编排边界，而没有把 HTML 判定回流到桌面宿主或前端壳层。
+- 已在 `crates/feed-engine/src/parser/html.rs` 新增 HTML 自动发现模块，并更新 `crates/feed-engine/src/parser/mod.rs`：默认 parser 现在会在 JSON / XML 之外识别 HTML 页面，读取 `<link rel="alternate">` 中的 RSS / Atom / JSON Feed 链接，支持 `<base href>` 与相对链接解析，并把“单个候选源”“多个候选源”“未发现任何源”收敛为统一 discovery 结果。
+- 已更新 `crates/feed-engine/Cargo.toml` 与根 `Cargo.lock`，补齐 `scraper` 与 `url` 运行时依赖，使 HTML 解析与相对 URL 解析继续留在 `feed-engine` 内部，而不扩散到宿主层或共享领域层。
+- 已扩展 `crates/feed-engine/tests/fetcher_pipeline.rs`，新增 discovery 短路验收，验证 `FeedFetcher` 在收到 HTML 自动发现结果后只执行 `fetch -> parse`，不会继续进入 `normalize` 与 `persist`。
+- 已扩展 `crates/feed-engine/tests/parser_fixtures.rs` 与 `crates/feed-engine/tests/fixture_catalog.rs`，并在 `crates/feed-engine/tests/fixtures/html/` 下新增 `html-single-feed.html`、`html-multiple-feeds.html` 与 `html-no-feed.html` 三份固定样本；同时更新 `tests/fixtures/manifest.json` 与 `tests/fixtures/README.md`，把 HTML discovery 场景正式纳入与 RSS / Atom / JSON Feed 同级的长期回归资产。
+- 本次实现继续保持既有边界：`DefaultFeedNormalizer` 继续只消费 `ParsedFeedDocument`，`FeedRepository` 继续只处理标准化结果；HTML 自动发现仅作为 parser 私有前置分支与 fetcher 的成功短路结果存在，尚未提前接入任何数据库写入或 UI 决策逻辑。
+
+### 验证结果
+
+- 已执行 `cargo test -p freelyrss-feed-engine`，结果通过；其中包含 3 个抓取器编排测试、3 个固定样本目录校验测试，以及 9 个 parser / normalizer / HTML discovery 回归测试。
+- 已执行 `corepack pnpm run verify`，结果通过；其中 `format:check`、`lint`、`test:config`、`test:types`、`test:query`、`test:desktop`、`rust:fmt:check`、`rust:clippy`、`test:rust` 与 `docs:links` 全部通过，证明 Step 28 已纳入仓库统一质量门禁。
+- 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，确认 `feed-engine` 新增 HTML discovery 运行时依赖与解析分支后，桌面前端构建、Tauri 宿主装配与 Rust 入口链路仍可端到端打通，生成 `apps/desktop/src-tauri/target/debug/freelyrss-desktop.exe`。
+- 已在验证通过后同步回写 `memory-bank/progress.md` 与 `memory-bank/architecture.md`，补齐阶段 4 Step 28 的交接记录、HTML discovery 文件职责说明与新的架构边界见解。
+- 当前验证结论：Step 28 通过，可进入阶段 4 Step 29“实现订阅源持久化流程”。
+
 ## 下一步
 
-- 按 `implementation-plan.md` 执行阶段 4 Step 28，在 `crates/feed-engine` 中补齐从普通网页 HTML 自动发现 feed 链接的能力，并区分“发现多个候选源”和“未发现任何源”的返回结果。
-- 在推进 Step 28 时继续保持当前边界：Step 25 已落地的 `FeedFetcher` 继续只承载编排职责，Step 26 / Step 27 已落地的默认 parser / normalizer 继续只消费与产出统一阶段契约，HTML 自动发现样本与验收继续只服务 `feed-engine`，不反向混入桌面宿主或前端壳层。
+- 按 `implementation-plan.md` 执行阶段 4 Step 29，在 `crates/feed-engine` 与持久化层接线中补齐“新建订阅 -> 首批文章 -> `Feed` / `Article` 相关表”的落库流程。
+- 在推进 Step 29 时继续保持当前边界：Step 25 已落地的 `FeedFetcher` 继续只承载编排职责；Step 28 已落地的 `FeedDiscoveryResult` / `FetchRunOutput` 继续只表达 parse 成功后的分支结果，不让网页自动发现判定、数据库写入策略或后续去重逻辑回流到桌面宿主或前端壳层。

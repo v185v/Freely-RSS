@@ -121,6 +121,20 @@ fn fixture_catalog_entries_point_to_existing_files_with_expected_signatures() {
                     fixture.id
                 );
             }
+            "html" => {
+                let trimmed = content.trim_start().to_ascii_lowercase();
+                assert!(
+                    trimmed.starts_with("<!doctype html") || trimmed.starts_with("<html"),
+                    "HTML fixture {} should start with an HTML document root",
+                    fixture.id
+                );
+                assert_eq!(
+                    content.matches("<link").count(),
+                    fixture.article_count,
+                    "HTML fixture {} should expose the declared number of discoverable link elements",
+                    fixture.id
+                );
+            }
             other => panic!("unsupported fixture format {other}"),
         }
 

@@ -1,4 +1,5 @@
 mod atom;
+mod html;
 mod json_feed;
 mod rss;
 
@@ -8,7 +9,7 @@ use chrono::{DateTime, SecondsFormat, Utc};
 use freelyrss_core_domain::{LanguageCode, UrlString};
 use roxmltree::{Document, Node, ParsingOptions};
 
-use crate::{FeedEngineError, FeedParser, FetchedFeed, ParsedFeedDocument};
+use crate::{FeedEngineError, FeedParser, FetchedFeed, ParsedFeedDocument, ParsedSource};
 
 const ATOM_NAMESPACE: &str = "http://www.w3.org/2005/Atom";
 const CONTENT_NAMESPACE: &str = "http://purl.org/rss/1.0/modules/content/";
@@ -18,36 +19,93 @@ const XML_NAMESPACE: &str = "http://www.w3.org/XML/1998/namespace";
 pub struct DefaultFeedParser;
 
 impl FeedParser for DefaultFeedParser {
-    fn parse(&self, fetched: &FetchedFeed) -> Result<ParsedFeedDocument, FeedEngineError> {
+    fn parse(&self, fetched: &FetchedFeed) -> Result<ParsedSource, FeedEngineError> {
         let source = str::from_utf8(&fetched.body).map_err(|error| {
             FeedEngineError::parse(format!("feed body is not valid UTF-8: {error}"))
         })?;
         let source = source.trim_start_matches('\u{feff}').trim();
 
         if source.starts_with('{') {
-            return json_feed::parse(source);
+            return json_feed::parse(source).map(ParsedSource::Feed);
         }
 
-        let document = Document::parse_with_options(
-            source,
-            ParsingOptions {
-                allow_dtd: true,
-                ..ParsingOptions::default()
-            },
-        )
-        .map_err(|error| {
-            FeedEngineError::parse(format!("feed XML could not be parsed: {error}"))
-        })?;
-        let root = document.root_element();
+        if looks_like_html_document(fetched.content_type.as_deref(), source)
+            && !looks_like_xml_feed(source)
+        {
+            return html::discover(source, &fetched.final_url).map(ParsedSource::Discovery);
+        }
 
-        match (root.tag_name().name(), root.tag_name().namespace()) {
-            ("rss", _) => rss::parse(source, root),
-            ("feed", Some(ATOM_NAMESPACE)) => atom::parse(source, root),
-            (name, _) => Err(FeedEngineError::parse(format!(
-                "unsupported feed root element: {name}"
-            ))),
+        match parse_xml_feed(source) {
+            Ok(parsed) => Ok(ParsedSource::Feed(parsed)),
+            Err(_error) if source_has_html_signature(source) => {
+                html::discover(source, &fetched.final_url).map(ParsedSource::Discovery)
+            }
+            Err(error) => Err(error),
         }
     }
+}
+
+fn parse_xml_feed(source: &str) -> Result<ParsedFeedDocument, FeedEngineError> {
+    let document = Document::parse_with_options(
+        source,
+        ParsingOptions {
+            allow_dtd: true,
+            ..ParsingOptions::default()
+        },
+    )
+    .map_err(|error| FeedEngineError::parse(format!("feed XML could not be parsed: {error}")))?;
+    let root = document.root_element();
+
+    match (root.tag_name().name(), root.tag_name().namespace()) {
+        ("rss", _) => rss::parse(source, root),
+        ("feed", Some(ATOM_NAMESPACE)) => atom::parse(source, root),
+        (name, _) => Err(FeedEngineError::parse(format!(
+            "unsupported feed root element: {name}"
+        ))),
+    }
+}
+
+fn looks_like_html_document(content_type: Option<&str>, source: &str) -> bool {
+    content_type_is_html(content_type) || source_has_html_signature(source)
+}
+
+fn content_type_is_html(content_type: Option<&str>) -> bool {
+    let Some(content_type) = content_type else {
+        return false;
+    };
+
+    matches!(
+        content_type
+            .split(';')
+            .next()
+            .map(str::trim)
+            .map(|value| value.to_ascii_lowercase())
+            .as_deref(),
+        Some("text/html") | Some("application/xhtml+xml")
+    )
+}
+
+fn looks_like_xml_feed(source: &str) -> bool {
+    let prefix = source
+        .chars()
+        .take(256)
+        .collect::<String>()
+        .to_ascii_lowercase();
+
+    prefix.starts_with("<?xml") || prefix.contains("<rss") || prefix.contains("<feed")
+}
+
+fn source_has_html_signature(source: &str) -> bool {
+    let prefix = source
+        .chars()
+        .take(256)
+        .collect::<String>()
+        .to_ascii_lowercase();
+
+    prefix.contains("<!doctype html")
+        || prefix.contains("<html")
+        || prefix.contains("<head")
+        || prefix.contains("<body")
 }
 
 fn child_element<'a, 'input>(

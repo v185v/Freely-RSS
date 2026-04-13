@@ -2,8 +2,8 @@ use std::{fs, path::PathBuf};
 
 use freelyrss_core_domain::{AttachmentType, FeedFormat, FeedId, IsoDateTime, UrlString};
 use freelyrss_feed_engine::{
-    DefaultFeedNormalizer, DefaultFeedParser, FeedNormalizer, FeedParser, FetchRequest,
-    FetchedFeed, NormalizeContext,
+    DefaultFeedNormalizer, DefaultFeedParser, FeedDiscoveryResult, FeedNormalizer, FeedParser,
+    FetchRequest, FetchedFeed, NormalizeContext, ParsedFeedDocument, ParsedSource,
 };
 
 #[test]
@@ -11,7 +11,7 @@ fn default_parser_reads_rss_2_rich_media_fixtures() {
     let parser = DefaultFeedParser;
     let fetched = fetched_fixture("rss/rss-2-rich-media.xml", "application/rss+xml");
 
-    let parsed = parser.parse(&fetched).expect("RSS fixture should parse");
+    let parsed = expect_feed(parser.parse(&fetched).expect("RSS fixture should parse"));
 
     assert_eq!(parsed.format, FeedFormat::Rss);
     assert_eq!(parsed.title.as_deref(), Some("FreelyRSS Rich Media Lab"));
@@ -60,6 +60,7 @@ fn default_parser_reads_rss_091_legacy_fixture() {
     let parsed = parser
         .parse(&fetched)
         .expect("legacy RSS fixture should parse");
+    let parsed = expect_feed(parsed);
 
     assert_eq!(parsed.format, FeedFormat::Rss);
     assert_eq!(
@@ -81,7 +82,7 @@ fn default_parser_reads_atom_longform_fixture() {
         "application/atom+xml",
     );
 
-    let parsed = parser.parse(&fetched).expect("Atom fixture should parse");
+    let parsed = expect_feed(parser.parse(&fetched).expect("Atom fixture should parse"));
 
     assert_eq!(parsed.format, FeedFormat::Atom);
     assert_eq!(
@@ -132,6 +133,7 @@ fn default_parser_reads_json_feed_fixture() {
     let parsed = parser
         .parse(&fetched)
         .expect("JSON Feed fixture should parse");
+    let parsed = expect_feed(parsed);
 
     assert_eq!(parsed.format, FeedFormat::JsonFeed);
     assert_eq!(parsed.title.as_deref(), Some("FreelyRSS JSON Feed Podcast"));
@@ -179,7 +181,7 @@ fn default_normalizer_projects_parsed_feed_into_normalized_records() {
         "rss/rss-2-duplicates-and-missing-fields.xml",
         "application/rss+xml",
     );
-    let parsed = parser.parse(&fetched).expect("RSS fixture should parse");
+    let parsed = expect_feed(parser.parse(&fetched).expect("RSS fixture should parse"));
     let context = NormalizeContext::from_fetched_feed(&fetched);
 
     let normalized = normalizer
@@ -219,6 +221,7 @@ fn default_normalizer_projects_json_feed_into_normalized_records() {
     let parsed = parser
         .parse(&fetched)
         .expect("JSON Feed fixture should parse");
+    let parsed = expect_feed(parsed);
     let context = NormalizeContext::from_fetched_feed(&fetched);
 
     let normalized = normalizer
@@ -243,6 +246,110 @@ fn default_normalizer_projects_json_feed_into_normalized_records() {
     );
 }
 
+#[test]
+fn default_parser_discovers_single_feed_from_html_fixture() {
+    let parser = DefaultFeedParser;
+    let fetched = html_fixture("html/html-single-feed.html");
+
+    let discovery = expect_discovery(
+        parser
+            .parse(&fetched)
+            .expect("HTML fixture with one candidate should parse"),
+    );
+
+    assert_eq!(
+        discovery,
+        FeedDiscoveryResult::Single {
+            page_url: url("https://example.com/blog/index.html"),
+            page_title: Some("FreelyRSS Journal".into()),
+            candidate: freelyrss_feed_engine::DiscoveredFeed {
+                title: Some("FreelyRSS Journal RSS".into()),
+                feed_url: url("https://example.com/feeds/journal.xml"),
+                content_type: Some("application/rss+xml".into()),
+                format: Some(FeedFormat::Rss),
+            },
+        }
+    );
+}
+
+#[test]
+fn default_parser_reports_multiple_discovered_feeds_from_html_fixture() {
+    let parser = DefaultFeedParser;
+    let fetched = html_fixture("html/html-multiple-feeds.html");
+
+    let discovery = expect_discovery(
+        parser
+            .parse(&fetched)
+            .expect("HTML fixture with multiple candidates should parse"),
+    );
+
+    assert_eq!(
+        discovery,
+        FeedDiscoveryResult::Multiple {
+            page_url: url("https://example.com/blog/index.html"),
+            page_title: Some("FreelyRSS Labs".into()),
+            candidates: vec![
+                freelyrss_feed_engine::DiscoveredFeed {
+                    title: Some("Labs RSS".into()),
+                    feed_url: url("https://example.com/feeds/labs.xml"),
+                    content_type: Some("application/rss+xml".into()),
+                    format: Some(FeedFormat::Rss),
+                },
+                freelyrss_feed_engine::DiscoveredFeed {
+                    title: Some("Labs Atom".into()),
+                    feed_url: url("https://example.com/feeds/labs.atom"),
+                    content_type: Some("application/atom+xml".into()),
+                    format: Some(FeedFormat::Atom),
+                },
+                freelyrss_feed_engine::DiscoveredFeed {
+                    title: Some("Labs JSON Feed".into()),
+                    feed_url: url("https://feeds.example.net/labs/feed.json"),
+                    content_type: Some("application/feed+json".into()),
+                    format: Some(FeedFormat::JsonFeed),
+                },
+            ],
+        }
+    );
+}
+
+#[test]
+fn default_parser_reports_no_feed_discovered_for_plain_html_fixture() {
+    let parser = DefaultFeedParser;
+    let fetched = html_fixture("html/html-no-feed.html");
+
+    let discovery = expect_discovery(
+        parser
+            .parse(&fetched)
+            .expect("plain HTML fixture should still return a discovery result"),
+    );
+
+    assert_eq!(
+        discovery,
+        FeedDiscoveryResult::None {
+            page_url: url("https://example.com/blog/index.html"),
+            page_title: Some("FreelyRSS About".into()),
+        }
+    );
+}
+
+fn expect_feed(parsed: ParsedSource) -> ParsedFeedDocument {
+    match parsed {
+        ParsedSource::Feed(parsed) => parsed,
+        ParsedSource::Discovery(discovery) => {
+            panic!("expected parsed feed document, got discovery result: {discovery:?}")
+        }
+    }
+}
+
+fn expect_discovery(parsed: ParsedSource) -> FeedDiscoveryResult {
+    match parsed {
+        ParsedSource::Feed(parsed) => {
+            panic!("expected HTML discovery result, got parsed feed document: {parsed:?}")
+        }
+        ParsedSource::Discovery(discovery) => discovery,
+    }
+}
+
 fn fetched_fixture(relative_path: &str, content_type: &str) -> FetchedFeed {
     FetchedFeed {
         request: FetchRequest {
@@ -258,6 +365,24 @@ fn fetched_fixture(relative_path: &str, content_type: &str) -> FetchedFeed {
         fetched_at: timestamp("2026-04-11T12:30:00Z"),
         etag: Some("\"etag-v2\"".to_owned()),
         last_modified: Some("Sat, 11 Apr 2026 12:00:00 GMT".to_owned()),
+    }
+}
+
+fn html_fixture(relative_path: &str) -> FetchedFeed {
+    FetchedFeed {
+        request: FetchRequest {
+            feed_id: None,
+            feed_url: url("https://example.com/blog"),
+            etag: None,
+            last_modified: None,
+        },
+        final_url: url("https://example.com/blog/index.html"),
+        status_code: 200,
+        content_type: Some("text/html; charset=utf-8".to_owned()),
+        body: fs::read(fixture_path(relative_path)).expect("fixture should be readable"),
+        fetched_at: timestamp("2026-04-11T12:30:00Z"),
+        etag: None,
+        last_modified: None,
     }
 }
 

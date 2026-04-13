@@ -15,5 +15,8 @@ Fixture inventory:
 - `rss/rss-0.91-legacy.xml`: legacy RSS 0.91 sample kept for future parser compatibility work.
 - `atom/atom-longform-multilingual.xml`: Atom 1.0 sample for longform and multilingual content.
 - `json-feed/json-feed-podcast.json`: JSON Feed 1.1 sample with rich-media attachments.
+- `html/html-single-feed.html`: HTML page with exactly one discoverable RSS feed.
+- `html/html-multiple-feeds.html`: HTML page with multiple discoverable RSS / Atom / JSON Feed candidates.
+- `html/html-no-feed.html`: HTML page without any discoverable feed links.
 
 When later steps add parser assertions, reuse these files directly instead of inventing ad hoc inline samples.
