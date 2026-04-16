@@ -4,6 +4,7 @@ mod backup;
 mod error;
 mod migrations;
 mod records;
+mod store;
 
 use std::{
     fs,
@@ -14,8 +15,9 @@ use std::{
 use rusqlite::{Connection, TransactionBehavior};
 
 pub use backup::restore_database_from_backup;
-pub use error::MigrationError;
+pub use error::{MigrationError, StoreError};
 pub use migrations::{EmbeddedMigration, embedded_migrations, latest_schema_version};
+pub use store::{FeedGraphPersistReport, FeedStore};
 
 use self::{
     backup::create_backup,
@@ -82,6 +84,10 @@ pub fn initialize_database(
         options,
         embedded_migrations(),
     )
+}
+
+pub fn prepare_database_connection(connection: &Connection) -> Result<(), MigrationError> {
+    prepare_connection(connection)
 }
 
 fn prepare_connection(connection: &Connection) -> Result<(), MigrationError> {

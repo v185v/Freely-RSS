@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use crate::ModelError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -22,4 +23,12 @@ pub enum MigrationError {
     },
     #[error("database path `{path}` does not have a parent directory")]
     MissingParentDirectory { path: PathBuf },
+}
+
+#[derive(Debug, Error)]
+pub enum StoreError {
+    #[error("sqlite store error: {0}")]
+    Sqlite(#[from] rusqlite::Error),
+    #[error("invalid stored model data: {0}")]
+    Model(#[from] ModelError),
 }

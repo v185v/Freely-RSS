@@ -6,6 +6,7 @@ mod model;
 mod normalizer;
 mod parser;
 mod ports;
+mod sqlite_repository;
 
 pub use error::FeedEngineError;
 pub use fetcher::FeedFetcher;
@@ -18,3 +19,4 @@ pub use model::{
 pub use normalizer::DefaultFeedNormalizer;
 pub use parser::DefaultFeedParser;
 pub use ports::{FeedNormalizer, FeedParser, FeedRepository, FeedTransport};
+pub use sqlite_repository::SqliteFeedRepository;

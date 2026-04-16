@@ -1007,6 +1007,19 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `parser/html.rs` 的落地说明 FreelyRSS 已把 `<link rel="alternate">` 识别、`type` 判定、`<base href>` 处理与相对链接解析全部封装在 `feed-engine` 内部；未来桌面壳、同步层或导入流程只需要消费 `FeedDiscoveryResult`，不需要自己重新解析网页 HTML。
 - `fetcher.rs` 在 Step 28 中新增“收到 discovery 结果后于 parse 阶段后直接短路返回”的行为，证明 Step 25 建立的编排边界仍然成立：HTML 自动发现是 parser 的成功分支，不是 normalizer 或 repository 的职责，也不是持久化层的特殊异常路径。
 - 把 `html-single-feed.html`、`html-multiple-feeds.html` 与 `html-no-feed.html` 纳入同一份 `manifest.json` 和 `fixture_catalog.rs`，意味着 FreelyRSS 现在把 HTML discovery 页面视为与 RSS / Atom / JSON Feed 同级的长期回归资产；这能显著降低后续 Step 29 接持久化流程时把 discovery 结果误当作解析错误或误当作可直接落库 feed 的风险。
+- Step 29 的关键价值不是“终于把数据写进 SQLite”，而是把“标准化 feed 批次 -> 本地业务图”的落库语义正式收敛到 `core-domain/sqlite`：`feed-engine` 继续只拥有抓取阶段语义与仓储接线权，而 SQL、默认 `UserState` 初始化和附件替换策略继续留在共享存储边界。
+- `core-domain/sqlite/store.rs` 的落地说明 FreelyRSS 已经拥有第一条真正服务业务写入的共享 SQLite API：它负责在单一事务里 upsert `Feed`、`Article`、`Attachment` 与默认 `UserState`，使后续桌面命令、抓取引擎和同步回放都不需要各自重写一套“文章图谱怎么落库”的 SQL。
+- Step 29 没有把 `Feed.custom_name`、排序、更新频率等用户字段交回抓取链覆盖，而是让 `FeedStore` 只更新抓取得到的元数据字段；这说明 FreelyRSS 已经开始把“抓取侧事实”和“用户侧组织状态”视为同一实体上的两类不同所有权字段。
+- `SqliteFeedRepository` 仅在 `feed-engine` 中负责把 `NormalizedFeedBatch` 映射为领域对象，并通过 `feed_url` 复用既有 `Feed.id`、通过 `source_guid` 复用既有 `Article.id`；这意味着 FreelyRSS 在 Step 29 只补齐了最小持久化身份闭环，还没有把 canonical URL / 标题时间 / 内容哈希等更强去重策略提前混入编排层，为 Step 30 保留了清晰扩展位。
+
+### Step 29 文件职责
+
+- `crates/core-domain/src/sqlite/store.rs`：SQLite 业务写入边界，负责在事务中 upsert `Feed` / `Article`、初始化默认 `UserState`，以及在文章重写时替换附件集合。
+- `crates/core-domain/src/sqlite/error.rs`：承载 `MigrationError` 与新的 `StoreError`，分别界定“迁移失败”和“业务写入失败”两类 SQLite 失败语义。
+- `crates/core-domain/src/sqlite/mod.rs`：`core-domain/sqlite` 的公共出口；继续负责数据库初始化与迁移，同时新增连接准备函数和 `FeedStore` 导出，避免调用方深链具体实现文件。
+- `crates/feed-engine/src/sqlite_repository.rs`：`feed-engine` 的默认 SQLite 仓储实现；负责把 `NormalizedFeedBatch` 转成领域对象、解析最小身份复用规则，并调用 `FeedStore` 完成真实落库。
+- `crates/feed-engine/src/lib.rs`：抓取引擎公共 API 汇总入口；在 Step 29 中新增 `SqliteFeedRepository` 导出，使桌面宿主或后续调度层可以只依赖稳定 crate 入口接线。
+- `crates/feed-engine/Cargo.toml`：限定 Step 29 的运行时与测试依赖边界；`rusqlite` 留在默认仓储实现，`sha2` 留在稳定 ID 生成，`tempfile` 仅用于仓储回归测试，不让这些依赖扩散到前端或宿主层。
 
 ## 14. 当前文档职责
 

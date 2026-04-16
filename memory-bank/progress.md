@@ -2,9 +2,9 @@
 
 ## 当前状态
 
-- 阶段：阶段 4 Step 28 已完成，`crates/feed-engine` 已补齐普通网页 HTML 的 feed 自动发现路径，并把“已解析 feed 文档”和“HTML 自动发现结果”显式区分为稳定阶段契约；下一步进入阶段 4 Step 29 的订阅源持久化流程
-- 最后更新：2026-04-13
-- 风险状态：已从“在 Step 28 中补齐网页 feed 自动发现时继续保持 HTML 发现逻辑只新增为 `feed-engine` 内部的解析前置分支，不让桌面宿主或前端壳层直接承担网页抓取结果判定”推进到“在 Step 29 中把新建订阅与首批文章写入数据库时，继续保持 `FeedFetcher` 只负责编排，发现结果在 normalize / persist 前短路，且不把 HTML 判定或去重逻辑回流到宿主或 UI”
+- 阶段：阶段 4 Step 29 已完成，`crates/feed-engine` 已补齐标准化 feed 结果到 SQLite 的真实持久化闭环，并把“抓取编排”和“SQLite 落库语义”继续拆分在 `feed-engine` 与 `core-domain/sqlite` 两层；下一步进入阶段 4 Step 30 的去重规则实现
+- 最后更新：2026-04-16
+- 风险状态：已从“在 Step 29 中把新建订阅与首批文章写入数据库时继续保持 `FeedFetcher` 只负责编排，发现结果在 normalize / persist 前短路”推进到“在 Step 30 中补齐 canonical URL / original URL、标题+时间+来源与内容哈希去重时，继续让 `feed-engine` 只负责标准化与仓储接线，不让 URL 去重策略、内容哈希比较或 UI 决策回流到桌面宿主或前端壳层”
 
 ## 已确认决策
 
@@ -20,7 +20,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 4 Step 29 需要在不破坏 Step 25 至 Step 28 已落地的 transport / parser / normalizer / repository 分层与 discovery 短路边界前提下，把“抓取成功进入落库”和“网页自动发现仅返回候选源”两条路径分别接入持久化层。
+- 当前无阻塞；下一步风险点是阶段 4 Step 30 需要在不破坏 Step 25 至 Step 29 已落地的 transport / parser / normalizer / repository / SQLite store 分层与 discovery 短路边界前提下，把 canonical URL / original URL、标题+时间+来源与内容哈希去重继续留在持久化边界，而不是把比较策略回流到宿主或 UI。
 
 ## 本次执行记录
 
@@ -429,7 +429,25 @@
 - 已在验证通过后同步回写 `memory-bank/progress.md` 与 `memory-bank/architecture.md`，补齐阶段 4 Step 28 的交接记录、HTML discovery 文件职责说明与新的架构边界见解。
 - 当前验证结论：Step 28 通过，可进入阶段 4 Step 29“实现订阅源持久化流程”。
 
+### 2026-04-16 - 阶段 4 Step 29：实现订阅源持久化流程
+
+- 已在 `crates/core-domain/src/sqlite/store.rs` 新增 `FeedStore`，把 `Feed`、`Article`、`Attachment` 与默认 `UserState` 的 SQLite 写入语义正式收敛到 `core-domain/sqlite`：该模块负责按事务 upsert `Feed` / `Article`、初始化首批文章的默认阅读状态，并在同一篇文章重写时替换其附件集合。
+- 已扩展 `crates/core-domain/src/sqlite/error.rs` 与 `crates/core-domain/src/sqlite/mod.rs`，为持久化层补齐 `StoreError`、`prepare_database_connection` 与 `FeedStore` / `FeedGraphPersistReport` 公共出口，使桌面宿主初始化链与抓取引擎仓储接线都能复用同一套 SQLite 连接准备与存储边界。
+- 已在 `crates/feed-engine/src/sqlite_repository.rs` 新增 `SqliteFeedRepository`，把标准化结果映射成领域对象后落入 `FeedStore`：新建订阅时会先按 `feed_url` 复用既有 `Feed.id` 或生成稳定 `FeedId`，已存在文章则按 `source_guid` 复用 `Article.id`，从而在后续刷新时保留既有 `UserState` 与用户自定义的 `Feed.custom_name` / 排序 / 更新频率等字段。
+- 已更新 `crates/feed-engine/src/lib.rs` 与 `crates/feed-engine/Cargo.toml`，公开默认 SQLite 仓储实现，并补齐 `rusqlite`、`sha2` 与 `tempfile` 依赖，使 `feed-engine` 自己拥有可回归的真实持久化接线验收，而不需要把 SQLite 细节扩散到桌面壳或前端层。
+- 已为 Step 29 新增两类真实落库测试：其一验证“新建订阅 -> 首批文章 -> 附件 / 默认 `UserState`”闭环；其二验证重复持久化时会复用既有 `Feed` / `Article` 标识、保留用户字段与阅读状态，并替换旧附件而不是追加脏数据。
+- 本次实现继续保持既有边界：`FeedFetcher` 仍只负责编排 `fetch -> parse -> normalize -> persist`；HTML discovery 继续在 parse 后短路，不会进入持久化；真正的 SQL 与默认状态初始化职责继续留在 `core-domain/sqlite`，而不是回流到宿主层或 UI。
+
+### 验证结果
+
+- 已执行 `cargo test -p freelyrss-core-domain`，结果通过；现有 16 个迁移、索引、FTS 与 record/domain 往返测试全部通过，确认 Step 29 没有破坏既有 SQLite 基线。
+- 已执行 `cargo test -p freelyrss-feed-engine`，结果通过；除既有抓取链与样本回归外，新增 2 个真实 SQLite 仓储测试也全部通过。
+- 已执行 `cargo fmt --all` 与 `corepack pnpm run verify`，结果通过；其中 `rust:fmt:check`、`rust:clippy`、`test:rust` 以及前端、共享包与文档链路检查全部通过，证明 Step 29 已纳入仓库统一质量门禁。
+- 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，结果通过；确认 `freelyrss-core-domain` 与 `freelyrss-feed-engine` 新增持久化接线后，桌面端前端构建、Tauri 宿主装配与 Rust 入口链路仍可端到端打通，生成 `apps/desktop/src-tauri/target/debug/freelyrss-desktop.exe`。
+- 已在验证通过后同步回写 `memory-bank/progress.md` 与 `memory-bank/architecture.md`，补齐阶段 4 Step 29 的交接记录、文件职责说明与新的架构洞察。
+- 当前验证结论：Step 29 通过，可进入阶段 4 Step 30“实现去重规则”。
+
 ## 下一步
 
-- 按 `implementation-plan.md` 执行阶段 4 Step 29，在 `crates/feed-engine` 与持久化层接线中补齐“新建订阅 -> 首批文章 -> `Feed` / `Article` 相关表”的落库流程。
-- 在推进 Step 29 时继续保持当前边界：Step 25 已落地的 `FeedFetcher` 继续只承载编排职责；Step 28 已落地的 `FeedDiscoveryResult` / `FetchRunOutput` 继续只表达 parse 成功后的分支结果，不让网页自动发现判定、数据库写入策略或后续去重逻辑回流到桌面宿主或前端壳层。
+- 按 `implementation-plan.md` 执行阶段 4 Step 30，在当前持久化闭环之上补齐 canonical URL / original URL、标题+发布时间+来源、内容哈希三层优先级的去重规则。
+- 在推进 Step 30 时继续保持当前边界：Step 29 新增的 `SqliteFeedRepository` 继续只承担标准化结果到领域对象/存储 API 的接线；真正的 URL 匹配、内容哈希比较与附件去留策略应继续留在持久化层或内容管线边界，不让去重判定回流到桌面宿主或前端壳层。
