@@ -61,6 +61,13 @@ string_enum!(FeedHealthStatus => [
     Paused = "paused",
 ]);
 
+string_enum!(FeedErrorKind => [
+    Network = "network",
+    Permission = "permission",
+    Parse = "parse",
+    Empty = "empty",
+]);
+
 string_enum!(FolderKind => [
     Regular = "regular",
     System = "system",

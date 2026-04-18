@@ -4,6 +4,9 @@ export type FeedFormat = (typeof FEED_FORMATS)[number]
 export const FEED_HEALTH_STATUSES = ["pending", "healthy", "degraded", "error", "paused"] as const
 export type FeedHealthStatus = (typeof FEED_HEALTH_STATUSES)[number]
 
+export const FEED_ERROR_KINDS = ["network", "permission", "parse", "empty"] as const
+export type FeedErrorKind = (typeof FEED_ERROR_KINDS)[number]
+
 export const FOLDER_KINDS = ["regular", "system", "group"] as const
 export type FolderKind = (typeof FOLDER_KINDS)[number]
 

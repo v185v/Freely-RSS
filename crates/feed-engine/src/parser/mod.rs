@@ -25,6 +25,12 @@ impl FeedParser for DefaultFeedParser {
         })?;
         let source = source.trim_start_matches('\u{feff}').trim();
 
+        if source.is_empty() {
+            return Err(FeedEngineError::empty_content(
+                "fetched feed body was empty after trimming whitespace",
+            ));
+        }
+
         if source.starts_with('{') {
             return json_feed::parse(source).map(ParsedSource::Feed);
         }

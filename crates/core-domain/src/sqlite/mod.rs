@@ -173,7 +173,7 @@ mod tests {
             .expect("database initialization should succeed");
 
         assert_eq!(report.current_version, latest_schema_version());
-        assert_eq!(report.applied_versions, vec![1, 2, 3, 4, 5]);
+        assert_eq!(report.applied_versions, vec![1, 2, 3, 4, 5, 6]);
         assert!(database_path.exists());
 
         let connection = Connection::open(&database_path).expect("open database");
@@ -192,7 +192,7 @@ mod tests {
             )
             .expect("bootstrap metadata should be present");
 
-        assert_eq!(recorded_version, 5);
+        assert_eq!(recorded_version, 6);
         assert_eq!(bootstrap_value, "ready");
     }
 
@@ -229,6 +229,10 @@ mod tests {
                     "last_success_at",
                     "etag",
                     "last_modified",
+                    "last_error_kind",
+                    "last_error_message",
+                    "last_error_at",
+                    "consecutive_failures",
                 ],
             ),
             (
@@ -388,6 +392,20 @@ mod tests {
                 unique: false,
                 partial: false,
                 columns: &["health_status", "last_checked_at"],
+            },
+            IndexExpectation {
+                table: "Feed",
+                name: "idx_feed_last_error_kind_last_checked_at",
+                unique: false,
+                partial: true,
+                columns: &["last_error_kind", "last_checked_at"],
+            },
+            IndexExpectation {
+                table: "Feed",
+                name: "idx_feed_consecutive_failures_last_checked_at",
+                unique: false,
+                partial: true,
+                columns: &["consecutive_failures", "last_checked_at"],
             },
             IndexExpectation {
                 table: "Article",
@@ -644,12 +662,12 @@ mod tests {
             &mut connection,
             &database_path,
             &DatabaseInitializationOptions::new().with_backup_dir(&backup_dir),
-            embedded_migrations(),
+            &embedded_migrations()[..4],
         )
         .expect("apply v4 migration");
 
-        assert_eq!(report.current_version, 5);
-        assert_eq!(report.applied_versions, vec![4, 5]);
+        assert_eq!(report.current_version, 4);
+        assert_eq!(report.applied_versions, vec![4]);
         assert!(report.backup_path.is_some());
         assert_eq!(
             match_article_search(&connection, "backfill"),
@@ -685,7 +703,7 @@ mod tests {
             &mut connection,
             &database_path,
             &DatabaseInitializationOptions::new().with_backup_dir(&backup_dir),
-            embedded_migrations(),
+            &embedded_migrations()[..5],
         )
         .expect("apply v5 migration");
 
@@ -707,6 +725,71 @@ mod tests {
                 "Article should expose Step 30 dedup index {index_name}"
             );
         }
+    }
+
+    #[test]
+    fn applies_feed_health_diagnostics_when_upgrading_from_v5_to_v6() {
+        let temp_dir = tempdir().expect("tempdir");
+        let database_path = temp_dir.path().join("freelyrss.sqlite3");
+        let backup_dir = temp_dir.path().join("backups");
+        let mut connection = Connection::open(&database_path).expect("open database");
+
+        prepare_connection(&connection).expect("prepare connection");
+        apply_migration_set(
+            &mut connection,
+            &database_path,
+            &DatabaseInitializationOptions::default(),
+            &embedded_migrations()[..5],
+        )
+        .expect("apply v1-v5 migrations");
+
+        let report = apply_migration_set(
+            &mut connection,
+            &database_path,
+            &DatabaseInitializationOptions::new().with_backup_dir(&backup_dir),
+            embedded_migrations(),
+        )
+        .expect("apply v6 migration");
+
+        assert_eq!(report.current_version, 6);
+        assert_eq!(report.applied_versions, vec![6]);
+        assert!(report.backup_path.is_some());
+        assert_eq!(
+            table_columns(&connection, "Feed"),
+            vec![
+                "id",
+                "title",
+                "site_url",
+                "feed_url",
+                "format",
+                "icon",
+                "folder_id",
+                "custom_name",
+                "sort_order",
+                "update_interval",
+                "health_status",
+                "last_checked_at",
+                "last_success_at",
+                "etag",
+                "last_modified",
+                "last_error_kind",
+                "last_error_message",
+                "last_error_at",
+                "consecutive_failures",
+            ]
+        );
+
+        let feed_indexes = table_indexes(&connection, "Feed");
+        assert!(
+            feed_indexes
+                .iter()
+                .any(|index| index.name == "idx_feed_last_error_kind_last_checked_at")
+        );
+        assert!(
+            feed_indexes
+                .iter()
+                .any(|index| index.name == "idx_feed_consecutive_failures_last_checked_at")
+        );
     }
 
     #[test]

@@ -1,7 +1,7 @@
 use crate::{
-    FeedEngineError, FetchRequest, FetchedFeed, NormalizeContext, NormalizedFeedBatch,
-    NotModifiedFeed, ParsedFeedDocument, ParsedSource, PersistedFeedBatch, RecordedFeedCheck,
-    TransportFetchOutput,
+    FailedFeedCheck, FeedEngineError, FetchRequest, FetchedFeed, NormalizeContext,
+    NormalizedFeedBatch, NotModifiedFeed, ParsedFeedDocument, ParsedSource, PersistedFeedBatch,
+    RecordedFeedCheck, TransportFetchOutput,
 };
 
 pub trait FeedTransport {
@@ -27,4 +27,6 @@ pub trait FeedRepository {
         &self,
         response: NotModifiedFeed,
     ) -> Result<RecordedFeedCheck, FeedEngineError>;
+
+    fn record_failure(&self, failure: FailedFeedCheck) -> Result<(), FeedEngineError>;
 }

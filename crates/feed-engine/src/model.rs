@@ -1,5 +1,5 @@
 use freelyrss_core_domain::{
-    AttachmentType, FeedFormat, FeedId, IsoDateTime, LanguageCode, UrlString,
+    AttachmentType, FeedErrorKind, FeedFormat, FeedId, IsoDateTime, LanguageCode, UrlString,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -184,6 +184,15 @@ pub struct PersistedFeedBatch {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RecordedFeedCheck {
     pub feed_id: FeedId,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FailedFeedCheck {
+    pub request: FetchRequest,
+    pub final_url: Option<UrlString>,
+    pub checked_at: IsoDateTime,
+    pub error_kind: FeedErrorKind,
+    pub error_message: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

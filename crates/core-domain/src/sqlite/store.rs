@@ -1,8 +1,8 @@
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
 use crate::{
-    Article, ArticleId, Attachment, Feed, FeedId, ImportanceLevel, IsoDateTime, ReadState,
-    UrlString,
+    Article, ArticleId, Attachment, Feed, FeedErrorKind, FeedHealthStatus, FeedId, ImportanceLevel,
+    IsoDateTime, ReadState, UrlString,
 };
 
 use super::StoreError;
@@ -166,15 +166,65 @@ impl<'conn> FeedStore<'conn> {
                 last_checked_at = ?4,
                 last_success_at = ?4,
                 etag = ?5,
-                last_modified = ?6
+                last_modified = ?6,
+                last_error_kind = NULL,
+                last_error_message = NULL,
+                last_error_at = NULL,
+                consecutive_failures = 0
             WHERE id = ?1",
             params![
                 feed_id.as_str(),
                 final_feed_url.as_str(),
-                crate::FeedHealthStatus::Healthy.as_str(),
+                FeedHealthStatus::Healthy.as_str(),
                 checked_at.as_str(),
                 etag,
                 last_modified,
+            ],
+        )?;
+
+        Ok(updated_rows > 0)
+    }
+
+    pub fn record_feed_failed_check(
+        &mut self,
+        feed_id: &FeedId,
+        checked_at: &IsoDateTime,
+        error_kind: FeedErrorKind,
+        error_message: &str,
+    ) -> Result<bool, StoreError> {
+        let Some(current_failures) = self
+            .connection
+            .query_row(
+                "SELECT consecutive_failures
+                FROM Feed
+                WHERE id = ?1
+                LIMIT 1",
+                params![feed_id.as_str()],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()?
+        else {
+            return Ok(false);
+        };
+
+        let next_failures = current_failures + 1;
+        let next_health_status = health_status_for_failure(error_kind, next_failures);
+        let updated_rows = self.connection.execute(
+            "UPDATE Feed
+            SET health_status = ?2,
+                last_checked_at = ?3,
+                last_error_kind = ?4,
+                last_error_message = ?5,
+                last_error_at = ?3,
+                consecutive_failures = ?6
+            WHERE id = ?1",
+            params![
+                feed_id.as_str(),
+                next_health_status.as_str(),
+                checked_at.as_str(),
+                error_kind.as_str(),
+                error_message,
+                next_failures,
             ],
         )?;
 
@@ -223,9 +273,13 @@ fn upsert_feed(transaction: &Transaction<'_>, feed: &Feed) -> Result<(), rusqlit
             last_checked_at,
             last_success_at,
             etag,
-            last_modified
+            last_modified,
+            last_error_kind,
+            last_error_message,
+            last_error_at,
+            consecutive_failures
         ) VALUES (
-            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15
+            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19
         )
         ON CONFLICT(id) DO UPDATE SET
             title = excluded.title,
@@ -237,7 +291,11 @@ fn upsert_feed(transaction: &Transaction<'_>, feed: &Feed) -> Result<(), rusqlit
             last_checked_at = excluded.last_checked_at,
             last_success_at = excluded.last_success_at,
             etag = excluded.etag,
-            last_modified = excluded.last_modified",
+            last_modified = excluded.last_modified,
+            last_error_kind = excluded.last_error_kind,
+            last_error_message = excluded.last_error_message,
+            last_error_at = excluded.last_error_at,
+            consecutive_failures = excluded.consecutive_failures",
         params![
             feed.id.as_str(),
             feed.title,
@@ -254,10 +312,25 @@ fn upsert_feed(transaction: &Transaction<'_>, feed: &Feed) -> Result<(), rusqlit
             feed.last_success_at.as_ref().map(|value| value.as_str()),
             feed.etag,
             feed.last_modified,
+            feed.last_error_kind.map(|value| value.as_str()),
+            feed.last_error_message,
+            feed.last_error_at.as_ref().map(|value| value.as_str()),
+            feed.consecutive_failures,
         ],
     )?;
 
     Ok(())
+}
+
+fn health_status_for_failure(
+    error_kind: FeedErrorKind,
+    consecutive_failures: i64,
+) -> FeedHealthStatus {
+    if matches!(error_kind, FeedErrorKind::Permission) || consecutive_failures >= 3 {
+        FeedHealthStatus::Error
+    } else {
+        FeedHealthStatus::Degraded
+    }
 }
 
 fn upsert_article(transaction: &Transaction<'_>, article: &Article) -> Result<(), rusqlite::Error> {

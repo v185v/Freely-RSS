@@ -1,12 +1,14 @@
 use std::{cell::RefCell, rc::Rc};
 
-use freelyrss_core_domain::{AttachmentType, FeedFormat, FeedId, IsoDateTime, UrlString};
+use freelyrss_core_domain::{
+    AttachmentType, FeedErrorKind, FeedFormat, FeedId, IsoDateTime, UrlString,
+};
 use freelyrss_feed_engine::{
-    DiscoveredFeed, FeedDiscoveryResult, FeedEngineError, FeedFetcher, FeedNormalizer, FeedParser,
-    FeedRepository, FeedTransport, FetchRequest, FetchRunOutput, FetchedFeed, NormalizeContext,
-    NormalizedArticleRecord, NormalizedAttachmentRecord, NormalizedFeedBatch, NormalizedFeedRecord,
-    NotModifiedFeed, ParsedArticle, ParsedAttachment, ParsedFeedDocument, ParsedSource,
-    PersistedFeedBatch, RecordedFeedCheck, TransportFetchOutput,
+    DiscoveredFeed, FailedFeedCheck, FeedDiscoveryResult, FeedEngineError, FeedFetcher,
+    FeedNormalizer, FeedParser, FeedRepository, FeedTransport, FetchRequest, FetchRunOutput,
+    FetchedFeed, NormalizeContext, NormalizedArticleRecord, NormalizedAttachmentRecord,
+    NormalizedFeedBatch, NormalizedFeedRecord, NotModifiedFeed, ParsedArticle, ParsedAttachment,
+    ParsedFeedDocument, ParsedSource, PersistedFeedBatch, RecordedFeedCheck, TransportFetchOutput,
 };
 
 #[derive(Clone)]
@@ -94,6 +96,20 @@ impl FeedTransport for NotModifiedTransport {
             etag: Some("\"etag-v2\"".into()),
             last_modified: Some("Fri, 11 Apr 2026 12:04:00 GMT".into()),
         }))
+    }
+}
+
+struct FailingTransport {
+    calls: CallLog,
+}
+
+impl FeedTransport for FailingTransport {
+    fn fetch(&self, request: &FetchRequest) -> Result<TransportFetchOutput, FeedEngineError> {
+        self.calls.push("fetch");
+        assert_eq!(request.feed_url, url("https://example.com/feed.xml"));
+        assert_eq!(request.feed_id, Some(feed_id("feed-existing")));
+
+        Err(FeedEngineError::fetch("fixture timeout"))
     }
 }
 
@@ -214,6 +230,10 @@ impl FeedRepository for StubRepository {
     ) -> Result<RecordedFeedCheck, FeedEngineError> {
         panic!("not-modified bookkeeping should not run for modified feeds");
     }
+
+    fn record_failure(&self, _failure: FailedFeedCheck) -> Result<(), FeedEngineError> {
+        panic!("failure bookkeeping should not run for modified feeds");
+    }
 }
 
 struct NotModifiedRepository {
@@ -242,6 +262,10 @@ impl FeedRepository for NotModifiedRepository {
         Ok(RecordedFeedCheck {
             feed_id: feed_id("feed-existing"),
         })
+    }
+
+    fn record_failure(&self, _failure: FailedFeedCheck) -> Result<(), FeedEngineError> {
+        panic!("failure bookkeeping should not run for not-modified responses");
     }
 }
 
@@ -311,6 +335,41 @@ impl FeedRepository for UnexpectedRepository {
     ) -> Result<RecordedFeedCheck, FeedEngineError> {
         panic!("not-modified bookkeeping should not run after parse failure");
     }
+
+    fn record_failure(&self, _failure: FailedFeedCheck) -> Result<(), FeedEngineError> {
+        panic!("failure bookkeeping should not run in this scenario");
+    }
+}
+
+struct FailureRecordingRepository {
+    calls: CallLog,
+    expected_error_kind: FeedErrorKind,
+    expected_error_message: &'static str,
+}
+
+impl FeedRepository for FailureRecordingRepository {
+    fn persist(&self, _batch: NormalizedFeedBatch) -> Result<PersistedFeedBatch, FeedEngineError> {
+        panic!("persistence should not run for failed fetches");
+    }
+
+    fn record_not_modified(
+        &self,
+        _response: NotModifiedFeed,
+    ) -> Result<RecordedFeedCheck, FeedEngineError> {
+        panic!("not-modified bookkeeping should not run for failed fetches");
+    }
+
+    fn record_failure(&self, failure: FailedFeedCheck) -> Result<(), FeedEngineError> {
+        self.calls.push("record-failure");
+        assert_eq!(failure.request.feed_id, Some(feed_id("feed-existing")));
+        assert_eq!(
+            failure.request.feed_url,
+            url("https://example.com/feed.xml")
+        );
+        assert_eq!(failure.error_kind, self.expected_error_kind);
+        assert_eq!(failure.error_message, self.expected_error_message);
+        Ok(())
+    }
 }
 
 #[test]
@@ -369,7 +428,11 @@ fn feed_fetcher_stops_after_parse_failure() {
             calls: calls.clone(),
         },
         UnexpectedNormalizer,
-        UnexpectedRepository,
+        FailureRecordingRepository {
+            calls: calls.clone(),
+            expected_error_kind: FeedErrorKind::Parse,
+            expected_error_message: "fixture parser failure",
+        },
     );
 
     let error = fetcher
@@ -381,7 +444,7 @@ fn feed_fetcher_stops_after_parse_failure() {
         })
         .expect_err("parse failure should bubble up");
 
-    assert_eq!(calls.snapshot(), vec!["fetch", "parse"]);
+    assert_eq!(calls.snapshot(), vec!["fetch", "parse", "record-failure"]);
     assert_eq!(error, FeedEngineError::parse("fixture parser failure"));
 }
 
@@ -468,6 +531,37 @@ fn feed_fetcher_returns_not_modified_result_without_running_parser_or_normalizer
             fetched_at: time("2026-04-11T12:05:00Z"),
         })
     );
+}
+
+#[test]
+fn feed_fetcher_records_transport_failures_without_running_parser_or_normalizer() {
+    let calls = CallLog::new();
+    let fetcher = FeedFetcher::new(
+        FailingTransport {
+            calls: calls.clone(),
+        },
+        FailingParser {
+            calls: calls.clone(),
+        },
+        UnexpectedNormalizer,
+        FailureRecordingRepository {
+            calls: calls.clone(),
+            expected_error_kind: FeedErrorKind::Network,
+            expected_error_message: "fixture timeout",
+        },
+    );
+
+    let error = fetcher
+        .run(FetchRequest {
+            feed_id: Some(feed_id("feed-existing")),
+            feed_url: url("https://example.com/feed.xml"),
+            etag: None,
+            last_modified: None,
+        })
+        .expect_err("transport failure should be returned");
+
+    assert_eq!(calls.snapshot(), vec!["fetch", "record-failure"]);
+    assert_eq!(error, FeedEngineError::fetch("fixture timeout"));
 }
 
 fn feed_id(value: &str) -> FeedId {

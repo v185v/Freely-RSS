@@ -483,6 +483,10 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `last_success_at`
 - `etag`
 - `last_modified`
+- `last_error_kind`
+- `last_error_message`
+- `last_error_at`
+- `consecutive_failures`
 
 约束建议：
 
@@ -490,6 +494,8 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `feed_url` 全局唯一。
 - `folder_id` 指向 `Folder.id`，允许为空。
 - `health_status` 采用受控枚举值。
+- `last_error_kind` 为空时表示最近一次检查未留下失败诊断；非空时必须来自受控错误枚举。
+- `consecutive_failures` 必须大于等于 0，并且在成功检查后归零。
 
 ### 12.2 Folder
 
@@ -729,7 +735,8 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - 阶段 3 应优先为 `feed_url`、`feed_id + source_guid`、`published_at`、`fetched_at`、状态字段和关联表外键补齐索引。
 - 阶段 3 Step 20 已通过数据库 `v3` 迁移落地唯一索引与查询索引基线：`Feed.feed_url`、`Tag.scope + name`、`Article.feed_id + source_guid`、`Article.published_at` / `Article.fetched_at`、`Feed.health_status`、`UserState` 状态字段、`FeedTag` / `ArticleTag` 反向关联、`Attachment.article_id`、`Annotation.article_id`、`AIArtifact.article_id` 以及 `SyncEvent` 的实体/设备查询路径都已拥有显式索引入口。
 - 阶段 3 Step 21 已通过数据库 `v4` 迁移补齐全文搜索基线：`ArticleSearchSource` 负责搜索文档投影，`ArticleSearch` 负责 FTS5 索引，`Article` / `Feed` / `ArticleTag` / `Tag` 的变更通过数据库触发器同步更新全文索引。
-- 当前约束策略是“基础语义进表定义、唯一性与查询优化走独立迁移、全文搜索走独立索引迁移”：主键、外键、受控枚举、布尔位和区间约束保留在 `v2` 建表迁移中，唯一索引与查询索引收敛到 `v3`，FTS5 结构、投影视图与同步触发器收敛到 `v4`，避免后续 SQLite 演进为了补查询能力而回退到整表重建。
+- 阶段 4 Step 32 已通过数据库 `v6` 迁移补齐源健康诊断基线：`Feed.last_error_kind` / `last_error_message` / `last_error_at` / `consecutive_failures` 正式进入 schema，并为“按错误类型回看失败源”和“按连续失败数筛查异常源”提供独立索引入口。
+- 当前约束策略是“基础语义进表定义、唯一性与查询优化走独立迁移、全文搜索走独立索引迁移、健康诊断走独立演进迁移”：主键、外键、受控枚举、布尔位和区间约束保留在 `v2` 建表迁移中，唯一索引与查询索引收敛到 `v3`，FTS5 结构、投影视图与同步触发器收敛到 `v4`，文章去重辅助索引收敛到 `v5`，健康诊断字段与索引收敛到 `v6`，避免后续 SQLite 演进为了补运维与可观测性能力而回退到整表重建。
 
 ## 13. 当前工程骨架与模块职责
 
@@ -1058,6 +1065,38 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `crates/feed-engine/src/sqlite_repository.rs`：默认 SQLite 仓储实现；在 Step 31 中新增 not-modified 记账入口，负责解析既有 `Feed.id`、调用 `FeedStore` 更新 feed 检查元数据，并保证文章图与用户状态不被重写。
 - `crates/core-domain/src/sqlite/store.rs`：共享 SQLite 写入边界；在 Step 31 中新增 `record_feed_successful_check()`，负责以数据库事务外的轻量更新方式回写 `feed_url`、`health_status`、`last_checked_at`、`last_success_at`、`etag` 与 `last_modified`。
 - `crates/core-domain/src/sqlite/mod.rs`：SQLite 初始化与迁移验收入口；虽然 Step 31 未新增 schema 版本，但它继续为 `FeedStore` 提供统一连接准备与既有 schema 保证，确保 transport / repository 新增的状态回写建立在稳定数据库基线上。
+
+### Step 32 架构洞察
+
+- Step 32 的关键价值不是“多加几个报错字符串”，而是把“抓取失败诊断”正式收敛为可持久化的领域事实：`Feed.health_status` 继续表达聚合后的健康状态，而 `last_error_kind`、`last_error_message`、`last_error_at` 与 `consecutive_failures` 则承载最近一次失败的细节与升级依据。
+- `FeedEngineError` 在 Step 32 中从“只区分阶段”推进到“阶段 + 失败类别”，说明 FreelyRSS 现在把网络错误、权限错误、解析错误和空内容错误视为产品级语义，而不是仅供日志查看的内部异常文本。
+- `FeedFetcher` 在 Step 32 中新增“失败先记账、再返回原始错误”的流程，意味着编排层开始承担失败短路与诊断回写触发职责，但仍不持有健康状态计算本身；真正的失败阈值与持久化语义继续留在 repository / store。
+- `FeedStore::record_feed_failed_check()` 与 `record_feed_successful_check()` 的对偶设计说明 FreelyRSS 已明确把健康诊断视为与内容落库并列的持久化分支：成功路径负责清空错误摘要并归零失败计数，失败路径负责递增计数、保留最近错误，并在权限错误立即升级与“连续失败达到阈值升级”之间做统一判定。
+- 把健康诊断 schema 独立推进到数据库 `v6`，而不是回改 `v2` 建表迁移，说明 FreelyRSS 已开始把“可观测性与运维字段”也当作可审阅、可升级的架构资产；这对已有用户数据库的平滑演进和后续 Step 33 左栏状态展示非常关键。
+- `packages/shared-types` 同步新增 `FeedErrorKind` 与错误摘要字段，说明健康状态不再只是 Rust 内部概念，而是已经推进到跨端契约层；但当前 UI 仍只消费 DTO，不反向定义错误分类规则，这保持了前后端职责边界。
+
+### Step 32 文件职责
+
+- `crates/core-domain/src/model/enums.rs`：共享受控枚举中心；在 Step 32 中新增 `FeedErrorKind`，统一 Rust 领域层对网络、权限、解析与空内容错误的命名。
+- `crates/core-domain/src/model/feed.rs`：Feed 领域实体；在 Step 32 中新增最近错误摘要与连续失败计数字段，使健康诊断与抓取元数据落到同一领域对象上。
+- `crates/core-domain/src/sqlite/records.rs`：领域对象与 SQLite 记录翻译层；在 Step 32 中负责把 `FeedErrorKind`、最近错误时间和连续失败计数在存储表示与领域表示之间安全往返。
+- `crates/core-domain/src/sqlite/migrations/006_feed_health_diagnostics.sql`：数据库 `v6` 迁移文件；负责为 `Feed` 表补齐健康诊断列与失败筛查索引，使 Step 32 的可观测性能力成为正式 schema 资产。
+- `crates/core-domain/src/sqlite/migrations.rs`：嵌入式迁移注册表；在 Step 32 中把 `feed_health_diagnostics` 纳入标准迁移序列，确保空库初始化与升级路径都会获得诊断字段。
+- `crates/core-domain/src/sqlite/mod.rs`：SQLite 初始化与迁移验收入口；在 Step 32 中负责校验 `v6` schema 列与索引存在，并新增 `v5 -> v6` 升级测试。
+- `crates/core-domain/src/sqlite/store.rs`：共享 SQLite 健康状态写入边界；在 Step 32 中新增 `record_feed_failed_check()`，并扩展成功记账以清理错误摘要和失败计数。
+- `crates/feed-engine/src/error.rs`：抓取错误语义中心；在 Step 32 中把 transport / parser 失败从模糊字符串推进为带 `FeedErrorKind` 的结构化错误，并为权限错误与空内容错误提供独立构造入口。
+- `crates/feed-engine/src/model.rs`：抓取中间契约中心；在 Step 32 中新增 `FailedFeedCheck`，作为 fetcher 向 repository 回写失败诊断的稳定载荷。
+- `crates/feed-engine/src/ports.rs`：`feed-engine` 四段式端口定义；在 Step 32 中为 repository 增加 `record_failure()`，确保失败路径也经过稳定端口而不是由 fetcher 直接拼 SQL。
+- `crates/feed-engine/src/fetcher.rs`：抓取编排器；在 Step 32 中负责在 transport / parser 失败后组装 `FailedFeedCheck` 并触发仓储记账，再把原始抓取错误返回给调用方。
+- `crates/feed-engine/src/parser/mod.rs`：默认 parser 总入口；在 Step 32 中把“空白正文”提升为独立 `empty` 错误，而不是继续退化成 generic parse failure。
+- `crates/feed-engine/src/transport.rs`：默认阻塞式 HTTP transport 实现；在 Step 32 中把 `401` / `403` 显式分类为权限错误，其余网络与 HTTP 失败继续收敛为网络错误。
+- `crates/feed-engine/src/sqlite_repository.rs`：默认 SQLite 仓储实现；在 Step 32 中新增失败记账入口，负责解析既有 `Feed.id`、回写失败诊断、在首次未落库 feed 场景下安全跳过健康写入，并在成功持久化时重置诊断字段。
+- `crates/feed-engine/tests/fetcher_pipeline.rs`：抓取编排回归测试；在 Step 32 中验证 transport / parser 失败会先触发 `record_failure()`，且不会误入 normalizer / persist。
+- `crates/feed-engine/tests/parser_fixtures.rs`：parser / normalizer 回归测试；在 Step 32 中新增空内容错误验收，防止空正文回退成一般解析失败。
+- `packages/shared-types/src/enums.ts`：前端共享受控枚举定义；在 Step 32 中新增 `FeedErrorKind`，让桌面端、Web 端和移动端共享同一错误类别词汇表。
+- `packages/shared-types/src/feed.ts`：Feed DTO 契约文件；在 Step 32 中把最近错误摘要与连续失败计数加入 `FeedDto` / `FeedSummaryDto`，为订阅树和源管理 UI 提供稳定输入。
+- `packages/shared-types/src/index.ts`：共享类型包导出面；在 Step 32 中导出新的健康诊断枚举与 DTO 字段，避免调用方深链引用具体实现文件。
+- `apps/desktop/src/features/reader-shell/mock-data.ts`：桌面壳异步 mock 数据边界；在 Step 32 中为来源样本补齐错误类型、错误摘要与连续失败计数，提前验证共享 DTO 扩展不会破坏现有壳层组合。
 
 ## 14. 当前文档职责
 

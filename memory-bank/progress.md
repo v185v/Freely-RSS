@@ -2,15 +2,15 @@
 
 ## 当前状态
 
-- 阶段：阶段 4 Step 30 已完成，`core-domain/sqlite` 与 `feed-engine` 已补齐 canonical URL / original URL、标题+发布时间+来源与内容哈希三层优先级的文章去重闭环，并把数据库级匹配查询、批次内去重折叠和稳定 ID 回退继续留在持久化边界；下一步进入阶段 4 Step 31 的增量抓取与缓存头支持
-- 最后更新：2026-04-16
-- 风险状态：已从“在 Step 30 中补齐 canonical URL / original URL、标题+时间+来源与内容哈希去重时，继续让 `feed-engine` 只负责标准化与仓储接线，不让 URL 去重策略、内容哈希比较或 UI 决策回流到桌面宿主或前端壳层”推进到“在 Step 31 中补齐 ETag / Last-Modified、增量抓取与失败重试时，继续让 transport 负责请求条件头、让持久化层负责去重后写入与状态更新，不把 HTTP 缓存语义散落到 UI、宿主或解析层”
+- 阶段：阶段 4 Step 32 已完成，`core-domain/sqlite` 与 `feed-engine` 已补齐源健康诊断字段、失败分类、连续失败升级与成功清零闭环，并把错误语义与健康状态回写继续留在 transport / fetcher / repository / store 边界；下一步进入阶段 4 Step 33 的订阅树与分组管理 UI
+- 最后更新：2026-04-18
+- 风险状态：已从“在 Step 31 中补齐 ETag / Last-Modified、增量抓取与失败重试时，继续让 transport 负责请求条件头、让持久化层负责去重后写入与状态更新，不把 HTTP 缓存语义散落到 UI、宿主或解析层”推进到“在 Step 32 中补齐网络错误、权限错误、解析错误、内容为空与连续失败升级时，继续让 transport 负责原始失败语义、让 fetcher 负责失败短路与回写触发、让 repository / store 负责健康状态落库，不把错误分类策略或失败阈值回流到 parser、桌面宿主或前端壳层”
 
 ### 2026-04-18 状态快照
 
-- 当前完成：阶段 4 Step 31 已完成，条件请求、`304` 短路、瞬态重试与 not-modified 持久化回写闭环已经落地。
+- 当前完成：阶段 4 Step 32 已完成，源健康诊断字段、网络 / 权限 / 解析 / 空内容分类、连续失败升级与成功清零闭环已经落地。
 - 当前验证：`cargo test -p freelyrss-core-domain`、`cargo test -p freelyrss-feed-engine`、`corepack pnpm run verify` 与 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle` 全部通过。
-- 当前下一步：进入阶段 4 Step 32“建立源健康状态与错误分类”，继续把错误语义与状态落库留在 transport / repository / store 边界。
+- 当前下一步：进入阶段 4 Step 33“建立订阅树与分组管理 UI”，在不破坏既有抓取与持久化边界的前提下，把 `Feed.health_status`、错误摘要与分组关系消费到左栏订阅树视图。
 
 ## 已确认决策
 
@@ -26,7 +26,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 4 Step 31 需要在不破坏 Step 25 至 Step 30 已落地的 transport / parser / normalizer / repository / SQLite store 分层、discovery 短路边界与去重优先级前提下，把 `ETag` / `Last-Modified`、条件请求与增量写入继续留在 transport / 持久化边界，而不是回流到宿主或 UI。
+- 当前无阻塞；下一步风险点是阶段 4 Step 33 需要在不破坏 Step 25 至 Step 32 已落地的 transport / parser / normalizer / repository / SQLite store 分层、discovery / not-modified / failed-check 短路边界与健康状态落库前提下，把订阅树显示、分组和状态徽标继续留在 UI 组合层，而不是把树结构拼装或健康诊断逻辑回流到抓取引擎与宿主层。
 
 ## 本次执行记录
 
@@ -488,10 +488,28 @@
 - 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，结果通过；确认 `feed-engine` 新增 transport、条件请求与 not-modified 分支后，桌面端前端构建、Tauri 宿主装配与 Rust 入口链路仍可端到端打通，生成 `apps/desktop/src-tauri/target/debug/freelyrss-desktop.exe`。
 - 当前验证结论：Step 31 通过，可进入阶段 4 Step 32“建立源健康状态与错误分类”。
 
+### 2026-04-18 - 阶段 4 Step 32：建立源健康状态与错误分类
+
+- 已在 `crates/core-domain/src/model/enums.rs`、`crates/core-domain/src/model/feed.rs` 与 `crates/core-domain/src/sqlite/records.rs` 新增 `FeedErrorKind`、`Feed.last_error_kind` / `last_error_message` / `last_error_at` / `consecutive_failures` 字段，把“错误类型”和“连续失败计数”正式纳入共享领域模型与 SQLite 记录翻译层，而不是继续依赖 `Feed.health_status` 的单字段含义承载全部失败语义。
+- 已新增 `crates/core-domain/src/sqlite/migrations/006_feed_health_diagnostics.sql`，并更新 `crates/core-domain/src/sqlite/migrations.rs` 与 `crates/core-domain/src/sqlite/mod.rs`：数据库 schema 已推进到 `v6`，为 `Feed` 表补齐健康诊断列与 `last_error_kind` / `consecutive_failures` 索引，同时新增 `v5 -> v6` 升级验收，确保已有数据库能平滑获得 Step 32 的诊断能力。
+- 已扩展 `crates/core-domain/src/sqlite/store.rs`：`record_feed_successful_check()` 现在会清空错误字段并把 `consecutive_failures` 归零；新增长 `record_feed_failed_check()`，负责按失败类型递增连续失败次数、写入最近错误详情，并在“权限错误立即升级”与“连续失败达到阈值升级”为 `error` 之间做统一健康状态判定。
+- 已更新 `crates/feed-engine/src/error.rs`、`crates/feed-engine/src/model.rs`、`crates/feed-engine/src/ports.rs` 与 `crates/feed-engine/src/fetcher.rs`：`FeedEngineError` 现在显式区分网络、权限、解析与空内容分类，`DefaultFeedParser` 会把空正文响应映射为独立 `empty` 错误，`FeedFetcher` 则会在 transport 或 parser 失败后先通过 `record_failure()` 触发仓储回写，再把原始错误返回给调用方。
+- 已更新 `crates/feed-engine/src/transport.rs` 与 `crates/feed-engine/src/sqlite_repository.rs`：transport 现在会把 `401` / `403` 分类为权限错误，其余网络与 HTTP 失败继续作为网络失败处理；默认 SQLite 仓储新增 `record_failure()`，在已知 feed 上回写失败诊断，在首次添加且尚未落库的 feed 请求上则安全跳过健康状态写入，避免用“记录失败失败”覆盖原始抓取错误。
+- 已同步扩展 `packages/shared-types/src/enums.ts`、`packages/shared-types/src/feed.ts`、`packages/shared-types/src/index.ts` 与 `apps/desktop/src/features/reader-shell/mock-data.ts`，把 `FeedErrorKind` 与错误摘要字段纳入共享 DTO 契约和桌面壳 mock 数据，为 Step 33 左栏订阅树消费健康诊断信息预留稳定字段边界。
+
+### 验证结果
+
+- 已执行 `cargo test -p freelyrss-core-domain`，结果通过；18 个 SQLite 迁移、索引、升级、约束与 record/domain 往返测试全部通过，其中包含新的 `v5 -> v6` 健康诊断迁移验收。
+- 已执行 `cargo test -p freelyrss-feed-engine`，结果通过；11 个仓储 / transport 测试、5 个抓取编排测试与 10 个 parser / normalizer 回归测试全部通过，覆盖权限错误分类、空内容分类、失败回写、连续失败升级与成功清零路径。
+- 已执行 `corepack pnpm run verify`，结果通过；`format:check`、`lint`、`test:config`、`test:types`、`test:query`、`test:desktop`、`rust:fmt:check`、`rust:clippy`、`test:rust` 与 `docs:links` 全部通过。
+- 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，结果通过；确认 `core-domain` 的 `v6` schema 与 `feed-engine` 的失败分类接入后，桌面前端构建、Tauri 宿主装配与 Rust 入口链路仍可端到端打通，生成 `apps/desktop/src-tauri/target/debug/freelyrss-desktop.exe`。
+- 已在验证通过后同步回写 `memory-bank/progress.md` 与 `memory-bank/architecture.md`，补齐阶段 4 Step 32 的交接记录、数据库 schema 变更、文件职责说明与新的架构洞察。
+- 当前验证结论：Step 32 通过，可进入阶段 4 Step 33“建立订阅树与分组管理 UI”。
+
 ## 下一步（2026-04-18 更新）
 
-- 按 `implementation-plan.md` 执行阶段 4 Step 32，在 Step 31 的条件请求与 not-modified 闭环之上补齐网络错误、解析错误、连续失败与健康状态分类，避免所有失败都退化成统一的 fetch error。
-- 在推进 Step 32 时继续保持当前边界：transport 负责网络层原始成功/失败语义，`FeedFetcher` 负责编排与短路控制流，`SqliteFeedRepository` 与 `FeedStore` 继续只处理状态写入与持久化更新，不让错误分类策略、连续失败阈值或 UI 提示逻辑回流到 parser、normalizer、桌面宿主或前端壳层。
+- 按 `implementation-plan.md` 执行阶段 4 Step 33，在现有 `Feed` 健康字段、错误摘要字段与订阅源持久化基础上实现左栏订阅树与分组管理 UI，先支持查看、展开、折叠与选中。
+- 在推进 Step 33 时继续保持当前边界：`shared-types` 只提供订阅树与健康摘要 DTO，桌面端 reader shell 负责树视图组合与交互状态，`core-domain/sqlite` 继续保有目录 / Feed / 健康诊断事实来源，不让树节点拼装或错误分类逻辑回流到 `feed-engine`、桌面宿主或前端基础组件层。
 
 ## 历史下一步（2026-04-16）
 

@@ -291,6 +291,13 @@ fn map_http_response(
         }));
     }
 
+    if matches!(response.status_code, 401 | 403) {
+        return Err(FeedEngineError::fetch_permission(format!(
+            "feed request failed with HTTP status {} for {}",
+            response.status_code, request.feed_url
+        )));
+    }
+
     if !(200..=299).contains(&response.status_code) {
         return Err(FeedEngineError::fetch(format!(
             "feed request failed with HTTP status {} for {}",
@@ -489,6 +496,41 @@ mod tests {
             Some("Thu, 16 Apr 2026 10:30:00 GMT")
         );
         assert!(fetched.fetched_at.as_str().ends_with('Z'));
+    }
+
+    #[test]
+    fn classifies_permission_responses_without_retrying() {
+        let executor = ScriptedExecutor::new(vec![Ok(HttpResponse {
+            final_url: "https://example.com/private.xml".into(),
+            status_code: 403,
+            content_type: Some("text/plain".into()),
+            body: b"forbidden".to_vec(),
+            etag: None,
+            last_modified: None,
+        })]);
+        let request = FetchRequest {
+            feed_id: Some(feed_id("feed-1")),
+            feed_url: url("https://example.com/private.xml"),
+            etag: None,
+            last_modified: None,
+        };
+
+        let error = fetch_with_executor(
+            &executor,
+            &FeedTransportOptions::new()
+                .with_max_attempts(3)
+                .with_retry_delay(Duration::ZERO),
+            &request,
+        )
+        .expect_err("403 response should be surfaced as a permission failure");
+
+        assert_eq!(executor.requests().len(), 1);
+        assert_eq!(
+            error,
+            FeedEngineError::fetch_permission(
+                "feed request failed with HTTP status 403 for https://example.com/private.xml",
+            )
+        );
     }
 
     fn feed_id(value: &str) -> freelyrss_core_domain::FeedId {

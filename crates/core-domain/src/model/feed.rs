@@ -1,4 +1,6 @@
-use super::{FeedFormat, FeedHealthStatus, FeedId, FolderId, IsoDateTime, UrlString};
+use super::{
+    FeedErrorKind, FeedFormat, FeedHealthStatus, FeedId, FolderId, IsoDateTime, UrlString,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Feed {
@@ -17,4 +19,8 @@ pub struct Feed {
     pub last_success_at: Option<IsoDateTime>,
     pub etag: Option<String>,
     pub last_modified: Option<String>,
+    pub last_error_kind: Option<FeedErrorKind>,
+    pub last_error_message: Option<String>,
+    pub last_error_at: Option<IsoDateTime>,
+    pub consecutive_failures: i64,
 }

@@ -174,6 +174,37 @@ fn default_parser_reads_json_feed_fixture() {
 }
 
 #[test]
+fn default_parser_rejects_empty_feed_bodies_with_a_distinct_error() {
+    let parser = DefaultFeedParser;
+    let fetched = FetchedFeed {
+        request: FetchRequest {
+            feed_id: Some(feed_id("feed-empty")),
+            feed_url: url("https://example.com/empty.xml"),
+            etag: None,
+            last_modified: None,
+        },
+        final_url: url("https://example.com/empty.xml"),
+        status_code: 200,
+        content_type: Some("application/rss+xml".into()),
+        body: b"   \n\t ".to_vec(),
+        fetched_at: timestamp("2026-04-18T09:30:00Z"),
+        etag: None,
+        last_modified: None,
+    };
+
+    let error = parser
+        .parse(&fetched)
+        .expect_err("empty response bodies should not collapse into a generic parse error");
+
+    assert_eq!(
+        error,
+        freelyrss_feed_engine::FeedEngineError::empty_content(
+            "fetched feed body was empty after trimming whitespace",
+        )
+    );
+}
+
+#[test]
 fn default_normalizer_projects_parsed_feed_into_normalized_records() {
     let parser = DefaultFeedParser;
     let normalizer = DefaultFeedNormalizer;

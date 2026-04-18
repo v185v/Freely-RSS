@@ -1,4 +1,4 @@
-import type { FeedFormat, FeedHealthStatus } from "./enums"
+import type { FeedErrorKind, FeedFormat, FeedHealthStatus } from "./enums"
 import type { FeedId, FolderId, TagId } from "./ids"
 import type { FolderDto } from "./organization"
 import type { ISODateTimeString, Nullable, UrlString } from "./primitives"
@@ -19,6 +19,10 @@ export interface FeedDto {
   lastSuccessAt: Nullable<ISODateTimeString>
   etag: Nullable<string>
   lastModified: Nullable<string>
+  lastErrorKind: Nullable<FeedErrorKind>
+  lastErrorMessage: Nullable<string>
+  lastErrorAt: Nullable<ISODateTimeString>
+  consecutiveFailures: number
 }
 
 export interface FeedSummaryDto {
@@ -29,6 +33,9 @@ export interface FeedSummaryDto {
   icon: Nullable<UrlString>
   folderId: Nullable<FolderId>
   healthStatus: FeedHealthStatus
+  lastErrorKind: Nullable<FeedErrorKind>
+  lastErrorMessage: Nullable<string>
+  consecutiveFailures: number
   unreadCount: number
   totalCount: number
   tagIds: TagId[]

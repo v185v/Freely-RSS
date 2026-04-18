@@ -12,8 +12,8 @@ mod transport;
 pub use error::FeedEngineError;
 pub use fetcher::FeedFetcher;
 pub use model::{
-    DiscoveredFeed, FeedDiscoveryResult, FetchNotModifiedReport, FetchRequest, FetchRunOutput,
-    FetchRunReport, FetchedFeed, NormalizeContext, NormalizedArticleRecord,
+    DiscoveredFeed, FailedFeedCheck, FeedDiscoveryResult, FetchNotModifiedReport, FetchRequest,
+    FetchRunOutput, FetchRunReport, FetchedFeed, NormalizeContext, NormalizedArticleRecord,
     NormalizedAttachmentRecord, NormalizedFeedBatch, NormalizedFeedRecord, NotModifiedFeed,
     ParsedArticle, ParsedAttachment, ParsedFeedDocument, ParsedSource, PersistedFeedBatch,
     RecordedFeedCheck, TransportFetchOutput,

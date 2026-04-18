@@ -1,9 +1,10 @@
 use crate::model::{
     AIArtifact, AIArtifactId, AIArtifactKind, Annotation, AnnotationId, AnnotationType, Article,
     ArticleId, ArticleTag, Attachment, AttachmentId, AttachmentType, CachePath, DeviceId, Feed,
-    FeedFormat, FeedHealthStatus, FeedId, FeedTag, Folder, FolderId, FolderKind, HexColor,
-    ImportanceLevel, IsoDateTime, JsonBlob, LanguageCode, ModelError, ReadState, Rule, RuleId,
-    SmartFolder, SmartFolderId, SyncEvent, SyncEventId, Tag, TagId, TagScope, UrlString, UserState,
+    FeedErrorKind, FeedFormat, FeedHealthStatus, FeedId, FeedTag, Folder, FolderId, FolderKind,
+    HexColor, ImportanceLevel, IsoDateTime, JsonBlob, LanguageCode, ModelError, ReadState, Rule,
+    RuleId, SmartFolder, SmartFolderId, SyncEvent, SyncEventId, Tag, TagId, TagScope, UrlString,
+    UserState,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -53,6 +54,10 @@ struct FeedRecord {
     last_success_at: Option<String>,
     etag: Option<String>,
     last_modified: Option<String>,
+    last_error_kind: Option<String>,
+    last_error_message: Option<String>,
+    last_error_at: Option<String>,
+    consecutive_failures: i64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -270,6 +275,16 @@ impl TryFrom<FeedRecord> for Feed {
                 .transpose()?,
             etag: record.etag,
             last_modified: record.last_modified,
+            last_error_kind: record
+                .last_error_kind
+                .map(FeedErrorKind::try_from)
+                .transpose()?,
+            last_error_message: record.last_error_message,
+            last_error_at: record
+                .last_error_at
+                .map(IsoDateTime::try_from)
+                .transpose()?,
+            consecutive_failures: record.consecutive_failures,
         })
     }
 }
@@ -292,6 +307,10 @@ impl From<Feed> for FeedRecord {
             last_success_at: value.last_success_at.map(Into::into),
             etag: value.etag,
             last_modified: value.last_modified,
+            last_error_kind: value.last_error_kind.map(|kind| kind.as_str().to_owned()),
+            last_error_message: value.last_error_message,
+            last_error_at: value.last_error_at.map(Into::into),
+            consecutive_failures: value.consecutive_failures,
         }
     }
 }
@@ -645,6 +664,10 @@ mod tests {
             last_success_at: Some("2026-04-11T10:00:00Z".into()),
             etag: Some("etag-1".into()),
             last_modified: Some("Fri, 11 Apr 2026 10:00:00 GMT".into()),
+            last_error_kind: Some("network".into()),
+            last_error_message: Some("feed request timed out".into()),
+            last_error_at: Some("2026-04-11T10:09:30Z".into()),
+            consecutive_failures: 2,
         };
         let article_record = ArticleRecord {
             id: "article-rust".into(),
@@ -882,6 +905,10 @@ mod tests {
             last_success_at: None,
             etag: None,
             last_modified: None,
+            last_error_kind: None,
+            last_error_message: None,
+            last_error_at: None,
+            consecutive_failures: 0,
         };
 
         assert!(matches!(

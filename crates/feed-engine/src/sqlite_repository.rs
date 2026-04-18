@@ -13,9 +13,9 @@ use rusqlite::Connection;
 use sha2::{Digest, Sha256};
 
 use crate::{
-    FeedEngineError, FeedRepository, NormalizedArticleRecord, NormalizedAttachmentRecord,
-    NormalizedFeedBatch, NormalizedFeedRecord, NotModifiedFeed, PersistedFeedBatch,
-    RecordedFeedCheck,
+    FailedFeedCheck, FeedEngineError, FeedRepository, NormalizedArticleRecord,
+    NormalizedAttachmentRecord, NormalizedFeedBatch, NormalizedFeedRecord, NotModifiedFeed,
+    PersistedFeedBatch, RecordedFeedCheck,
 };
 
 pub struct SqliteFeedRepository {
@@ -104,6 +104,37 @@ impl FeedRepository for SqliteFeedRepository {
 
         Ok(RecordedFeedCheck { feed_id })
     }
+
+    fn record_failure(&self, failure: FailedFeedCheck) -> Result<(), FeedEngineError> {
+        let mut connection = Connection::open(&self.database_path)
+            .map_err(|error| FeedEngineError::persist(format!("open sqlite database: {error}")))?;
+        prepare_database_connection(&connection).map_err(|error| {
+            FeedEngineError::persist(format!("prepare sqlite connection: {error}"))
+        })?;
+
+        let mut store = FeedStore::new(&mut connection);
+        let Some(feed_id) = resolve_existing_feed_id_for_failure(&mut store, &failure.request)?
+        else {
+            return Ok(());
+        };
+        let updated = store
+            .record_feed_failed_check(
+                &feed_id,
+                &failure.checked_at,
+                failure.error_kind,
+                failure.error_message.as_str(),
+            )
+            .map_err(|error| FeedEngineError::persist(error.to_string()))?;
+
+        if !updated {
+            return Err(FeedEngineError::persist(format!(
+                "record failed check for missing feed {}",
+                feed_id.as_str()
+            )));
+        }
+
+        Ok(())
+    }
 }
 
 fn resolve_feed_id(
@@ -143,6 +174,19 @@ fn resolve_existing_feed_id(
         })
 }
 
+fn resolve_existing_feed_id_for_failure(
+    store: &mut FeedStore<'_>,
+    request: &crate::FetchRequest,
+) -> Result<Option<FeedId>, FeedEngineError> {
+    if let Some(feed_id) = request.feed_id.clone() {
+        return Ok(Some(feed_id));
+    }
+
+    store
+        .find_feed_id_by_url(&request.feed_url)
+        .map_err(|error| FeedEngineError::persist(error.to_string()))
+}
+
 fn build_feed(feed: NormalizedFeedRecord, feed_id: FeedId) -> Feed {
     Feed {
         id: feed_id,
@@ -160,6 +204,10 @@ fn build_feed(feed: NormalizedFeedRecord, feed_id: FeedId) -> Feed {
         last_success_at: Some(feed.last_success_at),
         etag: feed.etag,
         last_modified: feed.last_modified,
+        last_error_kind: None,
+        last_error_message: None,
+        last_error_at: None,
+        consecutive_failures: 0,
     }
 }
 
@@ -521,7 +569,7 @@ mod tests {
     use std::{fs, path::PathBuf};
 
     use freelyrss_core_domain::{
-        AttachmentType, FeedFormat, IsoDateTime, UrlString,
+        AttachmentType, FeedErrorKind, FeedFormat, IsoDateTime, UrlString,
         sqlite::{DatabaseInitializationOptions, initialize_database},
     };
     use rusqlite::{Connection, params};
@@ -529,9 +577,10 @@ mod tests {
 
     use super::*;
     use crate::{
-        DefaultFeedNormalizer, DefaultFeedParser, FeedNormalizer, FeedParser, FetchRequest,
-        FetchedFeed, NormalizeContext, NormalizedArticleRecord, NormalizedAttachmentRecord,
-        NormalizedFeedBatch, NormalizedFeedRecord, NotModifiedFeed, ParsedSource,
+        DefaultFeedNormalizer, DefaultFeedParser, FailedFeedCheck, FeedNormalizer, FeedParser,
+        FetchRequest, FetchedFeed, NormalizeContext, NormalizedArticleRecord,
+        NormalizedAttachmentRecord, NormalizedFeedBatch, NormalizedFeedRecord, NotModifiedFeed,
+        ParsedSource,
     };
 
     #[test]
@@ -813,6 +862,167 @@ mod tests {
         assert_eq!(feed_row.5.as_deref(), Some("Wed, 16 Apr 2026 11:00:00 GMT"));
         assert_eq!(article_count, 1);
         assert_eq!(attachment_count, 1);
+    }
+
+    #[test]
+    fn records_failed_checks_with_error_details_and_degraded_health() {
+        let temp_dir = tempdir().expect("tempdir");
+        let database_path = temp_dir.path().join("freelyrss.sqlite3");
+        initialize_database(&database_path, &DatabaseInitializationOptions::default())
+            .expect("initialize database");
+
+        let repository = SqliteFeedRepository::new(&database_path);
+        let first_result = repository
+            .persist(sample_batch(
+                None,
+                "entry-1",
+                "First entry",
+                "https://example.com/audio-1.mp3",
+            ))
+            .expect("seed initial feed graph");
+
+        repository
+            .record_failure(FailedFeedCheck {
+                request: FetchRequest {
+                    feed_id: Some(first_result.feed_id.clone()),
+                    feed_url: url("https://example.com/feed.xml"),
+                    etag: None,
+                    last_modified: None,
+                },
+                final_url: Some(url("https://example.com/feed.xml")),
+                checked_at: time("2026-04-18T09:45:00Z"),
+                error_kind: FeedErrorKind::Parse,
+                error_message: "feed XML could not be parsed: malformed token".into(),
+            })
+            .expect("record failed check");
+
+        let connection = Connection::open(&database_path).expect("open database");
+        let feed_row = connection
+            .query_row(
+                "SELECT health_status, last_checked_at, last_success_at, last_error_kind, last_error_message, last_error_at, consecutive_failures
+                FROM Feed
+                WHERE id = ?1",
+                params![first_result.feed_id.as_str()],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, Option<String>>(3)?,
+                        row.get::<_, Option<String>>(4)?,
+                        row.get::<_, Option<String>>(5)?,
+                        row.get::<_, i64>(6)?,
+                    ))
+                },
+            )
+            .expect("read failed feed row");
+
+        assert_eq!(feed_row.0, "degraded");
+        assert_eq!(feed_row.1, "2026-04-18T09:45:00Z");
+        assert_eq!(feed_row.2, "2026-04-16T10:00:00Z");
+        assert_eq!(feed_row.3.as_deref(), Some("parse"));
+        assert_eq!(
+            feed_row.4.as_deref(),
+            Some("feed XML could not be parsed: malformed token")
+        );
+        assert_eq!(feed_row.5.as_deref(), Some("2026-04-18T09:45:00Z"));
+        assert_eq!(feed_row.6, 1);
+    }
+
+    #[test]
+    fn escalates_repeated_failures_to_error_and_clears_diagnostics_after_success() {
+        let temp_dir = tempdir().expect("tempdir");
+        let database_path = temp_dir.path().join("freelyrss.sqlite3");
+        initialize_database(&database_path, &DatabaseInitializationOptions::default())
+            .expect("initialize database");
+
+        let repository = SqliteFeedRepository::new(&database_path);
+        let first_result = repository
+            .persist(sample_batch(
+                None,
+                "entry-1",
+                "First entry",
+                "https://example.com/audio-1.mp3",
+            ))
+            .expect("seed initial feed graph");
+
+        for checked_at in [
+            "2026-04-18T09:45:00Z",
+            "2026-04-18T10:00:00Z",
+            "2026-04-18T10:15:00Z",
+        ] {
+            repository
+                .record_failure(FailedFeedCheck {
+                    request: FetchRequest {
+                        feed_id: Some(first_result.feed_id.clone()),
+                        feed_url: url("https://example.com/feed.xml"),
+                        etag: None,
+                        last_modified: None,
+                    },
+                    final_url: None,
+                    checked_at: time(checked_at),
+                    error_kind: FeedErrorKind::Network,
+                    error_message:
+                        "feed request exhausted retries for https://example.com/feed.xml".into(),
+                })
+                .expect("record network failure");
+        }
+
+        let connection = Connection::open(&database_path).expect("open database");
+        let failed_row = connection
+            .query_row(
+                "SELECT health_status, last_error_kind, consecutive_failures
+                FROM Feed
+                WHERE id = ?1",
+                params![first_result.feed_id.as_str()],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, Option<String>>(1)?,
+                        row.get::<_, i64>(2)?,
+                    ))
+                },
+            )
+            .expect("read failed feed row");
+        drop(connection);
+
+        assert_eq!(failed_row.0, "error");
+        assert_eq!(failed_row.1.as_deref(), Some("network"));
+        assert_eq!(failed_row.2, 3);
+
+        repository
+            .persist(sample_batch(
+                Some(first_result.feed_id.clone()),
+                "entry-1",
+                "Recovered entry",
+                "https://example.com/audio-2.mp3",
+            ))
+            .expect("persist recovered feed graph");
+
+        let connection = Connection::open(&database_path).expect("reopen database");
+        let recovered_row = connection
+            .query_row(
+                "SELECT health_status, last_error_kind, last_error_message, last_error_at, consecutive_failures
+                FROM Feed
+                WHERE id = ?1",
+                params![first_result.feed_id.as_str()],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, Option<String>>(1)?,
+                        row.get::<_, Option<String>>(2)?,
+                        row.get::<_, Option<String>>(3)?,
+                        row.get::<_, i64>(4)?,
+                    ))
+                },
+            )
+            .expect("read recovered feed row");
+
+        assert_eq!(recovered_row.0, "healthy");
+        assert_eq!(recovered_row.1, None);
+        assert_eq!(recovered_row.2, None);
+        assert_eq!(recovered_row.3, None);
+        assert_eq!(recovered_row.4, 0);
     }
 
     #[test]
