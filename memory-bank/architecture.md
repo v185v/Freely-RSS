@@ -1021,6 +1021,44 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `crates/feed-engine/src/lib.rs`：抓取引擎公共 API 汇总入口；在 Step 29 中新增 `SqliteFeedRepository` 导出，使桌面宿主或后续调度层可以只依赖稳定 crate 入口接线。
 - `crates/feed-engine/Cargo.toml`：限定 Step 29 的运行时与测试依赖边界；`rusqlite` 留在默认仓储实现，`sha2` 留在稳定 ID 生成，`tempfile` 仅用于仓储回归测试，不让这些依赖扩散到前端或宿主层。
 
+- Step 30 的关键价值不是“把重复文章删掉”，而是把“文章身份判定”正式提升为持久化边界的一等契约：`source_guid` 继续服务显式源内身份复用，canonical/original URL、标题+发布时间+来源与内容哈希则按优先级补足缺失或漂移场景下的稳定身份闭环。
+- `005_article_dedup_indexes.sql` 的落地说明 FreelyRSS 没有把 Step 30 做成仓储层的临时内存比较器，而是把 per-feed 去重查询路径固化为 schema 资产；这意味着后续 Step 31 的条件抓取、Step 35 的 OPML 导入回放和 Step 62 的同步重放都能复用同一套数据库级查重入口。
+- `core-domain/sqlite/store.rs` 在 Step 30 中新增 URL、标题+发布时间与内容哈希查询函数，说明 FreelyRSS 已明确把“数据库里如何认定这是同一篇文章”留在共享存储边界，而不是让桌面宿主、前端或抓取编排层各自拼接 SQL。
+- `feed-engine/src/sqlite_repository.rs` 在 Step 30 中新增批次内去重注册表与稳定 ID 回退策略，说明默认 SQLite 仓储不仅要负责“把标准化结果送进存储层”，也要负责在单次抓取批次内部先折叠重复项；这样同一份 feed 中的 mirror 条目不会因为数据库尚未写入第一条而漏过去重。
+- 让批次内去重采用“首个命中条目保留、后续重复条目跳过”的策略，而不是对同一 `Article.id` 连续覆盖，说明 FreelyRSS 现在把“避免重复污染列表”置于“盲目保留最后一份镜像副本”之前；这对 RSS 镜像源、归档镜像和未来多入口导入场景更稳妥。
+- 内容哈希只作为第三级后备规则，并且由 `content_extracted -> content_raw -> summary` 的文本序列推导，说明 FreelyRSS 当前仍在主动压低误判风险：只有当源标识、URL 与标题+发布时间都无法提供稳定身份时，才让正文级相似性介入身份判定。
+
+### Step 30 文件职责
+
+- `crates/core-domain/src/sqlite/migrations/005_article_dedup_indexes.sql`：数据库 `v5` 迁移文件，负责为 `Article` 提供按 `feed_id` 收敛的 canonical URL、original URL、标题+发布时间与内容哈希去重辅助索引。
+- `crates/core-domain/src/sqlite/migrations.rs`：SQLite 嵌入式迁移注册表；在 Step 30 中把 `article_dedup_indexes` 纳入标准迁移序列，使空库初始化与升级路径都能自动获得 `v5` 索引。
+- `crates/core-domain/src/sqlite/store.rs`：共享 SQLite 去重查询边界；继续负责事务写入，同时新增按 URL、标题+发布时间和内容哈希查找既有 `Article.id` 的存储级入口。
+- `crates/core-domain/src/sqlite/mod.rs`：SQLite 初始化与迁移验收入口；在 Step 30 中负责验证 `v5` 索引存在、最新 schema 版本推进，以及 `v4 -> v5` 升级路径会落地去重辅助索引。
+- `crates/feed-engine/src/sqlite_repository.rs`：默认 SQLite 仓储实现；在 Step 30 中负责按优先级调用去重查询、维护批次内重复项折叠注册表、生成稳定回退 `ArticleId`，并把内容哈希投影到领域文章对象。
+- `crates/feed-engine/tests/fixtures/rss/rss-2-duplicates-and-missing-fields.xml`：Step 30 的核心验收输入资产，负责固定“重复 canonical URL + 缺失 guid/author/pubDate”的真实 RSS 样本，验证去重不会误删不同文章。
+
+### Step 31 架构洞察
+
+- Step 31 的关键价值不是“加几个 HTTP 头”，而是把“远端未变化”正式提升为抓取链路中的一等成功结果：`304 Not Modified` 现在与“拉回正文后继续解析”处于同级分支，这使 FreelyRSS 不必再用错误字符串或宿主层条件判断来表达增量抓取。
+- `crates/feed-engine/src/transport.rs` 的落地说明 FreelyRSS 已把请求头拼装、超时、瞬态重试与响应缓存元数据收敛到 transport 私有边界；后续 Step 32 的网络错误分类与 Step 33 之后的调度接线都应继续复用这条边界，而不是让桌面宿主或 UI 自己管理 HTTP 语义。
+- `FetchRequest` 继续承载 `feed_id + feed_url + etag + last_modified`，意味着 FreelyRSS 现在把“抓取身份”和“缓存协商上下文”视为同一次拉取请求的组成部分；这为后续按 `update_interval` 调度、按健康状态回退频率提供了稳定输入契约。
+- `FeedFetcher` 在 Step 31 中新增 not-modified 短路后，进一步证明 parser / normalizer 只应该处理“正文被拉回”的分支；HTML discovery、JSON/XML 解析与标准化都不会接触 `304` 路径，这让内容语义层保持与 HTTP 缓存层解耦。
+- `SqliteFeedRepository::record_not_modified()` 与 `FeedStore::record_feed_successful_check()` 的引入说明 FreelyRSS 已明确区分两类成功写入：一种是“正文批次落库”，另一种是“仅更新 feed 检查元数据”。这使后续健康状态、失败计数与调度时间戳能够继续留在持久化边界，不污染内容模型。
+- Step 31 没有把 `update_interval`、健康状态分类或连续失败阈值提前混入 `feed-engine` transport，说明当前架构仍坚持“先固化成功路径与缓存协商，再在下一步叠加失败语义”的增量策略；这能减少把网络层暂态策略过早散落到仓储或 UI 的风险。
+
+### Step 31 文件职责
+
+- `crates/feed-engine/src/model.rs`：抓取链路中间契约中心；在 Step 31 中新增 `NotModifiedFeed`、`TransportFetchOutput`、`RecordedFeedCheck` 与 `FetchNotModifiedReport`，负责把“正文已变更”和“正文未变更”表达为显式的类型边界。
+- `crates/feed-engine/src/ports.rs`：`feed-engine` 四段式端口定义；在 Step 31 中把 transport 输出升级为 `TransportFetchOutput`，并为 repository 增加 `record_not_modified()`，确保 not-modified 路径也通过稳定端口闭环，而不是绕过仓储层。
+- `crates/feed-engine/src/fetcher.rs`：抓取编排器；在 Step 31 中负责识别 `TransportFetchOutput::NotModified`，调用 repository 记录检查结果，并在 `304` 路径下短路 parser / normalizer / persist 主链路。
+- `crates/feed-engine/src/transport.rs`：默认阻塞式 HTTP transport 实现；负责组装 `Accept` / `If-None-Match` / `If-Modified-Since`，执行超时与重试策略，提取 `ETag` / `Last-Modified` / `Content-Type` / 最终 URL，并把响应映射为 modified / not-modified 双分支结果。
+- `crates/feed-engine/src/lib.rs`：`feed-engine` 公共 API 汇总入口；在 Step 31 中导出新的 not-modified 契约类型以及 `ReqwestFeedTransport` / `FeedTransportOptions`，使宿主或后续调度层只需依赖稳定 crate 出口即可接线。
+- `crates/feed-engine/Cargo.toml`：`feed-engine` 依赖边界定义；在 Step 31 中正式纳入 `reqwest` 阻塞客户端依赖，说明默认 transport 已成为该 crate 的正式运行时能力，而非测试工具链附属物。
+- `crates/feed-engine/tests/fetcher_pipeline.rs`：抓取编排回归测试；在 Step 31 中验证 `304` 响应会停在 fetcher + repository not-modified 路径，不会误触 parser、normalizer 或普通持久化。
+- `crates/feed-engine/src/sqlite_repository.rs`：默认 SQLite 仓储实现；在 Step 31 中新增 not-modified 记账入口，负责解析既有 `Feed.id`、调用 `FeedStore` 更新 feed 检查元数据，并保证文章图与用户状态不被重写。
+- `crates/core-domain/src/sqlite/store.rs`：共享 SQLite 写入边界；在 Step 31 中新增 `record_feed_successful_check()`，负责以数据库事务外的轻量更新方式回写 `feed_url`、`health_status`、`last_checked_at`、`last_success_at`、`etag` 与 `last_modified`。
+- `crates/core-domain/src/sqlite/mod.rs`：SQLite 初始化与迁移验收入口；虽然 Step 31 未新增 schema 版本，但它继续为 `FeedStore` 提供统一连接准备与既有 schema 保证，确保 transport / repository 新增的状态回写建立在稳定数据库基线上。
+
 ## 14. 当前文档职责
 
 当前仓库仍处在“文档先行 + 工程骨架初始化”阶段，因此每个文档都承担明确职责：

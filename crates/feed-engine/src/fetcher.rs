@@ -1,6 +1,7 @@
 use crate::{
-    FeedEngineError, FeedNormalizer, FeedParser, FeedRepository, FeedTransport, FetchRequest,
-    FetchRunOutput, FetchRunReport, NormalizeContext, ParsedSource,
+    FeedEngineError, FeedNormalizer, FeedParser, FeedRepository, FeedTransport,
+    FetchNotModifiedReport, FetchRequest, FetchRunOutput, FetchRunReport, NormalizeContext,
+    ParsedSource, TransportFetchOutput,
 };
 
 pub struct FeedFetcher<TTransport, TParser, TNormalizer, TRepository> {
@@ -33,7 +34,20 @@ where
     }
 
     pub fn run(&self, request: FetchRequest) -> Result<FetchRunOutput, FeedEngineError> {
-        let fetched = self.transport.fetch(&request)?;
+        let fetched = match self.transport.fetch(&request)? {
+            TransportFetchOutput::Modified(fetched) => fetched,
+            TransportFetchOutput::NotModified(not_modified) => {
+                let recorded = self.repository.record_not_modified(not_modified.clone())?;
+
+                return Ok(FetchRunOutput::NotModified(FetchNotModifiedReport {
+                    feed_id: recorded.feed_id,
+                    requested_url: not_modified.request.feed_url,
+                    final_url: not_modified.final_url,
+                    response_status_code: not_modified.status_code,
+                    fetched_at: not_modified.fetched_at,
+                }));
+            }
+        };
         let parsed = match self.parser.parse(&fetched)? {
             ParsedSource::Feed(parsed) => parsed,
             ParsedSource::Discovery(discovery) => {

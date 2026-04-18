@@ -5,7 +5,8 @@ use freelyrss_feed_engine::{
     DiscoveredFeed, FeedDiscoveryResult, FeedEngineError, FeedFetcher, FeedNormalizer, FeedParser,
     FeedRepository, FeedTransport, FetchRequest, FetchRunOutput, FetchedFeed, NormalizeContext,
     NormalizedArticleRecord, NormalizedAttachmentRecord, NormalizedFeedBatch, NormalizedFeedRecord,
-    ParsedArticle, ParsedAttachment, ParsedFeedDocument, ParsedSource, PersistedFeedBatch,
+    NotModifiedFeed, ParsedArticle, ParsedAttachment, ParsedFeedDocument, ParsedSource,
+    PersistedFeedBatch, RecordedFeedCheck, TransportFetchOutput,
 };
 
 #[derive(Clone)]
@@ -34,12 +35,12 @@ struct StubTransport {
 }
 
 impl FeedTransport for StubTransport {
-    fn fetch(&self, request: &FetchRequest) -> Result<FetchedFeed, FeedEngineError> {
+    fn fetch(&self, request: &FetchRequest) -> Result<TransportFetchOutput, FeedEngineError> {
         self.calls.push("fetch");
         assert_eq!(request.feed_url, url("https://example.com/feed.xml"));
         assert_eq!(request.feed_id, Some(feed_id("feed-existing")));
 
-        Ok(FetchedFeed {
+        Ok(TransportFetchOutput::Modified(FetchedFeed {
             request: request.clone(),
             final_url: url("https://cdn.example.com/feed.xml"),
             status_code: 200,
@@ -48,7 +49,7 @@ impl FeedTransport for StubTransport {
             fetched_at: time("2026-04-11T12:00:00Z"),
             etag: Some("\"etag-v2\"".into()),
             last_modified: Some("Fri, 11 Apr 2026 11:59:00 GMT".into()),
-        })
+        }))
     }
 }
 
@@ -57,12 +58,12 @@ struct DiscoveryTransport {
 }
 
 impl FeedTransport for DiscoveryTransport {
-    fn fetch(&self, request: &FetchRequest) -> Result<FetchedFeed, FeedEngineError> {
+    fn fetch(&self, request: &FetchRequest) -> Result<TransportFetchOutput, FeedEngineError> {
         self.calls.push("fetch");
         assert_eq!(request.feed_url, url("https://example.com"));
         assert_eq!(request.feed_id, None);
 
-        Ok(FetchedFeed {
+        Ok(TransportFetchOutput::Modified(FetchedFeed {
             request: request.clone(),
             final_url: url("https://example.com"),
             status_code: 200,
@@ -71,7 +72,28 @@ impl FeedTransport for DiscoveryTransport {
             fetched_at: time("2026-04-11T12:00:00Z"),
             etag: None,
             last_modified: None,
-        })
+        }))
+    }
+}
+
+struct NotModifiedTransport {
+    calls: CallLog,
+}
+
+impl FeedTransport for NotModifiedTransport {
+    fn fetch(&self, request: &FetchRequest) -> Result<TransportFetchOutput, FeedEngineError> {
+        self.calls.push("fetch");
+        assert_eq!(request.feed_url, url("https://example.com/feed.xml"));
+        assert_eq!(request.feed_id, Some(feed_id("feed-existing")));
+
+        Ok(TransportFetchOutput::NotModified(NotModifiedFeed {
+            request: request.clone(),
+            final_url: url("https://cdn.example.com/feed.xml"),
+            status_code: 304,
+            fetched_at: time("2026-04-11T12:05:00Z"),
+            etag: Some("\"etag-v2\"".into()),
+            last_modified: Some("Fri, 11 Apr 2026 12:04:00 GMT".into()),
+        }))
     }
 }
 
@@ -185,6 +207,42 @@ impl FeedRepository for StubRepository {
             stored_article_count: batch.articles.len(),
         })
     }
+
+    fn record_not_modified(
+        &self,
+        _response: NotModifiedFeed,
+    ) -> Result<RecordedFeedCheck, FeedEngineError> {
+        panic!("not-modified bookkeeping should not run for modified feeds");
+    }
+}
+
+struct NotModifiedRepository {
+    calls: CallLog,
+}
+
+impl FeedRepository for NotModifiedRepository {
+    fn persist(&self, _batch: NormalizedFeedBatch) -> Result<PersistedFeedBatch, FeedEngineError> {
+        panic!("persistence should not run for not-modified responses");
+    }
+
+    fn record_not_modified(
+        &self,
+        response: NotModifiedFeed,
+    ) -> Result<RecordedFeedCheck, FeedEngineError> {
+        self.calls.push("record-not-modified");
+        assert_eq!(response.request.feed_id, Some(feed_id("feed-existing")));
+        assert_eq!(response.final_url, url("https://cdn.example.com/feed.xml"));
+        assert_eq!(response.status_code, 304);
+        assert_eq!(response.etag.as_deref(), Some("\"etag-v2\""));
+        assert_eq!(
+            response.last_modified.as_deref(),
+            Some("Fri, 11 Apr 2026 12:04:00 GMT")
+        );
+
+        Ok(RecordedFeedCheck {
+            feed_id: feed_id("feed-existing"),
+        })
+    }
 }
 
 struct FailingParser {
@@ -245,6 +303,13 @@ struct UnexpectedRepository;
 impl FeedRepository for UnexpectedRepository {
     fn persist(&self, _batch: NormalizedFeedBatch) -> Result<PersistedFeedBatch, FeedEngineError> {
         panic!("repository should not run after parse failure");
+    }
+
+    fn record_not_modified(
+        &self,
+        _response: NotModifiedFeed,
+    ) -> Result<RecordedFeedCheck, FeedEngineError> {
+        panic!("not-modified bookkeeping should not run after parse failure");
     }
 }
 
@@ -363,6 +428,44 @@ fn feed_fetcher_returns_discovery_result_without_running_normalizer_or_repositor
                     format: Some(FeedFormat::JsonFeed),
                 },
             ],
+        })
+    );
+}
+
+#[test]
+fn feed_fetcher_returns_not_modified_result_without_running_parser_or_normalizer() {
+    let calls = CallLog::new();
+    let fetcher = FeedFetcher::new(
+        NotModifiedTransport {
+            calls: calls.clone(),
+        },
+        FailingParser {
+            calls: calls.clone(),
+        },
+        UnexpectedNormalizer,
+        NotModifiedRepository {
+            calls: calls.clone(),
+        },
+    );
+
+    let outcome = fetcher
+        .run(FetchRequest {
+            feed_id: Some(feed_id("feed-existing")),
+            feed_url: url("https://example.com/feed.xml"),
+            etag: Some("\"etag-v1\"".into()),
+            last_modified: Some("Fri, 11 Apr 2026 10:00:00 GMT".into()),
+        })
+        .expect("304 response should short-circuit after transport");
+
+    assert_eq!(calls.snapshot(), vec!["fetch", "record-not-modified"]);
+    assert_eq!(
+        outcome,
+        FetchRunOutput::NotModified(freelyrss_feed_engine::FetchNotModifiedReport {
+            feed_id: feed_id("feed-existing"),
+            requested_url: url("https://example.com/feed.xml"),
+            final_url: url("https://cdn.example.com/feed.xml"),
+            response_status_code: 304,
+            fetched_at: time("2026-04-11T12:05:00Z"),
         })
     );
 }

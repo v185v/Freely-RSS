@@ -1,6 +1,9 @@
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
-use crate::{Article, ArticleId, Attachment, Feed, FeedId, ImportanceLevel, ReadState, UrlString};
+use crate::{
+    Article, ArticleId, Attachment, Feed, FeedId, ImportanceLevel, IsoDateTime, ReadState,
+    UrlString,
+};
 
 use super::StoreError;
 
@@ -63,6 +66,68 @@ impl<'conn> FeedStore<'conn> {
             .map_err(Into::into)
     }
 
+    pub fn find_article_id_by_url(
+        &mut self,
+        feed_id: &FeedId,
+        canonical_url: Option<&UrlString>,
+        original_url: Option<&UrlString>,
+    ) -> Result<Option<ArticleId>, StoreError> {
+        for url in [canonical_url, original_url].into_iter().flatten() {
+            if let Some(article_id) = self.find_article_id_by_single_url(feed_id, url.as_str())? {
+                return Ok(Some(article_id));
+            }
+        }
+
+        Ok(None)
+    }
+
+    pub fn find_article_id_by_title_and_published_at(
+        &mut self,
+        feed_id: &FeedId,
+        title: &str,
+        published_at: &IsoDateTime,
+    ) -> Result<Option<ArticleId>, StoreError> {
+        let article_id = self
+            .connection
+            .query_row(
+                "SELECT id
+                FROM Article
+                WHERE feed_id = ?1 AND title = ?2 AND published_at = ?3
+                LIMIT 1",
+                params![feed_id.as_str(), title, published_at.as_str()],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+
+        article_id
+            .map(ArticleId::try_from)
+            .transpose()
+            .map_err(Into::into)
+    }
+
+    pub fn find_article_id_by_content_hash(
+        &mut self,
+        feed_id: &FeedId,
+        content_hash: &str,
+    ) -> Result<Option<ArticleId>, StoreError> {
+        let article_id = self
+            .connection
+            .query_row(
+                "SELECT id
+                FROM Article
+                WHERE feed_id = ?1 AND content_hash = ?2
+                LIMIT 1",
+                params![feed_id.as_str(), content_hash],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+
+        article_id
+            .map(ArticleId::try_from)
+            .transpose()
+            .map_err(Into::into)
+    }
+
     pub fn persist_feed_graph(
         &mut self,
         feed: &Feed,
@@ -84,6 +149,60 @@ impl<'conn> FeedStore<'conn> {
         Ok(FeedGraphPersistReport {
             stored_article_count: articles.len(),
         })
+    }
+
+    pub fn record_feed_successful_check(
+        &mut self,
+        feed_id: &FeedId,
+        final_feed_url: &UrlString,
+        checked_at: &IsoDateTime,
+        etag: Option<&str>,
+        last_modified: Option<&str>,
+    ) -> Result<bool, StoreError> {
+        let updated_rows = self.connection.execute(
+            "UPDATE Feed
+            SET feed_url = ?2,
+                health_status = ?3,
+                last_checked_at = ?4,
+                last_success_at = ?4,
+                etag = ?5,
+                last_modified = ?6
+            WHERE id = ?1",
+            params![
+                feed_id.as_str(),
+                final_feed_url.as_str(),
+                crate::FeedHealthStatus::Healthy.as_str(),
+                checked_at.as_str(),
+                etag,
+                last_modified,
+            ],
+        )?;
+
+        Ok(updated_rows > 0)
+    }
+
+    fn find_article_id_by_single_url(
+        &mut self,
+        feed_id: &FeedId,
+        url: &str,
+    ) -> Result<Option<ArticleId>, StoreError> {
+        let article_id = self
+            .connection
+            .query_row(
+                "SELECT id
+                FROM Article
+                WHERE feed_id = ?1
+                  AND (canonical_url = ?2 OR original_url = ?2)
+                LIMIT 1",
+                params![feed_id.as_str(), url],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+
+        article_id
+            .map(ArticleId::try_from)
+            .transpose()
+            .map_err(Into::into)
     }
 }
 

@@ -2,9 +2,15 @@
 
 ## 当前状态
 
-- 阶段：阶段 4 Step 29 已完成，`crates/feed-engine` 已补齐标准化 feed 结果到 SQLite 的真实持久化闭环，并把“抓取编排”和“SQLite 落库语义”继续拆分在 `feed-engine` 与 `core-domain/sqlite` 两层；下一步进入阶段 4 Step 30 的去重规则实现
+- 阶段：阶段 4 Step 30 已完成，`core-domain/sqlite` 与 `feed-engine` 已补齐 canonical URL / original URL、标题+发布时间+来源与内容哈希三层优先级的文章去重闭环，并把数据库级匹配查询、批次内去重折叠和稳定 ID 回退继续留在持久化边界；下一步进入阶段 4 Step 31 的增量抓取与缓存头支持
 - 最后更新：2026-04-16
-- 风险状态：已从“在 Step 29 中把新建订阅与首批文章写入数据库时继续保持 `FeedFetcher` 只负责编排，发现结果在 normalize / persist 前短路”推进到“在 Step 30 中补齐 canonical URL / original URL、标题+时间+来源与内容哈希去重时，继续让 `feed-engine` 只负责标准化与仓储接线，不让 URL 去重策略、内容哈希比较或 UI 决策回流到桌面宿主或前端壳层”
+- 风险状态：已从“在 Step 30 中补齐 canonical URL / original URL、标题+时间+来源与内容哈希去重时，继续让 `feed-engine` 只负责标准化与仓储接线，不让 URL 去重策略、内容哈希比较或 UI 决策回流到桌面宿主或前端壳层”推进到“在 Step 31 中补齐 ETag / Last-Modified、增量抓取与失败重试时，继续让 transport 负责请求条件头、让持久化层负责去重后写入与状态更新，不把 HTTP 缓存语义散落到 UI、宿主或解析层”
+
+### 2026-04-18 状态快照
+
+- 当前完成：阶段 4 Step 31 已完成，条件请求、`304` 短路、瞬态重试与 not-modified 持久化回写闭环已经落地。
+- 当前验证：`cargo test -p freelyrss-core-domain`、`cargo test -p freelyrss-feed-engine`、`corepack pnpm run verify` 与 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle` 全部通过。
+- 当前下一步：进入阶段 4 Step 32“建立源健康状态与错误分类”，继续把错误语义与状态落库留在 transport / repository / store 边界。
 
 ## 已确认决策
 
@@ -20,7 +26,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 4 Step 30 需要在不破坏 Step 25 至 Step 29 已落地的 transport / parser / normalizer / repository / SQLite store 分层与 discovery 短路边界前提下，把 canonical URL / original URL、标题+时间+来源与内容哈希去重继续留在持久化边界，而不是把比较策略回流到宿主或 UI。
+- 当前无阻塞；下一步风险点是阶段 4 Step 31 需要在不破坏 Step 25 至 Step 30 已落地的 transport / parser / normalizer / repository / SQLite store 分层、discovery 短路边界与去重优先级前提下，把 `ETag` / `Last-Modified`、条件请求与增量写入继续留在 transport / 持久化边界，而不是回流到宿主或 UI。
 
 ## 本次执行记录
 
@@ -447,7 +453,47 @@
 - 已在验证通过后同步回写 `memory-bank/progress.md` 与 `memory-bank/architecture.md`，补齐阶段 4 Step 29 的交接记录、文件职责说明与新的架构洞察。
 - 当前验证结论：Step 29 通过，可进入阶段 4 Step 30“实现去重规则”。
 
-## 下一步
+### 2026-04-16 - 阶段 4 Step 30：实现去重规则
 
-- 按 `implementation-plan.md` 执行阶段 4 Step 30，在当前持久化闭环之上补齐 canonical URL / original URL、标题+发布时间+来源、内容哈希三层优先级的去重规则。
-- 在推进 Step 30 时继续保持当前边界：Step 29 新增的 `SqliteFeedRepository` 继续只承担标准化结果到领域对象/存储 API 的接线；真正的 URL 匹配、内容哈希比较与附件去留策略应继续留在持久化层或内容管线边界，不让去重判定回流到桌面宿主或前端壳层。
+- 已在 `crates/core-domain/src/sqlite/migrations/005_article_dedup_indexes.sql` 新增数据库 `v5` 迁移，为 `Article` 补齐按 `feed_id` 收敛的 `canonical_url`、`original_url`、`title + published_at` 与 `content_hash` 去重辅助索引；`crates/core-domain/src/sqlite/migrations.rs` 已同步把该迁移注册到嵌入式迁移序列中，避免 Step 30 的查重查询退化为无索引扫描。
+- 已在 `crates/core-domain/src/sqlite/store.rs` 新增 `find_article_id_by_url`、`find_article_id_by_title_and_published_at` 与 `find_article_id_by_content_hash`，把 URL、标题+发布时间+来源与内容哈希三层数据库级匹配规则继续收敛在共享 SQLite 边界，而不是散落到桌面宿主或前端壳层。
+- 已更新 `crates/feed-engine/src/sqlite_repository.rs`，让 `SqliteFeedRepository` 在持久化前按“已存在 `source_guid` -> URL -> 标题+发布时间+来源 -> 内容哈希 -> 稳定回退 ID”的顺序解析文章身份；同时新增批次内去重注册表，使同一批抓取结果中的重复条目会折叠到同一个 `Article.id`，并采用“首个匹配条目保留、后续重复条目跳过”的策略，避免同批次内仍写入重复文章。
+- 已在同一文件中补齐内容哈希推导与稳定 ID 回退：当文章缺失 `source_guid` 时，会优先使用 canonical/original URL、标题+发布时间或内容哈希生成稳定 `ArticleId`，并把内容哈希落到 `Article.content_hash`，为后续刷新复用与增量抓取奠定一致身份基础。
+- 已新增 Step 30 回归测试：其一使用 `rss-2-duplicates-and-missing-fields.xml` 真正验证同批次重复 canonical URL 只落 2 篇文章且不会误删稀疏文章；其二分别验证“无 guid / 无 URL 时按标题+发布时间复用文章身份”和“无 guid / 无 URL / 无发布时间时按内容哈希复用文章身份”。同时 `crates/core-domain/src/sqlite/mod.rs` 已新增 `v4 -> v5` 迁移验收，确认去重辅助索引会在升级路径中落地。
+- 本次实现继续保持既有边界：`FeedFetcher` 仍只负责 `fetch -> parse -> normalize -> persist` 编排；真正的去重查询继续留在 `core-domain/sqlite`，批次内折叠与稳定 ID 选择继续留在 `feed-engine` 默认 SQLite 仓储实现，HTML discovery 仍在 parse 后短路，不进入持久化。
+
+### 验证结果
+
+- 已执行 `cargo test -p freelyrss-core-domain`，结果通过；现有 17 个 SQLite 迁移、索引、FTS、升级与约束测试全部通过，其中包含 Step 30 新增的 `v4 -> v5` 去重索引升级验收。
+- 已执行 `cargo test -p freelyrss-feed-engine`，结果通过；除既有抓取链、fixture 目录和 parser / normalizer 回归外，新增的 3 个去重仓储测试全部通过。
+- 已执行 `corepack pnpm run verify`，结果通过；其中 `format:check`、`lint`、`test:config`、`test:types`、`test:query`、`test:desktop`、`rust:fmt:check`、`rust:clippy`、`test:rust` 与 `docs:links` 全部通过，证明 Step 30 已纳入仓库统一质量门禁。
+- 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，结果通过；确认 `freelyrss-core-domain` 的 `v5` 迁移与 `freelyrss-feed-engine` 的去重仓储逻辑接入后，桌面端前端构建、Tauri 宿主装配与 Rust 入口链路仍可端到端打通，生成 `apps/desktop/src-tauri/target/debug/freelyrss-desktop.exe`。
+- 已在验证通过后同步回写 `memory-bank/progress.md` 与 `memory-bank/architecture.md`，补齐阶段 4 Step 30 的交接记录、文件职责说明与新的架构洞察。
+- 当前验证结论：Step 30 通过，可进入阶段 4 Step 31“实现增量抓取与缓存头支持”。
+
+### 2026-04-18 - 阶段 4 Step 31：实现增量抓取与缓存头支持
+
+- 已在 `crates/feed-engine/src/model.rs` 新增 `NotModifiedFeed`、`TransportFetchOutput`、`RecordedFeedCheck` 与 `FetchNotModifiedReport`，把 `304 Not Modified` 从普通成功响应中显式拆出，避免后续继续依赖状态码字符串分支做控制流。
+- 已在 `crates/feed-engine/src/ports.rs`、`crates/feed-engine/src/fetcher.rs` 与 `crates/feed-engine/src/lib.rs` 把 transport / fetcher / 对外 API 推进为“修改后正文”与“未修改响应”双分支；`FeedFetcher` 在 not-modified 路径下只记录检查结果，不再进入 parser / normalizer / persist 主链路。
+- 已新增 `crates/feed-engine/src/transport.rs` 与 `ReqwestFeedTransport` / `FeedTransportOptions`，集中收敛 `Accept`、`If-None-Match`、`If-Modified-Since`、请求超时、最大重试次数、重试间隔与响应元数据投影；瞬态网络错误和 `408` / `429` / `5xx` 会在 transport 内重试，不回流到宿主或 UI。
+- 已在 `crates/feed-engine/src/sqlite_repository.rs` 与 `crates/core-domain/src/sqlite/store.rs` 补齐 not-modified 记账闭环：当 feed 返回 `304` 时，会复用既有 `Feed.id`，更新 `feed_url`、`last_checked_at`、`last_success_at`、`etag` 与 `last_modified`，同时不重写 `Article`、`Attachment` 或 `UserState`。
+- 已扩展 `crates/feed-engine/tests/fetcher_pipeline.rs`、`crates/feed-engine/src/transport.rs` 内部测试与 `crates/feed-engine/src/sqlite_repository.rs` 仓储测试，分别覆盖条件请求头透传、`304` 短路、瞬态 HTTP 状态重试、not-modified 记账与“未变更不重写文章”的回归场景；本次还把 `transport.rs` 中仅供测试使用的辅助方法限制在 `#[cfg(test)]` 下，确保仓库级 `clippy -D warnings` 通过。
+- 本次实现继续保持既有边界：HTTP 缓存语义留在 `feed-engine` transport 与 fetcher 成功分支中，真正的数据库状态更新继续留在 `SqliteFeedRepository` / `FeedStore`；parser、normalizer、桌面宿主与前端壳层没有新增任何缓存头判断或重试逻辑。
+
+### 验证结果
+
+- 已执行 `cargo test -p freelyrss-core-domain`，结果通过；17 个 SQLite 迁移、索引、FTS、升级与约束测试全部通过。
+- 已执行 `cargo test -p freelyrss-feed-engine`，结果通过；8 个 crate 内测试、4 个抓取编排测试、3 个 fixture 目录测试与 9 个 parser / normalizer 回归测试全部通过，覆盖条件请求、`304` 短路、重试与持久化记账路径。
+- 已执行 `corepack pnpm run verify`，结果通过；`format:check`、`lint`、`test:config`、`test:types`、`test:query`、`test:desktop`、`rust:fmt:check`、`rust:clippy`、`test:rust` 与 `docs:links` 全部通过。
+- 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，结果通过；确认 `feed-engine` 新增 transport、条件请求与 not-modified 分支后，桌面端前端构建、Tauri 宿主装配与 Rust 入口链路仍可端到端打通，生成 `apps/desktop/src-tauri/target/debug/freelyrss-desktop.exe`。
+- 当前验证结论：Step 31 通过，可进入阶段 4 Step 32“建立源健康状态与错误分类”。
+
+## 下一步（2026-04-18 更新）
+
+- 按 `implementation-plan.md` 执行阶段 4 Step 32，在 Step 31 的条件请求与 not-modified 闭环之上补齐网络错误、解析错误、连续失败与健康状态分类，避免所有失败都退化成统一的 fetch error。
+- 在推进 Step 32 时继续保持当前边界：transport 负责网络层原始成功/失败语义，`FeedFetcher` 负责编排与短路控制流，`SqliteFeedRepository` 与 `FeedStore` 继续只处理状态写入与持久化更新，不让错误分类策略、连续失败阈值或 UI 提示逻辑回流到 parser、normalizer、桌面宿主或前端壳层。
+
+## 历史下一步（2026-04-16）
+
+- 按 `implementation-plan.md` 执行阶段 4 Step 31，在当前去重闭环之上补齐 `ETag`、`Last-Modified`、条件请求与失败重试策略，避免每次刷新都全量重抓。
+- 在推进 Step 31 时继续保持当前边界：`FeedFetcher` 与 transport 负责条件请求头和响应元数据，`SqliteFeedRepository` 与 `FeedStore` 继续只处理去重后的持久化与状态写入，不让 HTTP 缓存语义、失败重试或 UI 反馈逻辑回流到宿主或前端壳层。

@@ -1,10 +1,12 @@
 use std::{
+    collections::{HashMap, HashSet},
     fmt::Write as _,
     path::{Path, PathBuf},
 };
 
 use freelyrss_core_domain::{
-    Article, ArticleId, Attachment, AttachmentId, Feed, FeedHealthStatus, FeedId, ModelError,
+    Article, ArticleId, Attachment, AttachmentId, Feed, FeedHealthStatus, FeedId, IsoDateTime,
+    ModelError, UrlString,
     sqlite::{FeedStore, prepare_database_connection},
 };
 use rusqlite::Connection;
@@ -12,7 +14,8 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     FeedEngineError, FeedRepository, NormalizedArticleRecord, NormalizedAttachmentRecord,
-    NormalizedFeedBatch, NormalizedFeedRecord, PersistedFeedBatch,
+    NormalizedFeedBatch, NormalizedFeedRecord, NotModifiedFeed, PersistedFeedBatch,
+    RecordedFeedCheck,
 };
 
 pub struct SqliteFeedRepository {
@@ -45,12 +48,19 @@ impl FeedRepository for SqliteFeedRepository {
 
         let mut articles = Vec::new();
         let mut attachments = Vec::new();
+        let mut pending = PendingArticleDedupIndex::default();
 
         for (index, normalized_article) in batch.articles.into_iter().enumerate() {
-            let (article, article_attachments) =
-                build_article_graph(&mut store, &feed_id, normalized_article, index)?;
-            articles.push(article);
-            attachments.extend(article_attachments);
+            if let Some((article, article_attachments)) = build_article_graph(
+                &mut store,
+                &mut pending,
+                &feed_id,
+                normalized_article,
+                index,
+            )? {
+                articles.push(article);
+                attachments.extend(article_attachments);
+            }
         }
 
         let report = store
@@ -61,6 +71,38 @@ impl FeedRepository for SqliteFeedRepository {
             feed_id,
             stored_article_count: report.stored_article_count,
         })
+    }
+
+    fn record_not_modified(
+        &self,
+        response: NotModifiedFeed,
+    ) -> Result<RecordedFeedCheck, FeedEngineError> {
+        let mut connection = Connection::open(&self.database_path)
+            .map_err(|error| FeedEngineError::persist(format!("open sqlite database: {error}")))?;
+        prepare_database_connection(&connection).map_err(|error| {
+            FeedEngineError::persist(format!("prepare sqlite connection: {error}"))
+        })?;
+
+        let mut store = FeedStore::new(&mut connection);
+        let feed_id = resolve_existing_feed_id(&mut store, &response.request)?;
+        let updated = store
+            .record_feed_successful_check(
+                &feed_id,
+                &response.final_url,
+                &response.fetched_at,
+                response.etag.as_deref(),
+                response.last_modified.as_deref(),
+            )
+            .map_err(|error| FeedEngineError::persist(error.to_string()))?;
+
+        if !updated {
+            return Err(FeedEngineError::persist(format!(
+                "record not-modified response for missing feed {}",
+                feed_id.as_str()
+            )));
+        }
+
+        Ok(RecordedFeedCheck { feed_id })
     }
 }
 
@@ -80,6 +122,25 @@ fn resolve_feed_id(
     }
 
     build_feed_id(&[feed.feed_url.as_str()])
+}
+
+fn resolve_existing_feed_id(
+    store: &mut FeedStore<'_>,
+    request: &crate::FetchRequest,
+) -> Result<FeedId, FeedEngineError> {
+    if let Some(feed_id) = request.feed_id.clone() {
+        return Ok(feed_id);
+    }
+
+    store
+        .find_feed_id_by_url(&request.feed_url)
+        .map_err(|error| FeedEngineError::persist(error.to_string()))?
+        .ok_or_else(|| {
+            FeedEngineError::persist(format!(
+                "record not-modified response for unknown feed URL {}",
+                request.feed_url
+            ))
+        })
 }
 
 fn build_feed(feed: NormalizedFeedRecord, feed_id: FeedId) -> Feed {
@@ -104,13 +165,25 @@ fn build_feed(feed: NormalizedFeedRecord, feed_id: FeedId) -> Feed {
 
 fn build_article_graph(
     store: &mut FeedStore<'_>,
+    pending: &mut PendingArticleDedupIndex,
     feed_id: &FeedId,
     normalized_article: NormalizedArticleRecord,
     index: usize,
-) -> Result<(Article, Vec<Attachment>), FeedEngineError> {
-    let article_id = resolve_article_id(store, feed_id, &normalized_article, index)?;
+) -> Result<Option<(Article, Vec<Attachment>)>, FeedEngineError> {
+    let deduplication = ArticleDeduplicationCandidate::from_article(&normalized_article);
+    let article_id = resolve_article_id(store, pending, feed_id, &deduplication, index)?;
+
+    if pending.contains_article_id(&article_id) {
+        return Ok(None);
+    }
+
     let attachment_records = normalized_article.attachments.clone();
-    let article = build_article(feed_id, article_id.clone(), normalized_article);
+    let article = build_article(
+        feed_id,
+        article_id.clone(),
+        normalized_article,
+        deduplication.content_hash,
+    );
     let attachments = attachment_records
         .into_iter()
         .enumerate()
@@ -119,28 +192,87 @@ fn build_article_graph(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    Ok((article, attachments))
+    pending.register(&article);
+
+    Ok(Some((article, attachments)))
 }
 
 fn resolve_article_id(
     store: &mut FeedStore<'_>,
+    pending: &PendingArticleDedupIndex,
     feed_id: &FeedId,
-    article: &NormalizedArticleRecord,
+    article: &ArticleDeduplicationCandidate,
     index: usize,
 ) -> Result<ArticleId, FeedEngineError> {
-    if let Some(source_guid) = article.source_guid.as_deref() {
-        if let Some(article_id) = store
+    if let Some(article_id) = pending.find_matching_article_id(article) {
+        return Ok(article_id);
+    }
+
+    if let Some(source_guid) = article.source_guid.as_deref()
+        && let Some(article_id) = store
             .find_article_id_by_source_guid(feed_id, source_guid)
             .map_err(|error| FeedEngineError::persist(error.to_string()))?
-        {
-            return Ok(article_id);
-        }
+    {
+        return Ok(article_id);
+    }
 
+    if let Some(article_id) = store
+        .find_article_id_by_url(
+            feed_id,
+            article.canonical_url.as_ref(),
+            article.original_url.as_ref(),
+        )
+        .map_err(|error| FeedEngineError::persist(error.to_string()))?
+    {
+        return Ok(article_id);
+    }
+
+    if let Some(published_at) = article.published_at.as_ref()
+        && let Some(article_id) = store
+            .find_article_id_by_title_and_published_at(
+                feed_id,
+                article.title.as_str(),
+                published_at,
+            )
+            .map_err(|error| FeedEngineError::persist(error.to_string()))?
+    {
+        return Ok(article_id);
+    }
+
+    if let Some(content_hash) = article.content_hash.as_deref()
+        && let Some(article_id) = store
+            .find_article_id_by_content_hash(feed_id, content_hash)
+            .map_err(|error| FeedEngineError::persist(error.to_string()))?
+    {
+        return Ok(article_id);
+    }
+
+    if let Some(source_guid) = article.source_guid.as_deref() {
         return build_article_id(&[feed_id.as_str(), "source-guid", source_guid]);
     }
 
-    let index_string = index.to_string();
+    if let Some(canonical_url) = article.canonical_url.as_ref() {
+        return build_article_id(&[feed_id.as_str(), "canonical-url", canonical_url.as_str()]);
+    }
 
+    if let Some(original_url) = article.original_url.as_ref() {
+        return build_article_id(&[feed_id.as_str(), "original-url", original_url.as_str()]);
+    }
+
+    if let Some(published_at) = article.published_at.as_ref() {
+        return build_article_id(&[
+            feed_id.as_str(),
+            "title-published-at",
+            article.title.as_str(),
+            published_at.as_str(),
+        ]);
+    }
+
+    if let Some(content_hash) = article.content_hash.as_deref() {
+        return build_article_id(&[feed_id.as_str(), "content-hash", content_hash]);
+    }
+
+    let index_string = index.to_string();
     build_article_id(&[
         feed_id.as_str(),
         "fetched-at",
@@ -156,6 +288,7 @@ fn build_article(
     feed_id: &FeedId,
     article_id: ArticleId,
     article: NormalizedArticleRecord,
+    content_hash: Option<String>,
 ) -> Article {
     let NormalizedArticleRecord {
         source_guid,
@@ -189,7 +322,7 @@ fn build_article(
         language,
         thumbnail,
         word_count: derive_word_count(content_extracted.as_deref().or(content_raw.as_deref())),
-        content_hash: None,
+        content_hash,
     }
 }
 
@@ -253,12 +386,140 @@ fn derive_word_count(content: Option<&str>) -> Option<i64> {
     (count > 0).then_some(count as i64)
 }
 
+fn derive_content_hash(
+    content_extracted: Option<&str>,
+    content_raw: Option<&str>,
+    summary: Option<&str>,
+) -> Option<String> {
+    let normalized = content_extracted
+        .or(content_raw)
+        .or(summary)
+        .map(normalize_hash_input)?;
+
+    (!normalized.is_empty()).then(|| digest_key(&[normalized.as_str()]))
+}
+
+fn normalize_hash_input(value: &str) -> String {
+    value.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 fn model_persist_error(error: ModelError) -> FeedEngineError {
     FeedEngineError::persist(error.to_string())
 }
 
+struct ArticleDeduplicationCandidate {
+    source_guid: Option<String>,
+    title: String,
+    canonical_url: Option<UrlString>,
+    original_url: Option<UrlString>,
+    published_at: Option<IsoDateTime>,
+    fetched_at: IsoDateTime,
+    content_hash: Option<String>,
+}
+
+impl ArticleDeduplicationCandidate {
+    fn from_article(article: &NormalizedArticleRecord) -> Self {
+        Self {
+            source_guid: article.source_guid.clone(),
+            title: article.title.clone(),
+            canonical_url: article.canonical_url.clone(),
+            original_url: article.original_url.clone(),
+            published_at: article.published_at.clone(),
+            fetched_at: article.fetched_at.clone(),
+            content_hash: derive_content_hash(
+                article.content_extracted.as_deref(),
+                article.content_raw.as_deref(),
+                article.summary.as_deref(),
+            ),
+        }
+    }
+}
+
+#[derive(Default)]
+struct PendingArticleDedupIndex {
+    article_ids: HashSet<ArticleId>,
+    by_source_guid: HashMap<String, ArticleId>,
+    by_url: HashMap<UrlString, ArticleId>,
+    by_title_and_published_at: HashMap<(String, IsoDateTime), ArticleId>,
+    by_content_hash: HashMap<String, ArticleId>,
+}
+
+impl PendingArticleDedupIndex {
+    fn contains_article_id(&self, article_id: &ArticleId) -> bool {
+        self.article_ids.contains(article_id)
+    }
+
+    fn find_matching_article_id(
+        &self,
+        article: &ArticleDeduplicationCandidate,
+    ) -> Option<ArticleId> {
+        if let Some(source_guid) = article.source_guid.as_deref()
+            && let Some(article_id) = self.by_source_guid.get(source_guid)
+        {
+            return Some(article_id.clone());
+        }
+
+        for url in [&article.canonical_url, &article.original_url]
+            .into_iter()
+            .flatten()
+        {
+            if let Some(article_id) = self.by_url.get(url) {
+                return Some(article_id.clone());
+            }
+        }
+
+        if let Some(published_at) = article.published_at.as_ref()
+            && let Some(article_id) = self
+                .by_title_and_published_at
+                .get(&(article.title.clone(), published_at.clone()))
+        {
+            return Some(article_id.clone());
+        }
+
+        if let Some(content_hash) = article.content_hash.as_deref()
+            && let Some(article_id) = self.by_content_hash.get(content_hash)
+        {
+            return Some(article_id.clone());
+        }
+
+        None
+    }
+
+    fn register(&mut self, article: &Article) {
+        let article_id = article.id.clone();
+        self.article_ids.insert(article_id.clone());
+
+        if let Some(source_guid) = article.source_guid.clone() {
+            self.by_source_guid
+                .entry(source_guid)
+                .or_insert(article_id.clone());
+        }
+
+        for url in [&article.canonical_url, &article.original_url]
+            .into_iter()
+            .flatten()
+        {
+            self.by_url.entry(url.clone()).or_insert(article_id.clone());
+        }
+
+        if let Some(published_at) = article.published_at.clone() {
+            self.by_title_and_published_at
+                .entry((article.title.clone(), published_at))
+                .or_insert(article_id.clone());
+        }
+
+        if let Some(content_hash) = article.content_hash.clone() {
+            self.by_content_hash
+                .entry(content_hash)
+                .or_insert(article_id);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::{fs, path::PathBuf};
+
     use freelyrss_core_domain::{
         AttachmentType, FeedFormat, IsoDateTime, UrlString,
         sqlite::{DatabaseInitializationOptions, initialize_database},
@@ -268,8 +529,9 @@ mod tests {
 
     use super::*;
     use crate::{
-        NormalizedArticleRecord, NormalizedAttachmentRecord, NormalizedFeedBatch,
-        NormalizedFeedRecord,
+        DefaultFeedNormalizer, DefaultFeedParser, FeedNormalizer, FeedParser, FetchRequest,
+        FetchedFeed, NormalizeContext, NormalizedArticleRecord, NormalizedAttachmentRecord,
+        NormalizedFeedBatch, NormalizedFeedRecord, NotModifiedFeed, ParsedSource,
     };
 
     #[test]
@@ -483,6 +745,251 @@ mod tests {
         assert_eq!(article_count, 1);
     }
 
+    #[test]
+    fn records_not_modified_checks_without_rewriting_existing_articles() {
+        let temp_dir = tempdir().expect("tempdir");
+        let database_path = temp_dir.path().join("freelyrss.sqlite3");
+        initialize_database(&database_path, &DatabaseInitializationOptions::default())
+            .expect("initialize database");
+
+        let repository = SqliteFeedRepository::new(&database_path);
+        let first_result = repository
+            .persist(sample_batch(
+                None,
+                "entry-1",
+                "First entry",
+                "https://example.com/audio-1.mp3",
+            ))
+            .expect("seed initial feed graph");
+
+        let recorded = repository
+            .record_not_modified(NotModifiedFeed {
+                request: FetchRequest {
+                    feed_id: Some(first_result.feed_id.clone()),
+                    feed_url: url("https://example.com/feed.xml"),
+                    etag: Some("\"etag-v2\"".into()),
+                    last_modified: Some("Wed, 16 Apr 2026 10:00:00 GMT".into()),
+                },
+                final_url: url("https://cdn.example.com/feed.xml"),
+                status_code: 304,
+                fetched_at: time("2026-04-16T11:15:00Z"),
+                etag: Some("\"etag-v3\"".into()),
+                last_modified: Some("Wed, 16 Apr 2026 11:00:00 GMT".into()),
+            })
+            .expect("record not-modified poll");
+
+        let connection = Connection::open(&database_path).expect("open database");
+        let feed_row = connection
+            .query_row(
+                "SELECT feed_url, health_status, last_checked_at, last_success_at, etag, last_modified
+                FROM Feed
+                WHERE id = ?1",
+                params![recorded.feed_id.as_str()],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, Option<String>>(4)?,
+                        row.get::<_, Option<String>>(5)?,
+                    ))
+                },
+            )
+            .expect("read updated feed");
+        let article_count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM Article", [], |row| row.get(0))
+            .expect("count articles");
+        let attachment_count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM Attachment", [], |row| row.get(0))
+            .expect("count attachments");
+
+        assert_eq!(recorded.feed_id, first_result.feed_id);
+        assert_eq!(feed_row.0, "https://cdn.example.com/feed.xml");
+        assert_eq!(feed_row.1, "healthy");
+        assert_eq!(feed_row.2, "2026-04-16T11:15:00Z");
+        assert_eq!(feed_row.3, "2026-04-16T11:15:00Z");
+        assert_eq!(feed_row.4.as_deref(), Some("\"etag-v3\""));
+        assert_eq!(feed_row.5.as_deref(), Some("Wed, 16 Apr 2026 11:00:00 GMT"));
+        assert_eq!(article_count, 1);
+        assert_eq!(attachment_count, 1);
+    }
+
+    #[test]
+    fn deduplicates_duplicate_fixture_articles_by_url_without_dropping_distinct_items() {
+        let temp_dir = tempdir().expect("tempdir");
+        let database_path = temp_dir.path().join("freelyrss.sqlite3");
+        initialize_database(&database_path, &DatabaseInitializationOptions::default())
+            .expect("initialize database");
+
+        let repository = SqliteFeedRepository::new(&database_path);
+        let parser = DefaultFeedParser;
+        let normalizer = DefaultFeedNormalizer;
+        let fetched = fetched_fixture("rss/rss-2-duplicates-and-missing-fields.xml");
+        let parsed = expect_feed(parser.parse(&fetched).expect("fixture should parse"));
+        let batch = normalizer
+            .normalize(parsed, &NormalizeContext::from_fetched_feed(&fetched))
+            .expect("fixture should normalize");
+
+        let result = repository
+            .persist(batch)
+            .expect("persist duplicate fixture");
+
+        let connection = Connection::open(&database_path).expect("open database");
+        let article_rows: Vec<(Option<String>, String)> = {
+            let mut statement = connection
+                .prepare(
+                    "SELECT source_guid, title
+                    FROM Article
+                    ORDER BY title ASC",
+                )
+                .expect("prepare article query");
+            let rows = statement
+                .query_map([], |row| {
+                    Ok((row.get::<_, Option<String>>(0)?, row.get::<_, String>(1)?))
+                })
+                .expect("query articles");
+
+            rows.collect::<Result<Vec<_>, _>>()
+                .expect("collect article rows")
+        };
+
+        assert_eq!(result.stored_article_count, 2);
+        assert_eq!(article_rows.len(), 2);
+        assert!(article_rows.contains(&(
+            Some("duplicate-source-guid".into()),
+            "Duplicate story from the primary source".into(),
+        )));
+        assert!(article_rows.contains(&(None, "Sparse article without optional fields".into())));
+        assert!(
+            !article_rows
+                .iter()
+                .any(|(_, title)| title == "Duplicate story mirrored by the archive")
+        );
+    }
+
+    #[test]
+    fn reuses_existing_article_identity_by_title_and_published_at_when_guid_and_urls_are_missing() {
+        let temp_dir = tempdir().expect("tempdir");
+        let database_path = temp_dir.path().join("freelyrss.sqlite3");
+        initialize_database(&database_path, &DatabaseInitializationOptions::default())
+            .expect("initialize database");
+
+        let repository = SqliteFeedRepository::new(&database_path);
+        repository
+            .persist(sample_batch_with_article(sample_article(
+                SampleArticleInput {
+                    title: "Repeated title",
+                    published_at: Some("2026-04-16T09:30:00Z"),
+                    content_raw: Some("<p>First copy</p>"),
+                    content_extracted: Some("First copy"),
+                    summary: Some("First summary"),
+                    ..SampleArticleInput::default()
+                },
+            )))
+            .expect("persist first article");
+
+        let connection = Connection::open(&database_path).expect("open database");
+        let article_id: String = connection
+            .query_row("SELECT id FROM Article LIMIT 1", [], |row| row.get(0))
+            .expect("read initial article id");
+        drop(connection);
+
+        repository
+            .persist(sample_batch_with_article(sample_article(
+                SampleArticleInput {
+                    title: "Repeated title",
+                    published_at: Some("2026-04-16T09:30:00Z"),
+                    content_raw: Some("<p>Updated copy</p>"),
+                    content_extracted: Some("Updated copy"),
+                    summary: Some("Updated summary"),
+                    ..SampleArticleInput::default()
+                },
+            )))
+            .expect("persist second article");
+
+        let connection = Connection::open(&database_path).expect("reopen database");
+        let article_row = connection
+            .query_row(
+                "SELECT id, content_extracted
+                FROM Article
+                LIMIT 1",
+                [],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?)),
+            )
+            .expect("read updated article");
+        let article_count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM Article", [], |row| row.get(0))
+            .expect("count articles");
+
+        assert_eq!(article_row.0, article_id);
+        assert_eq!(article_row.1.as_deref(), Some("Updated copy"));
+        assert_eq!(article_count, 1);
+    }
+
+    #[test]
+    fn reuses_existing_article_identity_by_content_hash_when_other_dedup_fields_are_missing() {
+        let temp_dir = tempdir().expect("tempdir");
+        let database_path = temp_dir.path().join("freelyrss.sqlite3");
+        initialize_database(&database_path, &DatabaseInitializationOptions::default())
+            .expect("initialize database");
+
+        let repository = SqliteFeedRepository::new(&database_path);
+        repository
+            .persist(sample_batch_with_article(sample_article(
+                SampleArticleInput {
+                    title: "Original title",
+                    content_raw: Some("<p>Shared body content for hash dedup.</p>"),
+                    content_extracted: Some("Shared body content for hash dedup."),
+                    ..SampleArticleInput::default()
+                },
+            )))
+            .expect("persist first article");
+
+        let connection = Connection::open(&database_path).expect("open database");
+        let article_id: String = connection
+            .query_row("SELECT id FROM Article LIMIT 1", [], |row| row.get(0))
+            .expect("read initial article id");
+        drop(connection);
+
+        repository
+            .persist(sample_batch_with_article(sample_article(
+                SampleArticleInput {
+                    title: "Mirrored title",
+                    content_raw: Some("<div>Shared body content for hash dedup.</div>"),
+                    content_extracted: Some("Shared body content for hash dedup."),
+                    summary: Some("Mirror summary"),
+                    ..SampleArticleInput::default()
+                },
+            )))
+            .expect("persist mirrored article");
+
+        let connection = Connection::open(&database_path).expect("reopen database");
+        let article_row = connection
+            .query_row(
+                "SELECT id, title, content_hash
+                FROM Article
+                LIMIT 1",
+                [],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, Option<String>>(2)?,
+                    ))
+                },
+            )
+            .expect("read updated article");
+        let article_count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM Article", [], |row| row.get(0))
+            .expect("count articles");
+
+        assert_eq!(article_row.0, article_id);
+        assert_eq!(article_row.1, "Mirrored title");
+        assert!(article_row.2.is_some());
+        assert_eq!(article_count, 1);
+    }
+
     fn sample_batch(
         feed_id: Option<FeedId>,
         source_guid: &str,
@@ -524,6 +1031,92 @@ mod tests {
                 }],
             }],
         }
+    }
+
+    fn sample_batch_with_article(article: NormalizedArticleRecord) -> NormalizedFeedBatch {
+        NormalizedFeedBatch {
+            feed: NormalizedFeedRecord {
+                feed_id: None,
+                title: "Example Feed".into(),
+                site_url: Some(url("https://example.com")),
+                feed_url: url("https://example.com/feed.xml"),
+                format: FeedFormat::Rss,
+                icon: Some(url("https://example.com/icon.png")),
+                etag: Some("\"etag-v2\"".into()),
+                last_modified: Some("Wed, 16 Apr 2026 10:00:00 GMT".into()),
+                last_checked_at: time("2026-04-16T10:00:00Z"),
+                last_success_at: time("2026-04-16T10:00:00Z"),
+            },
+            articles: vec![article],
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, Default)]
+    struct SampleArticleInput<'a> {
+        source_guid: Option<&'a str>,
+        title: &'a str,
+        canonical_url: Option<&'a str>,
+        original_url: Option<&'a str>,
+        published_at: Option<&'a str>,
+        content_raw: Option<&'a str>,
+        content_extracted: Option<&'a str>,
+        summary: Option<&'a str>,
+    }
+
+    fn sample_article(input: SampleArticleInput<'_>) -> NormalizedArticleRecord {
+        NormalizedArticleRecord {
+            source_guid: input.source_guid.map(str::to_owned),
+            title: input.title.into(),
+            author: Some("FreelyRSS".into()),
+            summary: input.summary.map(str::to_owned),
+            content_raw: input.content_raw.map(str::to_owned),
+            content_extracted: input.content_extracted.map(str::to_owned),
+            canonical_url: input.canonical_url.map(url),
+            original_url: input.original_url.map(url),
+            published_at: input.published_at.map(time),
+            fetched_at: time("2026-04-16T10:00:00Z"),
+            language: None,
+            thumbnail: Some(url("https://example.com/thumb.png")),
+            attachments: Vec::new(),
+        }
+    }
+
+    fn fetched_fixture(relative_path: &str) -> FetchedFeed {
+        FetchedFeed {
+            request: FetchRequest {
+                feed_id: Some(feed_id("feed-rss")),
+                feed_url: url("https://example.com/feeds/original.xml"),
+                etag: Some("\"etag-v1\"".to_owned()),
+                last_modified: Some("Fri, 10 Apr 2026 23:00:00 GMT".to_owned()),
+            },
+            final_url: url("https://example.com/feeds/current.xml"),
+            status_code: 200,
+            content_type: Some("application/rss+xml".to_owned()),
+            body: fs::read(fixture_path(relative_path)).expect("fixture should be readable"),
+            fetched_at: time("2026-04-11T12:30:00Z"),
+            etag: Some("\"etag-v2\"".to_owned()),
+            last_modified: Some("Sat, 11 Apr 2026 12:00:00 GMT".to_owned()),
+        }
+    }
+
+    fn fixture_path(relative_path: &str) -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("fixtures")
+            .join(relative_path)
+    }
+
+    fn expect_feed(parsed: ParsedSource) -> crate::ParsedFeedDocument {
+        match parsed {
+            ParsedSource::Feed(parsed) => parsed,
+            ParsedSource::Discovery(discovery) => {
+                panic!("expected parsed feed document, got discovery result: {discovery:?}")
+            }
+        }
+    }
+
+    fn feed_id(value: &str) -> FeedId {
+        FeedId::try_from(value).expect("valid feed id")
     }
 
     fn time(value: &str) -> IsoDateTime {

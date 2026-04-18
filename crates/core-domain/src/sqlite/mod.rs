@@ -173,7 +173,7 @@ mod tests {
             .expect("database initialization should succeed");
 
         assert_eq!(report.current_version, latest_schema_version());
-        assert_eq!(report.applied_versions, vec![1, 2, 3, 4]);
+        assert_eq!(report.applied_versions, vec![1, 2, 3, 4, 5]);
         assert!(database_path.exists());
 
         let connection = Connection::open(&database_path).expect("open database");
@@ -192,7 +192,7 @@ mod tests {
             )
             .expect("bootstrap metadata should be present");
 
-        assert_eq!(recorded_version, 4);
+        assert_eq!(recorded_version, 5);
         assert_eq!(bootstrap_value, "ready");
     }
 
@@ -402,6 +402,34 @@ mod tests {
                 unique: false,
                 partial: false,
                 columns: &["feed_id", "published_at"],
+            },
+            IndexExpectation {
+                table: "Article",
+                name: "idx_article_feed_id_canonical_url",
+                unique: false,
+                partial: true,
+                columns: &["feed_id", "canonical_url"],
+            },
+            IndexExpectation {
+                table: "Article",
+                name: "idx_article_feed_id_original_url",
+                unique: false,
+                partial: true,
+                columns: &["feed_id", "original_url"],
+            },
+            IndexExpectation {
+                table: "Article",
+                name: "idx_article_feed_id_title_published_at",
+                unique: false,
+                partial: true,
+                columns: &["feed_id", "title", "published_at"],
+            },
+            IndexExpectation {
+                table: "Article",
+                name: "idx_article_feed_id_content_hash",
+                unique: false,
+                partial: true,
+                columns: &["feed_id", "content_hash"],
             },
             IndexExpectation {
                 table: "Article",
@@ -620,8 +648,8 @@ mod tests {
         )
         .expect("apply v4 migration");
 
-        assert_eq!(report.current_version, 4);
-        assert_eq!(report.applied_versions, vec![4]);
+        assert_eq!(report.current_version, 5);
+        assert_eq!(report.applied_versions, vec![4, 5]);
         assert!(report.backup_path.is_some());
         assert_eq!(
             match_article_search(&connection, "backfill"),
@@ -635,6 +663,50 @@ mod tests {
             match_article_search(&connection, "\"Upgrade Feed\""),
             vec!["article-upgrade"]
         );
+    }
+
+    #[test]
+    fn applies_article_dedup_indexes_when_upgrading_from_v4_to_v5() {
+        let temp_dir = tempdir().expect("tempdir");
+        let database_path = temp_dir.path().join("freelyrss.sqlite3");
+        let backup_dir = temp_dir.path().join("backups");
+        let mut connection = Connection::open(&database_path).expect("open database");
+
+        prepare_connection(&connection).expect("prepare connection");
+        apply_migration_set(
+            &mut connection,
+            &database_path,
+            &DatabaseInitializationOptions::default(),
+            &embedded_migrations()[..4],
+        )
+        .expect("apply v1-v4 migrations");
+
+        let report = apply_migration_set(
+            &mut connection,
+            &database_path,
+            &DatabaseInitializationOptions::new().with_backup_dir(&backup_dir),
+            embedded_migrations(),
+        )
+        .expect("apply v5 migration");
+
+        assert_eq!(report.current_version, 5);
+        assert_eq!(report.applied_versions, vec![5]);
+        assert!(report.backup_path.is_some());
+
+        let article_indexes = table_indexes(&connection, "Article");
+        let dedup_index_names = [
+            "idx_article_feed_id_canonical_url",
+            "idx_article_feed_id_original_url",
+            "idx_article_feed_id_title_published_at",
+            "idx_article_feed_id_content_hash",
+        ];
+
+        for index_name in dedup_index_names {
+            assert!(
+                article_indexes.iter().any(|index| index.name == index_name),
+                "Article should expose Step 30 dedup index {index_name}"
+            );
+        }
     }
 
     #[test]

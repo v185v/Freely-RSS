@@ -1,10 +1,11 @@
 use crate::{
     FeedEngineError, FetchRequest, FetchedFeed, NormalizeContext, NormalizedFeedBatch,
-    ParsedFeedDocument, ParsedSource, PersistedFeedBatch,
+    NotModifiedFeed, ParsedFeedDocument, ParsedSource, PersistedFeedBatch, RecordedFeedCheck,
+    TransportFetchOutput,
 };
 
 pub trait FeedTransport {
-    fn fetch(&self, request: &FetchRequest) -> Result<FetchedFeed, FeedEngineError>;
+    fn fetch(&self, request: &FetchRequest) -> Result<TransportFetchOutput, FeedEngineError>;
 }
 
 pub trait FeedParser {
@@ -21,4 +22,9 @@ pub trait FeedNormalizer {
 
 pub trait FeedRepository {
     fn persist(&self, batch: NormalizedFeedBatch) -> Result<PersistedFeedBatch, FeedEngineError>;
+
+    fn record_not_modified(
+        &self,
+        response: NotModifiedFeed,
+    ) -> Result<RecordedFeedCheck, FeedEngineError>;
 }

@@ -23,6 +23,22 @@ pub struct FetchedFeed {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NotModifiedFeed {
+    pub request: FetchRequest,
+    pub final_url: UrlString,
+    pub status_code: u16,
+    pub fetched_at: IsoDateTime,
+    pub etag: Option<String>,
+    pub last_modified: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TransportFetchOutput {
+    Modified(FetchedFeed),
+    NotModified(NotModifiedFeed),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ParsedSource {
     Feed(ParsedFeedDocument),
     Discovery(FeedDiscoveryResult),
@@ -166,6 +182,11 @@ pub struct PersistedFeedBatch {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RecordedFeedCheck {
+    pub feed_id: FeedId,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FetchRunReport {
     pub feed_id: FeedId,
     pub requested_url: UrlString,
@@ -179,7 +200,17 @@ pub struct FetchRunReport {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FetchNotModifiedReport {
+    pub feed_id: FeedId,
+    pub requested_url: UrlString,
+    pub final_url: UrlString,
+    pub response_status_code: u16,
+    pub fetched_at: IsoDateTime,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FetchRunOutput {
     Persisted(FetchRunReport),
+    NotModified(FetchNotModifiedReport),
     Discovery(FeedDiscoveryResult),
 }
