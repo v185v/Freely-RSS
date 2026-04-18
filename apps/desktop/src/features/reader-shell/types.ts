@@ -1,6 +1,7 @@
 import type {
   ArticleDetailDto,
   ArticleListItemDto,
+  FeedDto,
   FeedSummaryDto,
   FolderDto,
   SubscriptionTreeNodeDto,
@@ -45,6 +46,7 @@ export interface NavigationEntry {
 export interface ReaderShellData {
   articleDetails: Record<string, ArticleDetailDto>
   articles: ArticleListItemDto[]
+  feedDetails: Record<string, FeedDto>
   feeds: FeedSummaryDto[]
   folders: FolderDto[]
   navigationEntries: NavigationEntry[]

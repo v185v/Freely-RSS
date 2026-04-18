@@ -1149,3 +1149,32 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - Step 26 进一步证明 `feed-engine` 的真实扩展位应当是“新增 parser / normalizer 默认实现文件”，而不是把格式判断、时间规范化或正文入口拼装回写到桌面宿主；这保持了桌面壳层继续只负责路径、窗口和命令接线。
 - 让 `DefaultFeedParser` 直接依赖 `roxmltree` 与 `chrono`、同时继续输出 `ParsedFeedDocument`，说明底层 XML / 时间库选型已经被封装在 `feed-engine` 内部；未来若替换解析库，调用方和领域词汇表无需跟着重写。
 - 把 RSS 2.0、RSS 0.91 与 Atom 1.0 的首批真实解析验收固定在 `tests/parser_fixtures.rs`，意味着 Step 27 以后新增 JSON Feed parser 时必须共享同一套阶段契约与样本驱动方式，而不是引入另一套只服务某一种格式的私有测试口径。
+
+## 2026-04-18 ASCII Addendum
+
+### Step 34 Architecture Insights
+
+- Step 34 confirms that feed editing is a desktop-shell composition concern, not a `feed-engine` concern. Rename, custom label, update interval, icon, and manual refresh are all initiated from the left pane beside source selection.
+- The route still owns `sourceId` and `articleId`. The shell store still owns only local view state such as folder collapse and queue filters. Step 34 does not move edit state into routing or persistence primitives.
+- The shell now resolves a full active-feed object separately from the subscription tree projection. This keeps tree rendering dependent on lightweight summary rows while the editor consumes a richer `FeedDto`.
+- The writable mock repository is now the single writer for shell-side feed edits and refresh commands. React Query cache replacement continues to happen at full-snapshot granularity, which keeps Step 34 aligned with earlier shell composition steps.
+- Manual refresh remains a shell command path that updates feed health facts and timestamps without pushing refresh semantics into shared UI primitives.
+- No database schema changes were required for Step 34. The existing schema continues to describe source facts; this step only proves the desktop-shell interaction boundary before real command wiring is connected to SQLite.
+- Verification matters at this boundary: the Step 34 regression test now checks save behavior, persistence across a reopen of the shell, and manual refresh health recovery, so the feature is protected as a shell-level contract rather than an ad hoc UI demo.
+
+### Step 34 File Responsibilities
+
+- `apps/desktop/src/features/reader-shell/components/feed-editor-card.tsx`: owns the feed editing form, draft state, validation, empty-state behavior, and save/refresh button dispatch for a concrete active feed.
+- `apps/desktop/src/features/reader-shell/components/source-pane.tsx`: keeps the left pane as the composition point for quick views, subscription tree navigation, and the feed editor card without mixing queue or reader responsibilities into the source pane.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`: wires route state, shell store state, React Query data, and Step 34 mutations together; resolves the active feed for the editor and keeps mutation cache updates at the shell boundary.
+- `apps/desktop/src/features/reader-shell/mock-data.ts`: acts as the shell-owned writable mock repository; stores editable feed facts, applies feed updates, performs manual refresh state changes, and rebuilds full shell snapshots.
+- `apps/desktop/src/features/reader-shell/types.ts`: defines the shell composition contract, including the `feedDetails` map used to resolve a full active feed independently from summary/tree projections.
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`: protects the Step 34 shell contract by verifying edit/save flow, reopen persistence, and manual refresh health-state recovery.
+- `apps/desktop/src/styles.css`: contains the shell-local presentation rules for the feed editor so feature-specific layout and status styling stay out of shared UI primitives.
+
+### Step 34 Boundary Notes
+
+- `packages/shared-types` remains the DTO boundary only.
+- `packages/ui` remains a base primitive layer and does not absorb feed-editing workflow logic.
+- `crates/feed-engine` still owns fetch and parse semantics, not user-authored source metadata edits.
+- `crates/core-domain` and SQLite remain the future durable write boundary for real source edits; Step 34 only validates the shell interaction shape ahead of that integration.

@@ -1,16 +1,30 @@
 import type { CSSProperties, Ref } from "react"
 
+import type { FeedDto } from "@freelyrss/shared-types"
 import { Button, ListRow, ListSection, SplitPane, Surface } from "@freelyrss/ui"
 
 import type { SourceRow, SubscriptionTreeRow } from "../types"
+import { FeedEditorCard } from "./feed-editor-card"
 
 type SourcePaneProps = {
   activeSourceId: string
+  activeFeed: FeedDto | null
   canCollapseFolders: boolean
   describedBy?: string
+  editorErrorMessage: string | null
   headingId: string
+  isRefreshingFeed: boolean
+  isSavingFeed: boolean
   onCollapseAllFolders: () => void
+  onRefreshFeed: (feedId: FeedDto["id"]) => void
   onSelectSource: (sourceId: string) => void
+  onSaveFeed: (input: {
+    customName: string | null
+    feedId: FeedDto["id"]
+    icon: string | null
+    title: string
+    updateInterval: number | null
+  }) => void
   onToggleFolderCollapsed: (folderId: string) => void
   paneId: string
   paneRef?: Ref<HTMLElement>
@@ -24,11 +38,17 @@ type SourcePaneProps = {
 
 export function SourcePane({
   activeSourceId,
+  activeFeed,
   canCollapseFolders,
   describedBy,
+  editorErrorMessage,
   headingId,
+  isRefreshingFeed,
+  isSavingFeed,
   onCollapseAllFolders,
+  onRefreshFeed,
   onSelectSource,
+  onSaveFeed,
   onToggleFolderCollapsed,
   paneId,
   paneRef,
@@ -50,8 +70,8 @@ export function SourcePane({
           <p className="desktop-pane__eyebrow">Left pane</p>
           <h2 id={headingId}>Sources</h2>
           <p className="desktop-pane__description">
-            Quick views stay route-backed, while folder expansion and collapse remain local shell
-            interaction state.
+            Quick views stay route-backed, folder expansion remains local shell state, and feed
+            editing now lives beside source selection instead of leaking into shared DTO assembly.
           </p>
         </div>
 
@@ -126,6 +146,15 @@ export function SourcePane({
               ))}
             </ul>
           </ListSection>
+
+          <FeedEditorCard
+            errorMessage={editorErrorMessage}
+            feed={activeFeed}
+            isRefreshing={isRefreshingFeed}
+            isSaving={isSavingFeed}
+            onRefreshFeed={onRefreshFeed}
+            onSaveFeed={onSaveFeed}
+          />
         </div>
 
         <div className="desktop-pane__footer">

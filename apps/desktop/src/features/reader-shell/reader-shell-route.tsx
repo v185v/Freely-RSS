@@ -1,7 +1,7 @@
 import { startTransition, useDeferredValue, useEffect, useEffectEvent, useRef } from "react"
 
 import { Button, SplitLayout, Surface } from "@freelyrss/ui"
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate, useSearch } from "@tanstack/react-router"
 
 import {
@@ -15,7 +15,12 @@ import { NavigationStrip } from "./components/navigation-strip"
 import { QueuePane } from "./components/queue-pane"
 import { ReaderPane } from "./components/reader-pane"
 import { SourcePane } from "./components/source-pane"
-import { fetchReaderShellData } from "./mock-data"
+import {
+  fetchReaderShellData,
+  readerShellQueryKey,
+  refreshMockFeed,
+  updateMockFeed,
+} from "./mock-data"
 import {
   buildSubscriptionTreeRows,
   buildViewFilterSummary,
@@ -52,6 +57,7 @@ function buildReaderSearch(sourceId: string, articleId: string | null) {
 }
 
 export function ReaderShellRoute() {
+  const queryClient = useQueryClient()
   const navigate = useNavigate({ from: "/" })
   const routeState = useSearch({ from: "/" })
   const searchText = useReaderViewStore((state) => state.searchText)
@@ -72,8 +78,20 @@ export function ReaderShellRoute() {
   const readerPaneRef = useRef<HTMLElement | null>(null)
 
   const shellDataQuery = useQuery({
-    queryKey: ["desktop-reader-shell", "mock-data"],
+    queryKey: readerShellQueryKey,
     queryFn: fetchReaderShellData,
+  })
+  const saveFeedMutation = useMutation({
+    mutationFn: updateMockFeed,
+    onSuccess: (nextShellData) => {
+      queryClient.setQueryData(readerShellQueryKey, nextShellData)
+    },
+  })
+  const refreshFeedMutation = useMutation({
+    mutationFn: refreshMockFeed,
+    onSuccess: (nextShellData) => {
+      queryClient.setQueryData(readerShellQueryKey, nextShellData)
+    },
   })
 
   const reconcileArticleSelection = useEffectEvent((articleId: string | null) => {
@@ -159,9 +177,16 @@ export function ReaderShellRoute() {
   const subscriptionRows = shellData
     ? buildSubscriptionTreeRows(shellData, collapsedFolderIds, routeState.sourceId)
     : []
+  const activeFeed =
+    shellData && routeState.sourceId in shellData.feedDetails
+      ? (shellData.feedDetails[routeState.sourceId] ?? null)
+      : null
   const collapsibleFolderIds = subscriptionRows
     .filter((row) => row.kind === "folder" && row.hasChildren)
     .map((row) => row.id)
+  const editorErrorMessage =
+    (saveFeedMutation.error instanceof Error ? saveFeedMutation.error.message : null) ??
+    (refreshFeedMutation.error instanceof Error ? refreshFeedMutation.error.message : null)
 
   useEffect(() => {
     if (shellData && activeArticleId !== routeState.articleId) {
@@ -181,8 +206,8 @@ export function ReaderShellRoute() {
     return (
       <main className="desktop-shell">
         <div className="desktop-loading">
-          <p className="desktop-shell__eyebrow">Stage 4 / Step 33</p>
-          <h1>Loading the subscription tree and grouped source context.</h1>
+          <p className="desktop-shell__eyebrow">Stage 4 / Step 34</p>
+          <h1>Loading source editing controls and route-backed feed context.</h1>
         </div>
       </main>
     )
@@ -282,15 +307,14 @@ export function ReaderShellRoute() {
 
       <header className="desktop-shell__header">
         <div className="desktop-shell__title-block">
-          <p className="desktop-shell__eyebrow">Stage 4 / Step 33</p>
-          <h1>
-            Subscription groups now render as a real left-pane tree with stable route selection.
-          </h1>
+          <p className="desktop-shell__eyebrow">Stage 4 / Step 34</p>
+          <h1>Feed editing now shares the left pane without breaking route or tree ownership.</h1>
           <p className="desktop-shell__lead">
-            Shared tree DTOs define folders and feeds, route search params still own the active
-            source and article, and the shell store now limits itself to local tree expansion plus
-            queue view state. That keeps grouped navigation visible in the UI without pushing tree
-            assembly or health logic down into the desktop host or fetch pipeline.
+            Source edits now sit next to selection in the reader shell: route state still owns the
+            active source and article, the shell store still owns only local tree expansion plus
+            queue view state, and the mock repository stays the single writer for editable feed
+            facts. That keeps Step 34 on the desktop command boundary instead of pushing rename,
+            icon, interval, or refresh behavior into the fetch pipeline.
           </p>
         </div>
 
@@ -322,8 +346,8 @@ export function ReaderShellRoute() {
           </div>
 
           <p className="desktop-summary__note">
-            Grouped source selection now reshapes the middle queue while collapsed folders remain a
-            shell-only concern.
+            Feed edits now flow through a shell-level command path while grouped selection and
+            collapsed folders remain separate concerns.
           </p>
 
           <div className="desktop-shortcuts">
@@ -373,13 +397,27 @@ export function ReaderShellRoute() {
         <SplitLayout>
           <SourcePane
             activeSourceId={routeState.sourceId}
+            activeFeed={activeFeed}
             canCollapseFolders={subscriptionRows.some(
               (row) => row.kind === "folder" && !row.isCollapsed,
             )}
             describedBy={READER_SHORTCUT_HINT_ID}
+            editorErrorMessage={editorErrorMessage}
             headingId={READER_LANDMARK_IDS.sourceHeading}
+            isRefreshingFeed={refreshFeedMutation.isPending}
+            isSavingFeed={saveFeedMutation.isPending}
             onCollapseAllFolders={() => setCollapsedFolderIds(collapsibleFolderIds)}
+            onRefreshFeed={(feedId) => {
+              refreshFeedMutation.reset()
+              saveFeedMutation.reset()
+              refreshFeedMutation.mutate(feedId)
+            }}
             onSelectSource={selectSource}
+            onSaveFeed={(input) => {
+              refreshFeedMutation.reset()
+              saveFeedMutation.reset()
+              saveFeedMutation.mutate(input)
+            }}
             onToggleFolderCollapsed={toggleFolderCollapsed}
             paneId={READER_LANDMARK_IDS.source}
             paneRef={sourcePaneRef}

@@ -534,3 +534,32 @@
 
 - 按 `implementation-plan.md` 执行阶段 4 Step 31，在当前去重闭环之上补齐 `ETag`、`Last-Modified`、条件请求与失败重试策略，避免每次刷新都全量重抓。
 - 在推进 Step 31 时继续保持当前边界：`FeedFetcher` 与 transport 负责条件请求头和响应元数据，`SqliteFeedRepository` 与 `FeedStore` 继续只处理去重后的持久化与状态写入，不让 HTTP 缓存语义、失败重试或 UI 反馈逻辑回流到宿主或前端壳层。
+
+## 2026-04-18 ASCII Addendum
+
+### Stage 4 Step 34 Completed: feed editing actions in the desktop shell
+
+- Implemented shell-level feed editing for title rename, custom display label, update interval, icon URL, and manual refresh.
+- Kept Step 34 inside the desktop shell boundary. The fetch engine, Rust storage layer, shared base UI primitives, and database schema were not changed for edit semantics.
+- Added a dedicated feed editor card in the left pane and wired it to the currently selected concrete feed only.
+- Extended shell data composition so the route can resolve a full `FeedDto` for the active feed while the subscription tree continues to consume summary/tree projections.
+- Promoted the mock layer from read-only fixture access to a writable mock repository that can update feed metadata, perform a manual refresh, and return a full shell snapshot for React Query cache replacement.
+- Updated the Step 34 regression test to verify save behavior, persistence across an app reopen within the mock shell, and manual refresh health recovery.
+- During validation, fixed two build blockers discovered after the initial implementation:
+- `feed-editor-card.tsx`: explicit non-null narrowing after the empty-state return so TypeScript accepts later save/refresh handlers.
+- `mock-data.ts`: snapshot output now materializes mutable `navigationEntries` instead of leaking a readonly tuple into `ReaderShellData`.
+
+### Step 34 Verification
+
+- Passed `corepack pnpm --filter @freelyrss/desktop test`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+
+### Next Step (ASCII update)
+
+- Next planned implementation step is `implementation-plan.md` Stage 4 Step 35: OPML import.
+- Preserve the current boundary split:
+- `packages/shared-types` stays as DTO contract only.
+- desktop reader shell owns edit interaction and route-adjacent command wiring.
+- writable persistence of source facts remains a later `core-domain/sqlite` concern rather than a `feed-engine` concern.

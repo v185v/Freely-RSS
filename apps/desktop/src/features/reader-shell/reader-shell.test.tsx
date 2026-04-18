@@ -5,11 +5,13 @@ import { afterEach, describe, expect, test } from "vitest"
 import App from "../../App"
 import { createAppQueryClient } from "../../app/query-client"
 import { createAppRouter } from "../../app/router"
+import { resetMockReaderShellState } from "./mock-data"
 import { resetReaderViewStore } from "./state"
 
 describe("reader shell navigation", () => {
   afterEach(() => {
     cleanup()
+    resetMockReaderShellState()
     resetReaderViewStore()
     window.history.pushState({}, "", "/")
   })
@@ -138,5 +140,113 @@ describe("reader shell navigation", () => {
         "Turning the desktop shell into a stable three-pane reader skeleton",
       ),
     ).toBeNull()
+  })
+
+  test("edits feed metadata and records a manual refresh through the shell command path", async () => {
+    window.scrollTo = () => {}
+    const user = userEvent.setup()
+    const renderShell = () =>
+      render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+
+    renderShell()
+
+    const sourcePane = await screen.findByRole("region", { name: "Sources" })
+    const subscriptionTree = within(sourcePane)
+      .getByRole("heading", {
+        name: "Subscription tree",
+      })
+      .closest("section")
+
+    expect(subscriptionTree).not.toBeNull()
+
+    const treeScope = within(subscriptionTree as HTMLElement)
+
+    await user.click(
+      treeScope.getByRole("button", {
+        name: /degraded.*Query Notes.*malformed XML near the channel header/i,
+      }),
+    )
+
+    const editor = within(sourcePane)
+      .getByRole("heading", {
+        name: "Feed editor",
+      })
+      .closest("section")
+
+    expect(editor).not.toBeNull()
+
+    const editorScope = within(editor as HTMLElement)
+
+    await user.clear(editorScope.getByLabelText("Source title"))
+    await user.type(editorScope.getByLabelText("Source title"), "Parser Dispatch")
+    await user.clear(editorScope.getByLabelText("Custom display label"))
+    await user.type(editorScope.getByLabelText("Custom display label"), "SQL Parser Watch")
+    await user.clear(editorScope.getByLabelText("Update interval (minutes)"))
+    await user.type(editorScope.getByLabelText("Update interval (minutes)"), "30")
+    await user.clear(editorScope.getByLabelText("Icon URL"))
+    await user.type(
+      editorScope.getByLabelText("Icon URL"),
+      "https://query.example/assets/query-notes.svg",
+    )
+
+    await user.click(editorScope.getByRole("button", { name: "Save changes" }))
+
+    await waitFor(() => {
+      expect(treeScope.getByText("SQL Parser Watch")).toBeTruthy()
+      expect((editorScope.getByLabelText("Source title") as HTMLInputElement).value).toBe(
+        "Parser Dispatch",
+      )
+      expect((editorScope.getByLabelText("Custom display label") as HTMLInputElement).value).toBe(
+        "SQL Parser Watch",
+      )
+      expect(
+        (editorScope.getByLabelText("Update interval (minutes)") as HTMLInputElement).value,
+      ).toBe("30")
+      expect((editorScope.getByLabelText("Icon URL") as HTMLInputElement).value).toBe(
+        "https://query.example/assets/query-notes.svg",
+      )
+    })
+
+    const queuePane = screen.getByRole("region", { name: "Article queue" })
+    const readerPane = screen.getByRole("region", { name: "Reading panel" })
+
+    expect(within(queuePane).getAllByText("SQL Parser Watch").length).toBeGreaterThan(0)
+    expect(within(readerPane).getAllByText("SQL Parser Watch").length).toBeGreaterThan(0)
+
+    cleanup()
+    renderShell()
+
+    const reopenedSourcePane = await screen.findByRole("region", { name: "Sources" })
+    const reopenedEditor = within(reopenedSourcePane)
+      .getByRole("heading", {
+        name: "Feed editor",
+      })
+      .closest("section")
+
+    expect(reopenedEditor).not.toBeNull()
+
+    const reopenedEditorScope = within(reopenedEditor as HTMLElement)
+
+    await waitFor(() => {
+      expect((reopenedEditorScope.getByLabelText("Source title") as HTMLInputElement).value).toBe(
+        "Parser Dispatch",
+      )
+      expect(
+        (reopenedEditorScope.getByLabelText("Custom display label") as HTMLInputElement).value,
+      ).toBe("SQL Parser Watch")
+      expect(
+        (reopenedEditorScope.getByLabelText("Update interval (minutes)") as HTMLInputElement).value,
+      ).toBe("30")
+      expect((reopenedEditorScope.getByLabelText("Icon URL") as HTMLInputElement).value).toBe(
+        "https://query.example/assets/query-notes.svg",
+      )
+    })
+
+    await user.click(reopenedEditorScope.getByRole("button", { name: "Manual refresh" }))
+
+    await waitFor(() => {
+      expect(reopenedEditorScope.getAllByText("healthy").length).toBeGreaterThan(0)
+      expect(reopenedEditorScope.queryByText(/malformed XML near the channel header/i)).toBeNull()
+    })
   })
 })
