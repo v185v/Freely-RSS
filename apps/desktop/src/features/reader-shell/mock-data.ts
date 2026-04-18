@@ -3,6 +3,7 @@ import type {
   ArticleListItemDto,
   FeedSummaryDto,
   FolderDto,
+  SubscriptionTreeNodeDto,
   TagDto,
 } from "@freelyrss/shared-types"
 
@@ -24,6 +25,13 @@ const folders: FolderDto[] = [
     sortOrder: 20,
   },
   {
+    id: "folder-daily-core",
+    kind: "regular",
+    name: "Core architecture",
+    parentId: "folder-daily",
+    sortOrder: 10,
+  },
+  {
     id: "folder-podcasts",
     kind: "regular",
     name: "Podcast watchlist",
@@ -39,7 +47,7 @@ const feeds: FeedSummaryDto[] = [
     displayTitle: "FreelyRSS Engineering",
     siteUrl: "https://freelyrss.dev",
     icon: null,
-    folderId: "folder-daily",
+    folderId: "folder-daily-core",
     healthStatus: "healthy",
     lastErrorKind: null,
     lastErrorMessage: null,
@@ -424,47 +432,41 @@ const quickViewRows: SourceRow[] = [
   },
 ]
 
-const sourceSections = [
-  {
-    title: "Quick views",
-    description: "Route-backed navigation entries that do not execute real queries yet.",
-    rows: quickViewRows,
-  },
-  {
-    title: "Subscription tree",
-    description: "Folder and feed placeholders shaped like the future left navigation tree.",
-    rows: folders.flatMap((folder) => {
-      const folderFeeds = feeds.filter((feed) => feed.folderId === folder.id)
-      const folderArticleCount = articles.filter((article) =>
-        folderFeeds.some((feed) => feed.id === article.feedId),
-      ).length
-      const folderUnreadCount = articles.filter(
-        (article) =>
-          article.state.readState !== "read" &&
-          folderFeeds.some((feed) => feed.id === article.feedId),
-      ).length
+const quickViewSection = {
+  title: "Quick views",
+  description: "Route-backed navigation entries that do not execute real queries yet.",
+  rows: quickViewRows,
+}
 
-      return [
-        {
-          id: folder.id,
-          kind: "folder" as const,
-          title: folder.name,
-          description: `${folderFeeds.length} feeds grouped under this folder.`,
-          eyebrow: "folder",
-          meta: `${folderUnreadCount}/${folderArticleCount} unread`,
-        },
-        ...folderFeeds.map<SourceRow>((feed) => ({
-          id: feed.id,
-          kind: "feed",
-          title: feed.displayTitle,
-          description: feed.siteUrl ?? "No site URL yet.",
-          depth: 1,
-          eyebrow: feed.healthStatus,
-          meta: `${feed.unreadCount}/${feed.totalCount} unread`,
-        })),
-      ]
-    }),
+const subscriptionTree: SubscriptionTreeNodeDto[] = [
+  {
+    nodeType: "folder",
+    folder: folders[0],
+    childFolderIds: ["folder-daily-core"],
+    feedIds: ["feed-rust-systems"],
   },
+  {
+    nodeType: "folder",
+    folder: folders[1],
+    childFolderIds: [],
+    feedIds: ["feed-query-notes"],
+  },
+  {
+    nodeType: "folder",
+    folder: folders[2],
+    childFolderIds: [],
+    feedIds: ["feed-freelyrss"],
+  },
+  {
+    nodeType: "folder",
+    folder: folders[3],
+    childFolderIds: [],
+    feedIds: ["feed-night-audio"],
+  },
+  ...feeds.map<SubscriptionTreeNodeDto>((feed) => ({
+    nodeType: "feed",
+    feed,
+  })),
 ]
 
 export async function fetchReaderShellData(): Promise<ReaderShellData> {
@@ -495,11 +497,12 @@ export async function fetchReaderShellData(): Promise<ReaderShellData> {
         description: "An intentionally empty feed route used to validate fallback behavior.",
       },
     ],
-    sourceSections,
+    quickViewSection,
+    subscriptionTree,
     stats: {
       feedCount: feeds.length,
       readingCount: articles.filter((article) => article.state.readState === "reading").length,
-      sourceCount: sourceSections.flatMap((section) => section.rows).length,
+      sourceCount: quickViewRows.length + subscriptionTree.length,
     },
   }
 }

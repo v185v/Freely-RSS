@@ -4,13 +4,108 @@ import {
   serializeQueryDefinition,
   text,
 } from "@freelyrss/shared-query"
+import type { FeedId, FeedTreeNodeDto, FolderId, FolderTreeNodeDto } from "@freelyrss/shared-types"
 
 import type {
   ReaderShellData,
   ReaderViewFilterSummary,
   ReaderViewFilters,
   SourceRow,
+  SubscriptionTreeRow,
 } from "./types"
+
+function getFeedNode(data: ReaderShellData, feedId: string): FeedTreeNodeDto | null {
+  const node = data.subscriptionTree.find(
+    (entry): entry is FeedTreeNodeDto => entry.nodeType === "feed" && entry.feed.id === feedId,
+  )
+
+  return node ?? null
+}
+
+function getFolderNode(data: ReaderShellData, folderId: string): FolderTreeNodeDto | null {
+  const node = data.subscriptionTree.find(
+    (entry): entry is FolderTreeNodeDto =>
+      entry.nodeType === "folder" && entry.folder.id === folderId,
+  )
+
+  return node ?? null
+}
+
+function getFeedIdsForFolder(data: ReaderShellData, folderId: FolderId): FeedId[] {
+  const folderNode = getFolderNode(data, folderId)
+
+  if (!folderNode) {
+    return []
+  }
+
+  return [
+    ...folderNode.feedIds,
+    ...folderNode.childFolderIds.flatMap((childFolderId) =>
+      getFeedIdsForFolder(data, childFolderId),
+    ),
+  ]
+}
+
+function getAncestorFolderIds(data: ReaderShellData, sourceId: string): FolderId[] {
+  const folder = data.folders.find((entry) => entry.id === sourceId)
+  if (folder) {
+    return folder.parentId ? [folder.parentId, ...getAncestorFolderIds(data, folder.parentId)] : []
+  }
+
+  const feed = data.feeds.find((entry) => entry.id === sourceId)
+  if (feed?.folderId) {
+    return [feed.folderId, ...getAncestorFolderIds(data, feed.folderId)]
+  }
+
+  return []
+}
+
+function buildFeedSourceRow(data: ReaderShellData, feedId: FeedId): SourceRow {
+  const feedNode = getFeedNode(data, feedId)
+
+  if (!feedNode) {
+    throw new Error(`Unknown feed tree node: ${feedId}`)
+  }
+
+  const feed = feedNode.feed
+  const detail =
+    feed.lastErrorMessage ?? feed.siteUrl ?? "No site URL or recent health detail available yet."
+
+  return {
+    id: feed.id,
+    kind: "feed",
+    title: feed.displayTitle,
+    description: detail,
+    eyebrow: feed.healthStatus,
+    meta: `${feed.unreadCount}/${feed.totalCount} unread`,
+  }
+}
+
+function buildFolderSourceRow(data: ReaderShellData, folderId: FolderId): SourceRow {
+  const folderNode = getFolderNode(data, folderId)
+
+  if (!folderNode) {
+    throw new Error(`Unknown folder tree node: ${folderId}`)
+  }
+
+  const feedIds = getFeedIdsForFolder(data, folderId)
+  const articles = data.articles.filter((article) => feedIds.includes(article.feedId))
+  const unreadCount = articles.filter((article) => article.state.readState !== "read").length
+  const childFolderCount = folderNode.childFolderIds.length
+  const feedCount = feedIds.length
+
+  return {
+    id: folderNode.folder.id,
+    kind: "folder",
+    title: folderNode.folder.name,
+    description:
+      childFolderCount > 0
+        ? `${feedCount} feeds across ${childFolderCount} nested group(s).`
+        : `${feedCount} feeds grouped under this folder.`,
+    eyebrow: "folder",
+    meta: `${unreadCount}/${articles.length} unread`,
+  }
+}
 
 function matchesSource(data: ReaderShellData, sourceId: string, articleFeedId: string) {
   switch (sourceId) {
@@ -26,9 +121,7 @@ function matchesSource(data: ReaderShellData, sourceId: string, articleFeedId: s
 
       const folder = data.folders.find((entry) => entry.id === sourceId)
       if (folder) {
-        return data.feeds.some(
-          (entry) => entry.folderId === folder.id && entry.id === articleFeedId,
-        )
+        return getFeedIdsForFolder(data, folder.id).includes(articleFeedId)
       }
 
       return false
@@ -93,7 +186,89 @@ function compareDates(
 }
 
 export function getActiveSource(data: ReaderShellData, sourceId: string) {
-  return data.sourceSections.flatMap((section) => section.rows).find((row) => row.id === sourceId)
+  const quickView = data.quickViewSection.rows.find((row) => row.id === sourceId)
+  if (quickView) {
+    return quickView
+  }
+
+  if (data.folders.some((entry) => entry.id === sourceId)) {
+    return buildFolderSourceRow(data, sourceId)
+  }
+
+  if (data.feeds.some((entry) => entry.id === sourceId)) {
+    return buildFeedSourceRow(data, sourceId)
+  }
+
+  return null
+}
+
+export function buildSubscriptionTreeRows(
+  data: ReaderShellData,
+  collapsedFolderIds: string[],
+  activeSourceId: string,
+): SubscriptionTreeRow[] {
+  const ancestorFolderIds = new Set(getAncestorFolderIds(data, activeSourceId))
+  const collapsedSet = new Set(
+    collapsedFolderIds.filter((folderId) => !ancestorFolderIds.has(folderId as FolderId)),
+  )
+  const rows: SubscriptionTreeRow[] = []
+  const rootFolders = data.folders
+    .filter((entry) => entry.parentId === null)
+    .slice()
+    .sort((left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name))
+
+  const pushFolder = (folderId: FolderId, depth: number) => {
+    const folderNode = getFolderNode(data, folderId)
+    if (!folderNode) {
+      return
+    }
+
+    const folderRow = buildFolderSourceRow(data, folderId)
+    const isCollapsed = collapsedSet.has(folderId)
+
+    rows.push({
+      ...folderRow,
+      depth,
+      hasChildren: folderNode.childFolderIds.length + folderNode.feedIds.length > 0,
+      isCollapsed,
+    })
+
+    if (isCollapsed) {
+      return
+    }
+
+    for (const childFolderId of folderNode.childFolderIds) {
+      pushFolder(childFolderId, depth + 1)
+    }
+
+    for (const feedId of folderNode.feedIds) {
+      rows.push({
+        ...buildFeedSourceRow(data, feedId),
+        depth: depth + 1,
+        hasChildren: false,
+        isCollapsed: false,
+      })
+    }
+  }
+
+  for (const folder of rootFolders) {
+    pushFolder(folder.id, 0)
+  }
+
+  for (const feed of data.feeds) {
+    if (feed.folderId !== null) {
+      continue
+    }
+
+    rows.push({
+      ...buildFeedSourceRow(data, feed.id),
+      depth: 0,
+      hasChildren: false,
+      isCollapsed: false,
+    })
+  }
+
+  return rows
 }
 
 export function getVisibleArticles(
@@ -191,5 +366,5 @@ export function formatReaderProgress(progress: number) {
 }
 
 export function findSourceRow(data: ReaderShellData, sourceId: string): SourceRow {
-  return getActiveSource(data, sourceId) ?? data.sourceSections[0]?.rows[0]
+  return getActiveSource(data, sourceId) ?? data.quickViewSection.rows[0]
 }

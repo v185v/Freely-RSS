@@ -2,15 +2,15 @@
 
 ## 当前状态
 
-- 阶段：阶段 4 Step 32 已完成，`core-domain/sqlite` 与 `feed-engine` 已补齐源健康诊断字段、失败分类、连续失败升级与成功清零闭环，并把错误语义与健康状态回写继续留在 transport / fetcher / repository / store 边界；下一步进入阶段 4 Step 33 的订阅树与分组管理 UI
+- 阶段：阶段 4 Step 33 已完成，桌面端 reader shell 已把共享订阅树 DTO 组合成可查看、展开、折叠与选中的左栏树视图，并保持“共享类型提供树事实、shell store 只持有折叠状态、route 继续拥有当前来源与文章选择”的边界；下一步进入阶段 4 Step 34 的订阅源编辑操作
 - 最后更新：2026-04-18
-- 风险状态：已从“在 Step 31 中补齐 ETag / Last-Modified、增量抓取与失败重试时，继续让 transport 负责请求条件头、让持久化层负责去重后写入与状态更新，不把 HTTP 缓存语义散落到 UI、宿主或解析层”推进到“在 Step 32 中补齐网络错误、权限错误、解析错误、内容为空与连续失败升级时，继续让 transport 负责原始失败语义、让 fetcher 负责失败短路与回写触发、让 repository / store 负责健康状态落库，不把错误分类策略或失败阈值回流到 parser、桌面宿主或前端壳层”
+- 风险状态：已从“在 Step 32 中补齐网络错误、权限错误、解析错误、内容为空与连续失败升级时，继续让 transport 负责原始失败语义、让 fetcher 负责失败短路与回写触发、让 repository / store 负责健康状态落库，不把错误分类策略或失败阈值回流到 parser、桌面宿主或前端壳层”推进到“在 Step 33 中补齐订阅树与分组管理 UI 时，继续让 `shared-types` 提供树 DTO、让 selectors 负责树投影与分组聚合、让 shell store 只负责本地折叠状态，不把树节点拼装、健康诊断规则或持久化写入回流到宿主、抓取引擎或基础组件层”
 
 ### 2026-04-18 状态快照
 
-- 当前完成：阶段 4 Step 32 已完成，源健康诊断字段、网络 / 权限 / 解析 / 空内容分类、连续失败升级与成功清零闭环已经落地。
-- 当前验证：`cargo test -p freelyrss-core-domain`、`cargo test -p freelyrss-feed-engine`、`corepack pnpm run verify` 与 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle` 全部通过。
-- 当前下一步：进入阶段 4 Step 33“建立订阅树与分组管理 UI”，在不破坏既有抓取与持久化边界的前提下，把 `Feed.health_status`、错误摘要与分组关系消费到左栏订阅树视图。
+- 当前完成：阶段 4 Step 33 已完成，左栏已支持快速视图与订阅树并存、文件夹展开/折叠、层级展示、按文件夹/订阅源选中，以及把 `Feed.health_status` / 错误摘要消费为树节点文案。
+- 当前验证：`corepack pnpm --filter @freelyrss/desktop test`、`corepack pnpm run desktop:build`、`corepack pnpm run verify` 与 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle` 全部通过。
+- 当前下一步：进入阶段 4 Step 34“实现订阅源编辑操作”，在不破坏 Step 33 的 route / tree / shell store 分层前提下，补齐重命名、自定义显示名、更新频率、图标与手动刷新入口。
 
 ## 已确认决策
 
@@ -26,7 +26,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 4 Step 33 需要在不破坏 Step 25 至 Step 32 已落地的 transport / parser / normalizer / repository / SQLite store 分层、discovery / not-modified / failed-check 短路边界与健康状态落库前提下，把订阅树显示、分组和状态徽标继续留在 UI 组合层，而不是把树结构拼装或健康诊断逻辑回流到抓取引擎与宿主层。
+- 当前无阻塞；下一步风险点是阶段 4 Step 34 需要在不破坏 Step 25 至 Step 33 已落地的 transport / parser / normalizer / repository / SQLite store 分层、discovery / not-modified / failed-check 短路边界与订阅树 UI 组合边界前提下，把订阅源编辑入口继续留在桌面壳与后续桌面命令层，而不是把用户编辑语义回流到抓取引擎、共享 DTO 或基础 UI 组件层。
 
 ## 本次执行记录
 
@@ -506,10 +506,29 @@
 - 已在验证通过后同步回写 `memory-bank/progress.md` 与 `memory-bank/architecture.md`，补齐阶段 4 Step 32 的交接记录、数据库 schema 变更、文件职责说明与新的架构洞察。
 - 当前验证结论：Step 32 通过，可进入阶段 4 Step 33“建立订阅树与分组管理 UI”。
 
+### 2026-04-18 - 阶段 4 Step 33：建立订阅树与分组管理 UI
+
+- 已在 `apps/desktop/src/features/reader-shell/mock-data.ts` 把桌面壳 mock 数据从“扁平来源行”推进为“快速视图 + 订阅树 DTO”双边界：快速视图继续服务跨源入口，订阅树则显式携带 `FolderTreeNodeDto` / `FeedTreeNodeDto`，并引入嵌套文件夹样本，验证左栏不再依赖手写扁平行才能表达层级。
+- 已在 `apps/desktop/src/features/reader-shell/types.ts` 与 `apps/desktop/src/features/reader-shell/selectors.ts` 建立 Step 33 的壳层组合边界：`ReaderShellData` 现在显式区分快速视图与订阅树输入，selectors 负责把树 DTO 投影为可渲染树行、聚合文件夹未读计数、递归解析文件夹所含订阅源，并在当前 route 指向深层节点时自动保持祖先展开，避免“路由选中项被树折叠隐藏”。
+- 已在 `apps/desktop/src/features/reader-shell/state.ts` 中为 shell store 新增 `collapsedFolderIds` 与本地折叠操作；该状态只服务左栏交互，不进入 route、不写入共享类型，也不触碰 `feed-engine` / SQLite，确保 Step 33 的 UI 行为仍是纯前端壳层责任。
+- 已在 `apps/desktop/src/features/reader-shell/components/source-pane.tsx` 与 `apps/desktop/src/styles.css` 中把左栏从普通分段列表推进为真正的树形导航：快速视图仍使用通用 `ListSection` / `ListRow`，订阅树则改为语义化 `ul/li` 结构、独立折叠按钮、树深度缩进与分组操作区，使树特有行为继续留在 feature 目录而不是回灌到 `packages/ui`。
+- 已在 `apps/desktop/src/features/reader-shell/reader-shell-route.tsx` 中把 Step 33 接入现有 route / query / store 组合：route 继续拥有 `sourceId` / `articleId`，shell store 继续拥有队列过滤与高对比模式，并新增把折叠状态投影为 `subscriptionRows` 的接线；中栏文章队列因此可以在选择文件夹或订阅源时稳定刷新，而无需引入新的宿主 API。
+- 已在 `apps/desktop/src/features/reader-shell/reader-shell.test.tsx` 新增 Step 33 回归测试，验证左栏可折叠树能稳定显示嵌套文件夹、折叠后隐藏子节点、重新展开后恢复可见，并在选择文件夹节点后正确刷新中栏文章列表。
+- 本次实现继续保持既有边界：`packages/shared-types` 仍只提供树 DTO 和健康摘要字段；树行投影、层级聚合与展开行为继续留在桌面 reader shell；`core-domain/sqlite` 仍只承担 `Folder` / `Feed` / 健康诊断事实来源，没有因为左栏树展示而新增任何树拼装 SQL 或 UI 专用状态字段。
+
+### 验证结果
+
+- 已执行 `corepack pnpm --filter @freelyrss/desktop test`，结果通过；桌面端现有 3 个 reader shell 测试全部通过，其中包含 Step 33 新增的订阅树折叠与队列刷新验收。
+- 已执行 `corepack pnpm run desktop:build`，结果通过；`tsc` 与 Vite 构建均成功，确认树 DTO 投影、shell store 扩展与样式更新没有破坏桌面前端生产构建。
+- 已执行 `corepack pnpm run verify`，结果通过；`format:check`、`lint`、`test:config`、`test:types`、`test:query`、`test:desktop`、`rust:fmt:check`、`rust:clippy`、`test:rust` 与 `docs:links` 全部通过。
+- 已执行 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`，结果通过；确认 Step 33 的桌面壳改动未破坏前端构建、Tauri 宿主装配与 Rust 入口链路，生成 `apps/desktop/src-tauri/target/debug/freelyrss-desktop.exe`。
+- 已在验证通过后同步回写 `memory-bank/progress.md` 与 `memory-bank/architecture.md`，补齐阶段 4 Step 33 的交接记录、文件职责说明与新的架构洞察。
+- 当前验证结论：Step 33 通过，可进入阶段 4 Step 34“实现订阅源编辑操作”。
+
 ## 下一步（2026-04-18 更新）
 
-- 按 `implementation-plan.md` 执行阶段 4 Step 33，在现有 `Feed` 健康字段、错误摘要字段与订阅源持久化基础上实现左栏订阅树与分组管理 UI，先支持查看、展开、折叠与选中。
-- 在推进 Step 33 时继续保持当前边界：`shared-types` 只提供订阅树与健康摘要 DTO，桌面端 reader shell 负责树视图组合与交互状态，`core-domain/sqlite` 继续保有目录 / Feed / 健康诊断事实来源，不让树节点拼装或错误分类逻辑回流到 `feed-engine`、桌面宿主或前端基础组件层。
+- 按 `implementation-plan.md` 执行阶段 4 Step 34，在现有订阅树与分组管理 UI 基础上实现订阅源编辑操作，先补齐重命名、自定义显示名、更新频率、图标更新与手动刷新入口。
+- 在推进 Step 34 时继续保持当前边界：`shared-types` 继续只提供稳定 `Feed` / `FeedSummary` 契约，桌面端 reader shell 与后续桌面命令层负责编辑交互和状态回显，`core-domain/sqlite` 继续保有订阅源事实与用户组织字段的最终写入边界，不把编辑语义回流到 `feed-engine`、宿主初始化链或基础 UI 组件层。
 
 ## 历史下一步（2026-04-16）
 

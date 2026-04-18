@@ -3,6 +3,7 @@ import type {
   ArticleListItemDto,
   FeedSummaryDto,
   FolderDto,
+  SubscriptionTreeNodeDto,
 } from "@freelyrss/shared-types"
 
 export const DEFAULT_SOURCE_ID = "view-unread"
@@ -15,7 +16,7 @@ export type ReaderThemeTone = "high-contrast" | "midnight"
 
 export interface SourceRow {
   description: string
-  depth?: 0 | 1
+  depth?: number
   eyebrow: string
   id: string
   kind: "feed" | "folder" | "view"
@@ -27,6 +28,12 @@ export interface SourceSection {
   description: string
   rows: SourceRow[]
   title: string
+}
+
+export interface SubscriptionTreeRow extends SourceRow {
+  depth: number
+  hasChildren: boolean
+  isCollapsed: boolean
 }
 
 export interface NavigationEntry {
@@ -41,7 +48,8 @@ export interface ReaderShellData {
   feeds: FeedSummaryDto[]
   folders: FolderDto[]
   navigationEntries: NavigationEntry[]
-  sourceSections: SourceSection[]
+  quickViewSection: SourceSection
+  subscriptionTree: SubscriptionTreeNodeDto[]
   stats: {
     feedCount: number
     readingCount: number

@@ -306,11 +306,57 @@ body {
   background-clip: content-box;
 }
 
-.desktop-source-row--child {
-  margin-left: 16px;
+.desktop-tree__actions {
+  display: flex;
 }
 
-.desktop-source-row--child .fr-list-row__title {
+.desktop-tree {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.desktop-tree__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  margin-left: calc(var(--tree-depth, 0) * 18px);
+}
+
+.desktop-tree__toggle,
+.desktop-tree__toggle-spacer {
+  width: 30px;
+  min-width: 30px;
+  margin-top: 10px;
+}
+
+.desktop-tree__toggle {
+  height: 30px;
+  border: 1px solid var(--fr-border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--fr-text-strong);
+  font: inherit;
+  cursor: pointer;
+}
+
+.desktop-tree__toggle:hover,
+.desktop-tree__toggle:focus-visible {
+  border-color: var(--fr-accent);
+}
+
+.desktop-tree__row {
+  width: 100%;
+}
+
+.desktop-tree__row--folder {
+  border-style: dashed;
+}
+
+.desktop-tree__row--feed .fr-list-row__title {
   font-size: 0.94rem;
 }
 

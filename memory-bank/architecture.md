@@ -1098,6 +1098,27 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `packages/shared-types/src/index.ts`：共享类型包导出面；在 Step 32 中导出新的健康诊断枚举与 DTO 字段，避免调用方深链引用具体实现文件。
 - `apps/desktop/src/features/reader-shell/mock-data.ts`：桌面壳异步 mock 数据边界；在 Step 32 中为来源样本补齐错误类型、错误摘要与连续失败计数，提前验证共享 DTO 扩展不会破坏现有壳层组合。
 
+### Step 33 架构洞察
+
+- Step 33 的关键价值不是“把左栏画成树”，而是把“树事实、树投影、树交互”拆成三层清晰边界：`packages/shared-types` 只描述订阅树节点事实，reader shell selectors 负责把这些事实投影为可渲染树行，shell store 只持有本地折叠状态；这使树 UI 可以演进，而不用把层级拼装或折叠状态写回共享契约或宿主层。
+- 让 `sourceId` 继续留在 route，而把 `collapsedFolderIds` 留在本地 store，说明 FreelyRSS 已明确区分“可分享 / 可恢复的导航上下文”和“仅服务当前窗口交互的暂态 UI 状态”；这对后续 Step 34 订阅源编辑、Step 37 查询驱动的文章列表和 Step 51 智能文件夹接入都很重要。
+- `selectors.ts` 在 Step 33 中承担递归聚合文件夹未读统计、解析文件夹包含的所有 feed、并在深层节点被 route 选中时自动保持祖先展开，说明树投影逻辑被限制在 feature 组合层，而不是回流到 `packages/ui`、桌面宿主或 `core-domain/sqlite`；这样未来接入真实数据源时可以直接替换输入 DTO，而不必重写树交互。
+- `source-pane.tsx` 继续复用 `ListSection` / `ListRow` 作为通用列表外壳，但把树专有的 `ul/li` 语义、折叠按钮、深度缩进与分组操作按钮留在 feature 目录，说明 FreelyRSS 没有为了当前一个树视图把基础 UI 包过早做成“通用树组件”；这保持了共享 UI 层的稳定性和低耦合。
+- Step 33 直接消费 `FeedSummaryDto.healthStatus` 与最近错误摘要作为树节点文案，而没有把错误分类规则搬到前端重新计算，说明健康诊断仍然由抓取与持久化边界定义，UI 只负责呈现；这延续了 Step 32 建立的“错误事实留在后端边界，前端只消费 DTO”原则。
+- 新增的订阅树回归测试把“嵌套文件夹可见性”和“选择文件夹会刷新中栏队列”收敛为桌面壳 feature 级验收，意味着 FreelyRSS 已开始把左栏树视图视为与抓取编排、SQLite 迁移同等级的可回归架构边界，而不是单纯的视觉占位。
+
+### Step 33 文件职责
+
+- `packages/shared-types/src/feed.ts`：订阅树 DTO 契约源文件；定义 `FolderTreeNodeDto`、`FeedTreeNodeDto` 与 `SubscriptionTreeNodeDto`，为桌面壳后续树视图、源管理和智能文件夹并列展示提供稳定数据边界。
+- `apps/desktop/src/features/reader-shell/types.ts`：reader shell 本地组合类型中心；在 Step 33 中显式区分快速视图输入、订阅树输入与订阅树渲染行，避免把树专有 UI 状态混入共享 DTO。
+- `apps/desktop/src/features/reader-shell/state.ts`：reader shell 的局部 Zustand store；继续承载队列过滤与主题切换，并在 Step 33 中新增 `collapsedFolderIds` 以管理仅属于当前窗口会话的树折叠状态。
+- `apps/desktop/src/features/reader-shell/selectors.ts`：reader shell 的纯函数组合层；负责把订阅树 DTO 投影为可渲染树行、递归解析文件夹包含的 feed、聚合未读统计、匹配 route 当前来源以及驱动中栏文章过滤。
+- `apps/desktop/src/features/reader-shell/components/source-pane.tsx`：左栏来源面板组件；负责把快速视图与订阅树渲染到同一面板中，并把“选中节点”和“折叠/展开文件夹”拆成两个明确交互入口。
+- `apps/desktop/src/features/reader-shell/mock-data.ts`：桌面壳异步 mock 数据入口；在 Step 33 中提供嵌套文件夹、健康状态与错误摘要样本，以及真实的 `SubscriptionTreeNodeDto` 结构，确保树 UI 在接真实数据前已有稳定验收资产。
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`：桌面 reader shell 的路由组合根；继续负责 route、query 与 shell store 接线，并在 Step 33 中把 `subscriptionRows` 计算、折叠操作与左栏树选择接入三栏布局。
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`：reader shell feature 回归测试；在 Step 33 中验证树层级显示、折叠/展开行为以及按文件夹选中后中栏队列刷新，防止后续路由或 UI 调整破坏左栏核心行为。
+- `apps/desktop/src/styles.css`：桌面壳视觉与布局样式文件；在 Step 33 中新增树行缩进、折叠按钮、语义列表与分组操作区样式，使树视图视觉层继续留在桌面壳而不侵入共享 UI 包。
+
 ## 14. 当前文档职责
 
 当前仓库仍处在“文档先行 + 工程骨架初始化”阶段，因此每个文档都承担明确职责：

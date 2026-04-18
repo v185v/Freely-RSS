@@ -81,4 +81,62 @@ describe("reader shell navigation", () => {
     const themeRoot = document.querySelector(".fr-theme-root")
     expect(themeRoot?.className).toContain("fr-theme-root--high-contrast")
   })
+
+  test("renders a collapsible subscription tree and refreshes the queue when selecting grouped sources", async () => {
+    window.scrollTo = () => {}
+    const user = userEvent.setup()
+
+    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+
+    const sourcePane = await screen.findByRole("region", { name: "Sources" })
+    const subscriptionTree = within(sourcePane)
+      .getByRole("heading", {
+        name: "Subscription tree",
+      })
+      .closest("section")
+
+    expect(subscriptionTree).not.toBeNull()
+
+    const treeScope = within(subscriptionTree as HTMLElement)
+
+    expect(treeScope.getByText("Daily reading desk")).toBeTruthy()
+    expect(treeScope.getByText("Core architecture")).toBeTruthy()
+    expect(treeScope.getByText("FreelyRSS Engineering")).toBeTruthy()
+
+    await user.click(treeScope.getByRole("button", { name: "Collapse Daily reading desk" }))
+
+    await waitFor(() => {
+      expect(treeScope.queryByText("Core architecture")).toBeNull()
+      expect(treeScope.queryByText("FreelyRSS Engineering")).toBeNull()
+    })
+
+    await user.click(treeScope.getByRole("button", { name: "Expand Daily reading desk" }))
+
+    await waitFor(() => {
+      expect(treeScope.getAllByText("FreelyRSS Engineering").length).toBeGreaterThan(0)
+    })
+
+    await user.click(
+      treeScope.getByRole("button", {
+        name: /folder.*Research threads.*feeds grouped under this folder/i,
+      }),
+    )
+
+    await waitFor(() => {
+      expect(window.location.search).toContain("sourceId=folder-research")
+    })
+
+    const queuePane = screen.getByRole("region", { name: "Article queue" })
+    expect(within(queuePane).getByText("Research threads")).toBeTruthy()
+    expect(
+      within(queuePane).getByText(
+        "Shared-query is ready, but the reader shell still needs a clean composition layer",
+      ),
+    ).toBeTruthy()
+    expect(
+      within(queuePane).queryByText(
+        "Turning the desktop shell into a stable three-pane reader skeleton",
+      ),
+    ).toBeNull()
+  })
 })

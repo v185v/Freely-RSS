@@ -1,31 +1,39 @@
-import type { Ref } from "react"
+import type { CSSProperties, Ref } from "react"
 
 import { Button, ListRow, ListSection, SplitPane, Surface } from "@freelyrss/ui"
 
-import type { SourceRow } from "../types"
+import type { SourceRow, SubscriptionTreeRow } from "../types"
 
 type SourcePaneProps = {
   activeSourceId: string
+  canCollapseFolders: boolean
   describedBy?: string
   headingId: string
+  onCollapseAllFolders: () => void
   onSelectSource: (sourceId: string) => void
+  onToggleFolderCollapsed: (folderId: string) => void
   paneId: string
   paneRef?: Ref<HTMLElement>
-  sourceSections: Array<{
+  quickViewSection: {
     description: string
     rows: SourceRow[]
     title: string
-  }>
+  }
+  subscriptionRows: SubscriptionTreeRow[]
 }
 
 export function SourcePane({
   activeSourceId,
+  canCollapseFolders,
   describedBy,
   headingId,
+  onCollapseAllFolders,
   onSelectSource,
+  onToggleFolderCollapsed,
   paneId,
   paneRef,
-  sourceSections,
+  quickViewSection,
+  subscriptionRows,
 }: SourcePaneProps) {
   return (
     <SplitPane
@@ -42,36 +50,82 @@ export function SourcePane({
           <p className="desktop-pane__eyebrow">Left pane</p>
           <h2 id={headingId}>Sources</h2>
           <p className="desktop-pane__description">
-            Navigation now resolves through route state instead of a local component-only selection.
+            Quick views stay route-backed, while folder expansion and collapse remain local shell
+            interaction state.
           </p>
         </div>
 
         <div className="desktop-pane__scroll">
-          {sourceSections.map((section) => (
-            <ListSection
-              description={section.description}
-              key={section.title}
-              title={section.title}
-            >
-              {section.rows.map((row) => (
-                <ListRow
-                  active={row.id === activeSourceId}
-                  aria-current={row.id === activeSourceId ? "page" : undefined}
-                  className={
-                    row.depth === 1
-                      ? "desktop-source-row desktop-source-row--child"
-                      : "desktop-source-row"
-                  }
-                  eyebrow={row.eyebrow}
+          <ListSection description={quickViewSection.description} title={quickViewSection.title}>
+            {quickViewSection.rows.map((row) => (
+              <ListRow
+                active={row.id === activeSourceId}
+                aria-current={row.id === activeSourceId ? "page" : undefined}
+                className="desktop-source-row"
+                eyebrow={row.eyebrow}
+                key={row.id}
+                meta={row.meta}
+                onClick={() => onSelectSource(row.id)}
+                summary={row.description}
+                title={row.title}
+              />
+            ))}
+          </ListSection>
+
+          <ListSection
+            actions={
+              <div className="desktop-tree__actions">
+                <Button
+                  onClick={canCollapseFolders ? onCollapseAllFolders : undefined}
+                  size="sm"
+                  tone="ghost"
+                >
+                  Collapse groups
+                </Button>
+              </div>
+            }
+            description="Folder and feed placeholders shaped like the future left navigation tree."
+            title="Subscription tree"
+          >
+            <ul className="desktop-tree">
+              {subscriptionRows.map((row) => (
+                <li
+                  className="desktop-tree__item"
                   key={row.id}
-                  meta={row.meta}
-                  onClick={() => onSelectSource(row.id)}
-                  summary={row.description}
-                  title={row.title}
-                />
+                  style={{ "--tree-depth": row.depth } as CSSProperties}
+                >
+                  {row.kind === "folder" && row.hasChildren ? (
+                    <button
+                      aria-expanded={!row.isCollapsed}
+                      aria-label={row.isCollapsed ? `Expand ${row.title}` : `Collapse ${row.title}`}
+                      className="desktop-tree__toggle"
+                      onClick={() => onToggleFolderCollapsed(row.id)}
+                      type="button"
+                    >
+                      {row.isCollapsed ? "+" : "-"}
+                    </button>
+                  ) : (
+                    <span aria-hidden="true" className="desktop-tree__toggle-spacer" />
+                  )}
+
+                  <ListRow
+                    active={row.id === activeSourceId}
+                    aria-current={row.id === activeSourceId ? "page" : undefined}
+                    className={
+                      row.kind === "folder"
+                        ? "desktop-source-row desktop-tree__row desktop-tree__row--folder"
+                        : "desktop-source-row desktop-tree__row desktop-tree__row--feed"
+                    }
+                    eyebrow={row.eyebrow}
+                    meta={row.meta}
+                    onClick={() => onSelectSource(row.id)}
+                    summary={row.description}
+                    title={row.title}
+                  />
+                </li>
               ))}
-            </ListSection>
-          ))}
+            </ul>
+          </ListSection>
         </div>
 
         <div className="desktop-pane__footer">

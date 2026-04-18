@@ -17,6 +17,7 @@ import { ReaderPane } from "./components/reader-pane"
 import { SourcePane } from "./components/source-pane"
 import { fetchReaderShellData } from "./mock-data"
 import {
+  buildSubscriptionTreeRows,
   buildViewFilterSummary,
   findSourceRow,
   getVisibleArticles,
@@ -54,12 +55,15 @@ export function ReaderShellRoute() {
   const navigate = useNavigate({ from: "/" })
   const routeState = useSearch({ from: "/" })
   const searchText = useReaderViewStore((state) => state.searchText)
+  const collapsedFolderIds = useReaderViewStore((state) => state.collapsedFolderIds)
   const setSearchText = useReaderViewStore((state) => state.setSearchText)
+  const setCollapsedFolderIds = useReaderViewStore((state) => state.setCollapsedFolderIds)
   const setSortMode = useReaderViewStore((state) => state.setSortMode)
   const sortMode = useReaderViewStore((state) => state.sortMode)
   const setStatusFilter = useReaderViewStore((state) => state.setStatusFilter)
   const statusFilter = useReaderViewStore((state) => state.statusFilter)
   const themeTone = useReaderViewStore((state) => state.themeTone)
+  const toggleFolderCollapsed = useReaderViewStore((state) => state.toggleFolderCollapsed)
   const toggleThemeTone = useReaderViewStore((state) => state.toggleThemeTone)
   const deferredSearchText = useDeferredValue(searchText)
   const navigationRef = useRef<HTMLElement | null>(null)
@@ -152,6 +156,12 @@ export function ReaderShellRoute() {
   const activeDetail =
     shellData && activeArticleId ? (shellData.articleDetails[activeArticleId] ?? null) : null
   const filterSummary = buildViewFilterSummary(filters)
+  const subscriptionRows = shellData
+    ? buildSubscriptionTreeRows(shellData, collapsedFolderIds, routeState.sourceId)
+    : []
+  const collapsibleFolderIds = subscriptionRows
+    .filter((row) => row.kind === "folder" && row.hasChildren)
+    .map((row) => row.id)
 
   useEffect(() => {
     if (shellData && activeArticleId !== routeState.articleId) {
@@ -171,8 +181,8 @@ export function ReaderShellRoute() {
     return (
       <main className="desktop-shell">
         <div className="desktop-loading">
-          <p className="desktop-shell__eyebrow">Stage 2 / Step 17</p>
-          <h1>Loading keyboard and accessibility scaffolding.</h1>
+          <p className="desktop-shell__eyebrow">Stage 4 / Step 33</p>
+          <h1>Loading the subscription tree and grouped source context.</h1>
         </div>
       </main>
     )
@@ -272,16 +282,15 @@ export function ReaderShellRoute() {
 
       <header className="desktop-shell__header">
         <div className="desktop-shell__title-block">
-          <p className="desktop-shell__eyebrow">Stage 2 / Step 17</p>
+          <p className="desktop-shell__eyebrow">Stage 4 / Step 33</p>
           <h1>
-            Keyboard entry points and landmark semantics now sit on top of the explicit shell
-            layers.
+            Subscription groups now render as a real left-pane tree with stable route selection.
           </h1>
           <p className="desktop-shell__lead">
-            Route search params own the current source and selected article. A local shell store
-            owns temporary queue filters and contrast mode. The current step adds global shortcuts,
-            named regions, and a keyboard-first way to jump across the shell without collapsing the
-            existing route, store, and query boundaries back together.
+            Shared tree DTOs define folders and feeds, route search params still own the active
+            source and article, and the shell store now limits itself to local tree expansion plus
+            queue view state. That keeps grouped navigation visible in the UI without pushing tree
+            assembly or health logic down into the desktop host or fetch pipeline.
           </p>
         </div>
 
@@ -313,8 +322,8 @@ export function ReaderShellRoute() {
           </div>
 
           <p className="desktop-summary__note">
-            Empty routes now resolve to a valid reader state instead of leaving stale article ids in
-            place.
+            Grouped source selection now reshapes the middle queue while collapsed folders remain a
+            shell-only concern.
           </p>
 
           <div className="desktop-shortcuts">
@@ -364,12 +373,18 @@ export function ReaderShellRoute() {
         <SplitLayout>
           <SourcePane
             activeSourceId={routeState.sourceId}
+            canCollapseFolders={subscriptionRows.some(
+              (row) => row.kind === "folder" && !row.isCollapsed,
+            )}
             describedBy={READER_SHORTCUT_HINT_ID}
             headingId={READER_LANDMARK_IDS.sourceHeading}
+            onCollapseAllFolders={() => setCollapsedFolderIds(collapsibleFolderIds)}
             onSelectSource={selectSource}
+            onToggleFolderCollapsed={toggleFolderCollapsed}
             paneId={READER_LANDMARK_IDS.source}
             paneRef={sourcePaneRef}
-            sourceSections={resolvedShellData.sourceSections}
+            quickViewSection={resolvedShellData.quickViewSection}
+            subscriptionRows={subscriptionRows}
           />
 
           <QueuePane
