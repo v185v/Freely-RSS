@@ -563,3 +563,29 @@
 - `packages/shared-types` stays as DTO contract only.
 - desktop reader shell owns edit interaction and route-adjacent command wiring.
 - writable persistence of source facts remains a later `core-domain/sqlite` concern rather than a `feed-engine` concern.
+
+## 2026-04-19 ASCII Addendum
+
+### Stage 4 Step 35 Completed: OPML import in the desktop shell
+
+- Implemented shell-level OPML import through a dedicated left-pane card that accepts OPML payload text and reports imported feeds, created folders, and skipped duplicates.
+- Kept Step 35 inside the desktop shell boundary. No Rust engine, shared DTO contract, or database schema changes were required for this step.
+- Added recursive OPML parsing in the shell-owned mock repository with lazy folder materialization, so nested outlines become folders only when a non-duplicate descendant feed actually needs them.
+- Defined duplicate handling at the feed URL boundary. Feed URLs already present in the shell snapshot, or repeated inside the same OPML payload, are skipped instead of creating second sources.
+- Imported feeds currently enter the shell as pending source facts with no articles yet, which keeps Step 35 focused on source-tree structure rather than fetch or persistence integration.
+- Added regression coverage for nested folder preservation, global duplicate skipping, and import summary reporting.
+
+### Step 35 Verification
+
+- Passed `corepack pnpm --filter @freelyrss/desktop test`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+
+### Next Step (ASCII update)
+
+- Next planned implementation step is `implementation-plan.md` Stage 4 Step 36: OPML export.
+- Preserve the current boundary split:
+- desktop reader shell owns OPML text acceptance, import feedback, and route-adjacent mutation wiring.
+- shell mock repository owns parsing, deduplication, and full-snapshot replacement for imported source structure.
+- `packages/shared-types` remains DTO-only, and real durable OPML persistence still belongs to later `core-domain/sqlite` wiring.

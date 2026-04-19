@@ -1178,3 +1178,32 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `packages/ui` remains a base primitive layer and does not absorb feed-editing workflow logic.
 - `crates/feed-engine` still owns fetch and parse semantics, not user-authored source metadata edits.
 - `crates/core-domain` and SQLite remain the future durable write boundary for real source edits; Step 34 only validates the shell interaction shape ahead of that integration.
+
+## 2026-04-19 ASCII Addendum
+
+### Step 35 Architecture Insights
+
+- Step 35 confirms that OPML import is a desktop-shell source-organization concern, not a `feed-engine` concern and not a shared DTO concern.
+- The route still owns `sourceId` and `articleId`. The shell store still owns only local view state. OPML import introduces new structural source facts without moving selection state into persistence or routing primitives.
+- The writable mock repository is now responsible for OPML parsing, duplicate handling, and structural mutation. The shell UI remains responsible only for accepting OPML text, dispatching the command, and rendering feedback.
+- Lazy folder materialization is the key architectural decision in this step: folder outlines become shell folders only when a non-duplicate descendant feed is actually imported. This avoids creating empty imported groups when every descendant feed URL is already known.
+- Duplicate handling is now defined at the feed URL boundary and applied against both existing shell source facts and repeated URLs inside the same OPML payload.
+- Imported feeds currently enter the shell as `pending` source facts with zero articles. That keeps source import separate from fetch execution and preserves the existing queue and reader boundaries.
+- No database schema changes were required for Step 35. The step validates import structure and interaction shape before later SQLite-backed OPML persistence and export work.
+
+### Step 35 File Responsibilities
+
+- `apps/desktop/src/features/reader-shell/components/opml-import-card.tsx`: owns OPML draft state, local validation, import button dispatch, and human-readable import summary and error presentation.
+- `apps/desktop/src/features/reader-shell/components/source-pane.tsx`: remains the left-pane composition root and now hosts quick views, the subscription tree, the feed editor, and OPML import without mixing queue or reader concerns into the source pane.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`: wires the OPML import mutation, import report state, and React Query snapshot replacement into the shell while preserving route ownership of the selected source and article.
+- `apps/desktop/src/features/reader-shell/mock-data.ts`: now acts as the shell-side OPML import engine for the mock environment; it parses XML, reconstructs nested folders, skips duplicate feed URLs, creates pending imported feeds, and rebuilds the full shell snapshot.
+- `apps/desktop/src/features/reader-shell/types.ts`: extends the shell-local composition contract with `OpmlImportReport`, keeping import feedback typed without pushing shell-only state into shared DTOs.
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`: protects Step 35 by verifying nested folder preservation, duplicate feed skipping, and import summary reporting.
+- `apps/desktop/src/styles.css`: adds shell-local OPML import layout, textarea, and summary styling so import presentation remains outside shared UI primitives.
+
+### Step 35 Boundary Notes
+
+- `packages/shared-types` remains the DTO boundary only; no OPML-specific shared contract was introduced yet.
+- `packages/ui` remains a primitive layer and does not absorb OPML parsing or import workflow semantics.
+- `crates/feed-engine` still owns remote feed fetch and parse semantics, not OPML source-list ingestion.
+- `crates/core-domain` and SQLite remain the later durable boundary for real OPML import and export persistence; Step 35 only validates desktop-shell interaction and structural mutation shape.

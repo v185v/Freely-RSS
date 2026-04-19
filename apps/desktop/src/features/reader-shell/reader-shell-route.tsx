@@ -1,4 +1,11 @@
-import { startTransition, useDeferredValue, useEffect, useEffectEvent, useRef } from "react"
+import {
+  startTransition,
+  useDeferredValue,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+} from "react"
 
 import { Button, SplitLayout, Surface } from "@freelyrss/ui"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
@@ -16,7 +23,9 @@ import { QueuePane } from "./components/queue-pane"
 import { ReaderPane } from "./components/reader-pane"
 import { SourcePane } from "./components/source-pane"
 import {
+  type MockOpmlImportResult,
   fetchReaderShellData,
+  importMockOpml,
   readerShellQueryKey,
   refreshMockFeed,
   updateMockFeed,
@@ -72,6 +81,9 @@ export function ReaderShellRoute() {
   const toggleFolderCollapsed = useReaderViewStore((state) => state.toggleFolderCollapsed)
   const toggleThemeTone = useReaderViewStore((state) => state.toggleThemeTone)
   const deferredSearchText = useDeferredValue(searchText)
+  const [opmlImportReport, setOpmlImportReport] = useState<MockOpmlImportResult["report"] | null>(
+    null,
+  )
   const navigationRef = useRef<HTMLElement | null>(null)
   const sourcePaneRef = useRef<HTMLElement | null>(null)
   const queuePaneRef = useRef<HTMLElement | null>(null)
@@ -91,6 +103,13 @@ export function ReaderShellRoute() {
     mutationFn: refreshMockFeed,
     onSuccess: (nextShellData) => {
       queryClient.setQueryData(readerShellQueryKey, nextShellData)
+    },
+  })
+  const importOpmlMutation = useMutation({
+    mutationFn: importMockOpml,
+    onSuccess: (result) => {
+      setOpmlImportReport(result.report)
+      queryClient.setQueryData(readerShellQueryKey, result.shellData)
     },
   })
 
@@ -206,8 +225,8 @@ export function ReaderShellRoute() {
     return (
       <main className="desktop-shell">
         <div className="desktop-loading">
-          <p className="desktop-shell__eyebrow">Stage 4 / Step 34</p>
-          <h1>Loading source editing controls and route-backed feed context.</h1>
+          <p className="desktop-shell__eyebrow">Stage 4 / Step 35</p>
+          <h1>Loading OPML import controls and route-backed source context.</h1>
         </div>
       </main>
     )
@@ -307,14 +326,15 @@ export function ReaderShellRoute() {
 
       <header className="desktop-shell__header">
         <div className="desktop-shell__title-block">
-          <p className="desktop-shell__eyebrow">Stage 4 / Step 34</p>
-          <h1>Feed editing now shares the left pane without breaking route or tree ownership.</h1>
+          <p className="desktop-shell__eyebrow">Stage 4 / Step 35</p>
+          <h1>OPML import now extends the left pane without breaking route or tree ownership.</h1>
           <p className="desktop-shell__lead">
-            Source edits now sit next to selection in the reader shell: route state still owns the
-            active source and article, the shell store still owns only local tree expansion plus
-            queue view state, and the mock repository stays the single writer for editable feed
-            facts. That keeps Step 34 on the desktop command boundary instead of pushing rename,
-            icon, interval, or refresh behavior into the fetch pipeline.
+            Feed editing and OPML import now sit next to selection in the reader shell: route state
+            still owns the active source and article, the shell store still owns only local tree
+            expansion plus queue view state, and the mock repository stays the single writer for
+            editable feed facts and imported source structure. That keeps Step 35 on the desktop
+            command boundary instead of pushing folder reconstruction, duplicate handling, or import
+            parsing into shared DTO assembly, the fetch pipeline, or the Rust host shell.
           </p>
         </div>
 
@@ -346,8 +366,8 @@ export function ReaderShellRoute() {
           </div>
 
           <p className="desktop-summary__note">
-            Feed edits now flow through a shell-level command path while grouped selection and
-            collapsed folders remain separate concerns.
+            Feed edits and OPML imports now flow through shell-level command paths while grouped
+            selection and collapsed folders remain separate concerns.
           </p>
 
           <div className="desktop-shortcuts">
@@ -404,16 +424,28 @@ export function ReaderShellRoute() {
             describedBy={READER_SHORTCUT_HINT_ID}
             editorErrorMessage={editorErrorMessage}
             headingId={READER_LANDMARK_IDS.sourceHeading}
+            importErrorMessage={
+              importOpmlMutation.error instanceof Error ? importOpmlMutation.error.message : null
+            }
+            importReport={opmlImportReport}
+            isImportingOpml={importOpmlMutation.isPending}
             isRefreshingFeed={refreshFeedMutation.isPending}
             isSavingFeed={saveFeedMutation.isPending}
             onCollapseAllFolders={() => setCollapsedFolderIds(collapsibleFolderIds)}
+            onImportOpml={(opmlText) => {
+              importOpmlMutation.reset()
+              setOpmlImportReport(null)
+              importOpmlMutation.mutate(opmlText)
+            }}
             onRefreshFeed={(feedId) => {
+              importOpmlMutation.reset()
               refreshFeedMutation.reset()
               saveFeedMutation.reset()
               refreshFeedMutation.mutate(feedId)
             }}
             onSelectSource={selectSource}
             onSaveFeed={(input) => {
+              importOpmlMutation.reset()
               refreshFeedMutation.reset()
               saveFeedMutation.reset()
               saveFeedMutation.mutate(input)

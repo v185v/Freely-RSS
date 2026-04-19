@@ -43,6 +43,12 @@ export interface NavigationEntry {
   title: string
 }
 
+export interface OpmlImportReport {
+  createdFeedCount: number
+  createdFolderCount: number
+  duplicateFeedCount: number
+}
+
 export interface ReaderShellData {
   articleDetails: Record<string, ArticleDetailDto>
   articles: ArticleListItemDto[]

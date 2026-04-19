@@ -1,10 +1,11 @@
-import type { CSSProperties, Ref } from "react"
+import { type CSSProperties, type Ref, useRef } from "react"
 
 import type { FeedDto } from "@freelyrss/shared-types"
 import { Button, ListRow, ListSection, SplitPane, Surface } from "@freelyrss/ui"
 
-import type { SourceRow, SubscriptionTreeRow } from "../types"
+import type { OpmlImportReport, SourceRow, SubscriptionTreeRow } from "../types"
 import { FeedEditorCard } from "./feed-editor-card"
+import { OpmlImportCard } from "./opml-import-card"
 
 type SourcePaneProps = {
   activeSourceId: string
@@ -13,9 +14,13 @@ type SourcePaneProps = {
   describedBy?: string
   editorErrorMessage: string | null
   headingId: string
+  importErrorMessage: string | null
+  importReport: OpmlImportReport | null
+  isImportingOpml: boolean
   isRefreshingFeed: boolean
   isSavingFeed: boolean
   onCollapseAllFolders: () => void
+  onImportOpml: (opmlText: string) => void
   onRefreshFeed: (feedId: FeedDto["id"]) => void
   onSelectSource: (sourceId: string) => void
   onSaveFeed: (input: {
@@ -43,9 +48,13 @@ export function SourcePane({
   describedBy,
   editorErrorMessage,
   headingId,
+  importErrorMessage,
+  importReport,
+  isImportingOpml,
   isRefreshingFeed,
   isSavingFeed,
   onCollapseAllFolders,
+  onImportOpml,
   onRefreshFeed,
   onSelectSource,
   onSaveFeed,
@@ -55,6 +64,8 @@ export function SourcePane({
   quickViewSection,
   subscriptionRows,
 }: SourcePaneProps) {
+  const importTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+
   return (
     <SplitPane
       aria-describedby={describedBy}
@@ -155,13 +166,21 @@ export function SourcePane({
             onRefreshFeed={onRefreshFeed}
             onSaveFeed={onSaveFeed}
           />
+
+          <OpmlImportCard
+            errorMessage={importErrorMessage}
+            importReport={importReport}
+            isImporting={isImportingOpml}
+            onImportOpml={onImportOpml}
+            textareaRef={importTextareaRef}
+          />
         </div>
 
         <div className="desktop-pane__footer">
           <Button size="sm" tone="ghost">
             Add source
           </Button>
-          <Button size="sm" tone="neutral">
+          <Button onClick={() => importTextareaRef.current?.focus()} size="sm" tone="neutral">
             Import OPML
           </Button>
         </div>

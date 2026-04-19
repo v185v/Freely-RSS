@@ -249,4 +249,89 @@ describe("reader shell navigation", () => {
       expect(reopenedEditorScope.queryByText(/malformed XML near the channel header/i)).toBeNull()
     })
   })
+
+  test("imports OPML with nested folders and skips duplicate feed URLs", async () => {
+    window.scrollTo = () => {}
+    const user = userEvent.setup()
+
+    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+
+    const sourcePane = await screen.findByRole("region", { name: "Sources" })
+    const subscriptionTree = within(sourcePane)
+      .getByRole("heading", {
+        name: "Subscription tree",
+      })
+      .closest("section")
+    const importSection = within(sourcePane)
+      .getByRole("heading", {
+        name: "OPML import",
+      })
+      .closest("section")
+
+    expect(subscriptionTree).not.toBeNull()
+    expect(importSection).not.toBeNull()
+
+    const treeScope = within(subscriptionTree as HTMLElement)
+    const importScope = within(importSection as HTMLElement)
+    const opmlPayload = `<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <body>
+    <outline text="Imported research">
+      <outline text="Parsing desk">
+        <outline
+          text="Rust Systems Weekly"
+          type="rss"
+          xmlUrl="https://systems.example/feed.xml"
+          htmlUrl="https://systems.example"
+        />
+        <outline
+          text="XML Weekly"
+          type="rss"
+          xmlUrl="https://xml.example/feed.xml"
+          htmlUrl="https://xml.example"
+        />
+        <outline
+          text="XML Weekly duplicate"
+          type="rss"
+          xmlUrl="https://xml.example/feed.xml"
+          htmlUrl="https://xml.example"
+        />
+      </outline>
+      <outline
+        text="Atom Signals"
+        type="atom"
+        xmlUrl="https://signals.example/atom.xml"
+        htmlUrl="https://signals.example"
+      />
+    </outline>
+  </body>
+</opml>`
+
+    fireEvent.change(importScope.getByLabelText("OPML payload"), {
+      target: { value: opmlPayload },
+    })
+
+    await user.click(importScope.getByRole("button", { name: "Import OPML" }))
+
+    await waitFor(() => {
+      expect(treeScope.getByText("Imported research")).toBeTruthy()
+      expect(treeScope.getByText("Parsing desk")).toBeTruthy()
+      expect(treeScope.getByText("XML Weekly")).toBeTruthy()
+      expect(treeScope.getByText("Atom Signals")).toBeTruthy()
+    })
+
+    expect(treeScope.queryByText("XML Weekly duplicate")).toBeNull()
+
+    const importedFeedsSummary = importScope.getByText("Feeds imported").parentElement
+    const createdFoldersSummary = importScope.getByText("Folders created").parentElement
+    const skippedDuplicatesSummary = importScope.getByText("Duplicates skipped").parentElement
+
+    expect(importedFeedsSummary).not.toBeNull()
+    expect(createdFoldersSummary).not.toBeNull()
+    expect(skippedDuplicatesSummary).not.toBeNull()
+
+    expect(within(importedFeedsSummary as HTMLElement).getByText("2")).toBeTruthy()
+    expect(within(createdFoldersSummary as HTMLElement).getByText("2")).toBeTruthy()
+    expect(within(skippedDuplicatesSummary as HTMLElement).getByText("2")).toBeTruthy()
+  })
 })

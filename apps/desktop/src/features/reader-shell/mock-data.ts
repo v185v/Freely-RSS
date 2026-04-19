@@ -8,7 +8,7 @@ import type {
   TagDto,
 } from "@freelyrss/shared-types"
 
-import type { ReaderShellData, SourceRow } from "./types"
+import type { OpmlImportReport, ReaderShellData, SourceRow } from "./types"
 
 export const readerShellQueryKey = ["desktop-reader-shell", "mock-data"] as const
 
@@ -470,6 +470,164 @@ type MockReaderState = {
   folders: FolderDto[]
 }
 
+export type MockOpmlImportResult = {
+  report: OpmlImportReport
+  shellData: ReaderShellData
+}
+
+const ROOT_SORT_KEY = "__root__"
+
+function normalizeOptionalText(value: string | null | undefined) {
+  const trimmed = value?.trim() ?? ""
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function normalizeFeedUrl(value: string) {
+  return value.trim()
+}
+
+function getSortKey(parentId: string | null) {
+  return parentId ?? ROOT_SORT_KEY
+}
+
+function createSortOrderMap(
+  items: Array<{ parentId: string | null; sortOrder: number }>,
+): Map<string, number> {
+  const sortOrderMap = new Map<string, number>()
+
+  for (const item of items) {
+    const sortKey = getSortKey(item.parentId)
+    const currentValue = sortOrderMap.get(sortKey) ?? 0
+    sortOrderMap.set(sortKey, Math.max(currentValue, item.sortOrder))
+  }
+
+  return sortOrderMap
+}
+
+function takeNextSortOrder(sortOrderMap: Map<string, number>, parentId: string | null) {
+  const sortKey = getSortKey(parentId)
+  const nextSortOrder = (sortOrderMap.get(sortKey) ?? 0) + 10
+  sortOrderMap.set(sortKey, nextSortOrder)
+  return nextSortOrder
+}
+
+function slugifySegment(value: string) {
+  const normalized = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+  return normalized.length > 0 ? normalized : "item"
+}
+
+function createUniqueId(prefix: "feed" | "folder", seed: string, existingIds: Set<string>) {
+  const baseId = `${prefix}-${slugifySegment(seed)}`
+
+  if (!existingIds.has(baseId)) {
+    existingIds.add(baseId)
+    return baseId
+  }
+
+  let suffix = 2
+
+  while (existingIds.has(`${baseId}-${suffix}`)) {
+    suffix += 1
+  }
+
+  const nextId = `${baseId}-${suffix}`
+  existingIds.add(nextId)
+  return nextId
+}
+
+function inferFeedFormat(
+  typeAttribute: string | null | undefined,
+  feedUrl: string,
+): FeedDto["format"] {
+  const normalizedType = typeAttribute?.trim().toLowerCase() ?? ""
+  const normalizedUrl = feedUrl.toLowerCase()
+
+  if (normalizedType.includes("atom")) {
+    return "atom"
+  }
+
+  if (normalizedType.includes("json")) {
+    return "json-feed"
+  }
+
+  if (normalizedUrl.endsWith(".json") || normalizedUrl.includes("jsonfeed")) {
+    return "json-feed"
+  }
+
+  return "rss"
+}
+
+function parseOpmlDocument(opmlText: string) {
+  const parser = new DOMParser()
+  const document = parser.parseFromString(opmlText, "text/xml")
+
+  if (document.querySelector("parsererror")) {
+    throw new Error("OPML could not be parsed as XML.")
+  }
+
+  const body = document.querySelector("body")
+
+  if (!body) {
+    throw new Error("OPML document is missing a body element.")
+  }
+
+  return body
+}
+
+function getChildOutlines(element: Element) {
+  return Array.from(element.children).filter((child) => child.tagName.toLowerCase() === "outline")
+}
+
+function findFolderByName(
+  state: MockReaderState,
+  folderName: string,
+  parentId: FolderDto["parentId"],
+) {
+  const normalizedName = folderName.toLowerCase()
+
+  return (
+    state.folders.find(
+      (folder) =>
+        folder.parentId === parentId && folder.name.trim().toLowerCase() === normalizedName,
+    ) ?? null
+  )
+}
+
+function findOrCreateImportedFolder(input: {
+  existingFolderIds: Set<string>
+  folderName: string
+  folderSortOrders: Map<string, number>
+  parentId: FolderDto["parentId"]
+  state: MockReaderState
+}) {
+  const existingFolder = findFolderByName(input.state, input.folderName, input.parentId)
+
+  if (existingFolder) {
+    return {
+      created: false,
+      folderId: existingFolder.id,
+    }
+  }
+
+  const folderId = createUniqueId("folder", input.folderName, input.existingFolderIds)
+
+  input.state.folders.push({
+    id: folderId,
+    kind: "regular",
+    name: input.folderName,
+    parentId: input.parentId,
+    sortOrder: takeNextSortOrder(input.folderSortOrders, input.parentId),
+  })
+
+  return {
+    created: true,
+    folderId,
+  }
+}
+
 function cloneValue<T>(value: T): T {
   return structuredClone(value)
 }
@@ -708,4 +866,128 @@ export async function refreshMockFeed(feedId: FeedDto["id"]): Promise<ReaderShel
   replaceFeed(nextFeed)
 
   return buildReaderShellSnapshot(mockReaderState)
+}
+
+export async function importMockOpml(opmlText: string): Promise<MockOpmlImportResult> {
+  const body = parseOpmlDocument(opmlText)
+  const report: OpmlImportReport = {
+    createdFeedCount: 0,
+    createdFolderCount: 0,
+    duplicateFeedCount: 0,
+  }
+  const knownFeedUrls = new Set(
+    mockReaderState.feedDetails.map((feed) => normalizeFeedUrl(feed.feedUrl)),
+  )
+  const existingFeedIds = new Set(mockReaderState.feedDetails.map((feed) => feed.id))
+  const existingFolderIds = new Set(mockReaderState.folders.map((folder) => folder.id))
+  const folderSortOrders = createSortOrderMap(
+    mockReaderState.folders.map((folder) => ({
+      parentId: folder.parentId,
+      sortOrder: folder.sortOrder,
+    })),
+  )
+  const feedSortOrders = createSortOrderMap(
+    mockReaderState.feedDetails.map((feed) => ({
+      parentId: feed.folderId,
+      sortOrder: feed.sortOrder,
+    })),
+  )
+
+  const importOutline = (outline: Element, resolveParentId: () => FolderDto["parentId"]) => {
+    const feedUrl = normalizeOptionalText(outline.getAttribute("xmlUrl"))
+
+    if (feedUrl) {
+      const normalizedFeedUrl = normalizeFeedUrl(feedUrl)
+
+      if (knownFeedUrls.has(normalizedFeedUrl)) {
+        report.duplicateFeedCount += 1
+        return
+      }
+
+      const title =
+        normalizeOptionalText(outline.getAttribute("title")) ??
+        normalizeOptionalText(outline.getAttribute("text")) ??
+        normalizedFeedUrl
+      const parentId = resolveParentId()
+      const feedId = createUniqueId("feed", title, existingFeedIds)
+
+      mockReaderState.feedDetails.push({
+        id: feedId,
+        title,
+        siteUrl: normalizeOptionalText(outline.getAttribute("htmlUrl")),
+        feedUrl: normalizedFeedUrl,
+        format: inferFeedFormat(outline.getAttribute("type"), normalizedFeedUrl),
+        icon: null,
+        folderId: parentId,
+        customName: null,
+        sortOrder: takeNextSortOrder(feedSortOrders, parentId),
+        updateInterval: null,
+        healthStatus: "pending",
+        lastCheckedAt: null,
+        lastSuccessAt: null,
+        etag: null,
+        lastModified: null,
+        lastErrorKind: null,
+        lastErrorMessage: null,
+        lastErrorAt: null,
+        consecutiveFailures: 0,
+      })
+      mockReaderState.feedTagIdsByFeedId[feedId] = []
+      knownFeedUrls.add(normalizedFeedUrl)
+      report.createdFeedCount += 1
+      return
+    }
+
+    const childOutlines = getChildOutlines(outline)
+    if (childOutlines.length === 0) {
+      return
+    }
+
+    const folderName =
+      normalizeOptionalText(outline.getAttribute("text")) ??
+      normalizeOptionalText(outline.getAttribute("title"))
+    let cachedParentId: FolderDto["parentId"] | undefined
+
+    const resolveFolderId = () => {
+      if (!folderName) {
+        return resolveParentId()
+      }
+
+      if (cachedParentId !== undefined) {
+        return cachedParentId
+      }
+
+      const importedFolder = findOrCreateImportedFolder({
+        state: mockReaderState,
+        folderName,
+        parentId: resolveParentId(),
+        folderSortOrders,
+        existingFolderIds,
+      })
+
+      if (importedFolder.created) {
+        report.createdFolderCount += 1
+      }
+
+      cachedParentId = importedFolder.folderId
+      return cachedParentId
+    }
+
+    for (const childOutline of childOutlines) {
+      importOutline(childOutline, resolveFolderId)
+    }
+  }
+
+  for (const outline of getChildOutlines(body)) {
+    importOutline(outline, () => null)
+  }
+
+  if (report.createdFeedCount === 0 && report.duplicateFeedCount === 0) {
+    throw new Error("OPML import did not contain any feed outlines with xmlUrl attributes.")
+  }
+
+  return {
+    report,
+    shellData: buildReaderShellSnapshot(mockReaderState),
+  }
 }
