@@ -8,7 +8,7 @@ import type {
   TagDto,
 } from "@freelyrss/shared-types"
 
-import type { OpmlImportReport, ReaderShellData, SourceRow } from "./types"
+import type { OpmlExportReport, OpmlImportReport, ReaderShellData, SourceRow } from "./types"
 
 export const readerShellQueryKey = ["desktop-reader-shell", "mock-data"] as const
 
@@ -475,6 +475,11 @@ export type MockOpmlImportResult = {
   shellData: ReaderShellData
 }
 
+export type MockOpmlExportResult = {
+  opmlText: string
+  report: OpmlExportReport
+}
+
 const ROOT_SORT_KEY = "__root__"
 
 function normalizeOptionalText(value: string | null | undefined) {
@@ -575,6 +580,14 @@ function parseOpmlDocument(opmlText: string) {
   }
 
   return body
+}
+
+function escapeXmlAttribute(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
 }
 
 function getChildOutlines(element: Element) {
@@ -731,6 +744,132 @@ function buildSubscriptionTree(
   ]
 }
 
+function createEmptyMockReaderState(): MockReaderState {
+  return {
+    articleDetails: {},
+    articles: [],
+    feedDetails: [],
+    feedTagIdsByFeedId: {},
+    folders: [],
+  }
+}
+
+function getSortedFolders(state: MockReaderState, parentId: FolderDto["parentId"]) {
+  return state.folders
+    .filter((folder) => folder.parentId === parentId)
+    .slice()
+    .sort((left, right) => left.sortOrder - right.sortOrder || left.name.localeCompare(right.name))
+}
+
+function getSortedFeeds(state: MockReaderState, folderId: FeedDto["folderId"]) {
+  return state.feedDetails
+    .filter((feed) => feed.folderId === folderId)
+    .slice()
+    .sort(
+      (left, right) =>
+        left.sortOrder - right.sortOrder ||
+        getFeedDisplayTitle(left).localeCompare(getFeedDisplayTitle(right)),
+    )
+}
+
+function hasExportableDescendantFeed(state: MockReaderState, folderId: FolderDto["id"]): boolean {
+  if (getSortedFeeds(state, folderId).length > 0) {
+    return true
+  }
+
+  return getSortedFolders(state, folderId).some((folder) =>
+    hasExportableDescendantFeed(state, folder.id),
+  )
+}
+
+function buildOutlineAttributes(attributes: Array<[string, string | null]>) {
+  return attributes
+    .filter((entry): entry is [string, string] => entry[1] !== null)
+    .map(([key, value]) => `${key}="${escapeXmlAttribute(value)}"`)
+    .join(" ")
+}
+
+function formatOpmlFeedType(format: FeedDto["format"]) {
+  if (format === "json-feed") {
+    return "json"
+  }
+
+  return format
+}
+
+function buildFeedOutline(feed: FeedDto, indentLevel: number) {
+  const indent = "  ".repeat(indentLevel)
+  const attributes = buildOutlineAttributes([
+    ["text", getFeedDisplayTitle(feed)],
+    ["title", feed.title],
+    ["type", formatOpmlFeedType(feed.format)],
+    ["xmlUrl", feed.feedUrl],
+    ["htmlUrl", feed.siteUrl],
+  ])
+
+  return `${indent}<outline ${attributes} />`
+}
+
+function buildFolderOutline(
+  state: MockReaderState,
+  folder: FolderDto,
+  indentLevel: number,
+  report: OpmlExportReport,
+): string | null {
+  const childFolderOutlines = getSortedFolders(state, folder.id)
+    .map((childFolder) => buildFolderOutline(state, childFolder, indentLevel + 1, report))
+    .filter((outline): outline is string => outline !== null)
+  const childFeedOutlines = getSortedFeeds(state, folder.id).map((feed) =>
+    buildFeedOutline(feed, indentLevel + 1),
+  )
+
+  if (childFolderOutlines.length === 0 && childFeedOutlines.length === 0) {
+    return null
+  }
+
+  report.exportedFolderCount += 1
+
+  const indent = "  ".repeat(indentLevel)
+  const attributes = buildOutlineAttributes([
+    ["text", folder.name],
+    ["title", folder.name],
+  ])
+  const children = [...childFolderOutlines, ...childFeedOutlines].join("\n")
+
+  return `${indent}<outline ${attributes}>\n${children}\n${indent}</outline>`
+}
+
+function buildOpmlDocument(state: MockReaderState): MockOpmlExportResult {
+  const report: OpmlExportReport = {
+    exportedFeedCount: state.feedDetails.length,
+    exportedFolderCount: 0,
+    generatedAt: new Date().toISOString(),
+  }
+  const bodyLines = [
+    ...getSortedFolders(state, null)
+      .filter((folder) => hasExportableDescendantFeed(state, folder.id))
+      .map((folder) => buildFolderOutline(state, folder, 2, report))
+      .filter((outline): outline is string => outline !== null),
+    ...getSortedFeeds(state, null).map((feed) => buildFeedOutline(feed, 2)),
+  ]
+  const headTitle = `FreelyRSS subscriptions (${report.exportedFeedCount} feeds)`
+  const opmlText = `<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head>
+    <title>${escapeXmlAttribute(headTitle)}</title>
+    <dateCreated>${escapeXmlAttribute(report.generatedAt)}</dateCreated>
+  </head>
+  <body>
+${bodyLines.join("\n")}
+  </body>
+</opml>`
+
+  return {
+    opmlText,
+    report,
+  }
+}
+
 function buildReaderShellSnapshot(state: MockReaderState): ReaderShellData {
   const feeds = buildFeedSummaries(state)
   const quickViewSection = buildQuickViewSection(state)
@@ -810,8 +949,9 @@ function syncFeedPresentation(nextFeed: FeedDto) {
 
 let mockReaderState = createInitialMockReaderState()
 
-export function resetMockReaderShellState() {
-  mockReaderState = createInitialMockReaderState()
+export function resetMockReaderShellState(options?: { mode?: "default" | "empty" }) {
+  mockReaderState =
+    options?.mode === "empty" ? createEmptyMockReaderState() : createInitialMockReaderState()
 }
 
 export async function fetchReaderShellData(): Promise<ReaderShellData> {
@@ -990,4 +1130,8 @@ export async function importMockOpml(opmlText: string): Promise<MockOpmlImportRe
     report,
     shellData: buildReaderShellSnapshot(mockReaderState),
   }
+}
+
+export async function exportMockOpml(): Promise<MockOpmlExportResult> {
+  return buildOpmlDocument(mockReaderState)
 }

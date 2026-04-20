@@ -1207,3 +1207,32 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `packages/ui` remains a primitive layer and does not absorb OPML parsing or import workflow semantics.
 - `crates/feed-engine` still owns remote feed fetch and parse semantics, not OPML source-list ingestion.
 - `crates/core-domain` and SQLite remain the later durable boundary for real OPML import and export persistence; Step 35 only validates desktop-shell interaction and structural mutation shape.
+
+## 2026-04-20 ASCII Addendum
+
+### Step 36 Architecture Insights
+
+- Step 36 confirms that OPML export is the mirror image of Step 35 import: it is a desktop-shell source-portability concern, not a `feed-engine` concern, not a shared DTO concern, and not yet a durable SQLite write concern.
+- The route still owns `sourceId` and `articleId`. The shell store still owns only local view state. OPML export adds a portable snapshot output without moving selection or expansion state into persistence or routing primitives.
+- The shell-owned mock repository now owns both structural transforms at this boundary: OPML parsing for import and OPML serialization for export. That keeps the left pane as a command surface while the mock repository remains the single source of truth for shell-side source structure mutation and projection.
+- Export intentionally serializes only folders that still contain feed descendants. This is the key Step 36 alignment with Step 35 lazy folder materialization: the round-trip contract is defined around source-bearing structure, not arbitrary empty groups.
+- The round-trip regression is an architectural guardrail, not just a UI test. Exporting the current tree, resetting to an empty mock state, and re-importing the payload proves that the shell now owns a reversible OPML structure contract before real persistence wiring lands.
+- No database schema changes were required for Step 36. The existing schema still describes source facts; this step only validates portable shell serialization ahead of later SQLite-backed import/export integration.
+
+### Step 36 File Responsibilities
+
+- `apps/desktop/src/features/reader-shell/components/opml-export-card.tsx`: owns OPML export presentation, read-only payload display, export summary rendering, and the generate button for shell-level OPML output.
+- `apps/desktop/src/features/reader-shell/components/source-pane.tsx`: remains the left-pane composition root and now hosts quick views, the subscription tree, feed editing, OPML import, and OPML export without mixing queue or reader concerns into the source pane.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`: wires the OPML export mutation and generated payload state into the shell while preserving route ownership of the selected source and article; it also invalidates stale export snapshots when import, edit, or refresh mutations change source facts.
+- `apps/desktop/src/features/reader-shell/mock-data.ts`: now acts as the shell-side OPML portability engine for the mock environment; it serializes the current folder/feed tree to OPML, keeps export aligned with importable structure, and still rebuilds full shell snapshots after source mutations.
+- `apps/desktop/src/features/reader-shell/types.ts`: extends the shell-local composition contract with `OpmlExportReport`, keeping export-only summary state typed without pushing OPML workflow semantics into shared DTOs.
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`: protects Step 36 by verifying OPML payload generation from the UI and export/import round-trip preservation of folder paths and feed paths.
+- `apps/desktop/src/styles.css`: adds shell-local OPML export layout, textarea, and summary styling so export presentation remains outside shared UI primitives.
+- `apps/desktop/src/features/reader-shell/components/opml-import-card.tsx`: continues to own OPML input and import feedback; in Step 36 it remains the complementary import boundary that the export path is intentionally designed to round-trip against.
+
+### Step 36 Boundary Notes
+
+- `packages/shared-types` remains the DTO boundary only; no OPML export DTO was introduced because this step is shell-local workflow state rather than cross-app contract.
+- `packages/ui` remains a primitive layer and does not absorb OPML serialization or copy/export workflow semantics.
+- `crates/feed-engine` still owns remote feed fetch and parse semantics, not source-tree portability or OPML serialization.
+- `crates/core-domain` and SQLite remain the later durable boundary for real OPML import/export persistence; Step 36 only validates desktop-shell interaction, reversible structure shape, and shell-side serialization.

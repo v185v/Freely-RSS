@@ -49,6 +49,12 @@ export interface OpmlImportReport {
   duplicateFeedCount: number
 }
 
+export interface OpmlExportReport {
+  exportedFeedCount: number
+  exportedFolderCount: number
+  generatedAt: string
+}
+
 export interface ReaderShellData {
   articleDetails: Record<string, ArticleDetailDto>
   articles: ArticleListItemDto[]

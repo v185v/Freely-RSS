@@ -23,7 +23,9 @@ import { QueuePane } from "./components/queue-pane"
 import { ReaderPane } from "./components/reader-pane"
 import { SourcePane } from "./components/source-pane"
 import {
+  type MockOpmlExportResult,
   type MockOpmlImportResult,
+  exportMockOpml,
   fetchReaderShellData,
   importMockOpml,
   readerShellQueryKey,
@@ -84,6 +86,7 @@ export function ReaderShellRoute() {
   const [opmlImportReport, setOpmlImportReport] = useState<MockOpmlImportResult["report"] | null>(
     null,
   )
+  const [opmlExportResult, setOpmlExportResult] = useState<MockOpmlExportResult | null>(null)
   const navigationRef = useRef<HTMLElement | null>(null)
   const sourcePaneRef = useRef<HTMLElement | null>(null)
   const queuePaneRef = useRef<HTMLElement | null>(null)
@@ -109,7 +112,14 @@ export function ReaderShellRoute() {
     mutationFn: importMockOpml,
     onSuccess: (result) => {
       setOpmlImportReport(result.report)
+      setOpmlExportResult(null)
       queryClient.setQueryData(readerShellQueryKey, result.shellData)
+    },
+  })
+  const exportOpmlMutation = useMutation({
+    mutationFn: exportMockOpml,
+    onSuccess: (result) => {
+      setOpmlExportResult(result)
     },
   })
 
@@ -225,8 +235,8 @@ export function ReaderShellRoute() {
     return (
       <main className="desktop-shell">
         <div className="desktop-loading">
-          <p className="desktop-shell__eyebrow">Stage 4 / Step 35</p>
-          <h1>Loading OPML import controls and route-backed source context.</h1>
+          <p className="desktop-shell__eyebrow">Stage 4 / Step 36</p>
+          <h1>Loading OPML portability controls and route-backed source context.</h1>
         </div>
       </main>
     )
@@ -326,15 +336,18 @@ export function ReaderShellRoute() {
 
       <header className="desktop-shell__header">
         <div className="desktop-shell__title-block">
-          <p className="desktop-shell__eyebrow">Stage 4 / Step 35</p>
-          <h1>OPML import now extends the left pane without breaking route or tree ownership.</h1>
+          <p className="desktop-shell__eyebrow">Stage 4 / Step 36</p>
+          <h1>
+            OPML portability now extends the left pane without breaking route or tree ownership.
+          </h1>
           <p className="desktop-shell__lead">
-            Feed editing and OPML import now sit next to selection in the reader shell: route state
-            still owns the active source and article, the shell store still owns only local tree
-            expansion plus queue view state, and the mock repository stays the single writer for
-            editable feed facts and imported source structure. That keeps Step 35 on the desktop
-            command boundary instead of pushing folder reconstruction, duplicate handling, or import
-            parsing into shared DTO assembly, the fetch pipeline, or the Rust host shell.
+            Feed editing plus OPML import and export now sit next to selection in the reader shell:
+            route state still owns the active source and article, the shell store still owns only
+            local tree expansion plus queue view state, and the mock repository stays the single
+            writer for editable feed facts and portable source structure transforms. That keeps Step
+            36 on the desktop command boundary instead of pushing folder reconstruction, duplicate
+            handling, or OPML serialization into shared DTO assembly, the fetch pipeline, or the
+            Rust host shell.
           </p>
         </div>
 
@@ -366,8 +379,8 @@ export function ReaderShellRoute() {
           </div>
 
           <p className="desktop-summary__note">
-            Feed edits and OPML imports now flow through shell-level command paths while grouped
-            selection and collapsed folders remain separate concerns.
+            Feed edits plus OPML imports and exports now flow through shell-level command paths
+            while grouped selection and collapsed folders remain separate concerns.
           </p>
 
           <div className="desktop-shortcuts">
@@ -423,21 +436,35 @@ export function ReaderShellRoute() {
             )}
             describedBy={READER_SHORTCUT_HINT_ID}
             editorErrorMessage={editorErrorMessage}
+            exportErrorMessage={
+              exportOpmlMutation.error instanceof Error ? exportOpmlMutation.error.message : null
+            }
+            exportReport={opmlExportResult?.report ?? null}
+            exportedOpml={opmlExportResult?.opmlText ?? null}
             headingId={READER_LANDMARK_IDS.sourceHeading}
             importErrorMessage={
               importOpmlMutation.error instanceof Error ? importOpmlMutation.error.message : null
             }
             importReport={opmlImportReport}
+            isExportingOpml={exportOpmlMutation.isPending}
             isImportingOpml={importOpmlMutation.isPending}
             isRefreshingFeed={refreshFeedMutation.isPending}
             isSavingFeed={saveFeedMutation.isPending}
             onCollapseAllFolders={() => setCollapsedFolderIds(collapsibleFolderIds)}
+            onExportOpml={() => {
+              exportOpmlMutation.reset()
+              exportOpmlMutation.mutate()
+            }}
             onImportOpml={(opmlText) => {
+              exportOpmlMutation.reset()
+              setOpmlExportResult(null)
               importOpmlMutation.reset()
               setOpmlImportReport(null)
               importOpmlMutation.mutate(opmlText)
             }}
             onRefreshFeed={(feedId) => {
+              exportOpmlMutation.reset()
+              setOpmlExportResult(null)
               importOpmlMutation.reset()
               refreshFeedMutation.reset()
               saveFeedMutation.reset()
@@ -445,6 +472,8 @@ export function ReaderShellRoute() {
             }}
             onSelectSource={selectSource}
             onSaveFeed={(input) => {
+              exportOpmlMutation.reset()
+              setOpmlExportResult(null)
               importOpmlMutation.reset()
               refreshFeedMutation.reset()
               saveFeedMutation.reset()

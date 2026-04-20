@@ -370,7 +370,20 @@ body {
   gap: 16px;
 }
 
+.desktop-export {
+  display: grid;
+  gap: 16px;
+}
+
 .desktop-import__textarea {
+  min-height: 220px;
+  padding: 12px 14px;
+  resize: vertical;
+  font: inherit;
+  line-height: 1.5;
+}
+
+.desktop-export__textarea {
   min-height: 220px;
   padding: 12px 14px;
   resize: vertical;
@@ -384,7 +397,22 @@ body {
   gap: 12px;
 }
 
+.desktop-export__summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .desktop-import__summary > div {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--fr-border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.desktop-export__summary > div {
   display: grid;
   gap: 6px;
   padding: 14px;
@@ -623,6 +651,7 @@ body {
 
   .desktop-editor__summary,
   .desktop-editor__facts,
+  .desktop-export__summary,
   .desktop-import__summary,
   .desktop-reader__facts {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -646,6 +675,7 @@ body {
 
   .desktop-editor__summary,
   .desktop-editor__facts,
+  .desktop-export__summary,
   .desktop-import__summary,
   .desktop-summary__metrics,
   .desktop-reader__facts,

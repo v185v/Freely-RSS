@@ -5,8 +5,49 @@ import { afterEach, describe, expect, test } from "vitest"
 import App from "../../App"
 import { createAppQueryClient } from "../../app/query-client"
 import { createAppRouter } from "../../app/router"
-import { resetMockReaderShellState } from "./mock-data"
+import { fetchReaderShellData, importMockOpml, resetMockReaderShellState } from "./mock-data"
 import { resetReaderViewStore } from "./state"
+import type { ReaderShellData } from "./types"
+
+function buildShellStructure(shellData: ReaderShellData) {
+  const foldersById = new Map(shellData.folders.map((folder) => [folder.id, folder]))
+  const folderPathCache = new Map<string, string>()
+
+  function resolveFolderPath(folderId: string | null): string {
+    if (!folderId) {
+      return ""
+    }
+
+    const cachedPath = folderPathCache.get(folderId)
+
+    if (cachedPath) {
+      return cachedPath
+    }
+
+    const folder = foldersById.get(folderId)
+
+    if (!folder) {
+      throw new Error(`Unknown folder id in structure snapshot: ${folderId}`)
+    }
+
+    const parentPath = resolveFolderPath(folder.parentId)
+    const path = parentPath.length > 0 ? `${parentPath}/${folder.name}` : folder.name
+
+    folderPathCache.set(folderId, path)
+
+    return path
+  }
+
+  return {
+    feedPaths: Object.values(shellData.feedDetails)
+      .map((feed) => {
+        const folderPath = resolveFolderPath(feed.folderId)
+        return folderPath.length > 0 ? `${folderPath}|${feed.feedUrl}` : feed.feedUrl
+      })
+      .sort(),
+    folderPaths: shellData.folders.map((folder) => resolveFolderPath(folder.id)).sort(),
+  }
+}
 
 describe("reader shell navigation", () => {
   afterEach(() => {
@@ -333,5 +374,55 @@ describe("reader shell navigation", () => {
     expect(within(importedFeedsSummary as HTMLElement).getByText("2")).toBeTruthy()
     expect(within(createdFoldersSummary as HTMLElement).getByText("2")).toBeTruthy()
     expect(within(skippedDuplicatesSummary as HTMLElement).getByText("2")).toBeTruthy()
+  })
+
+  test("exports the current subscription tree as OPML and round-trips it into the same structure", async () => {
+    window.scrollTo = () => {}
+    const user = userEvent.setup()
+
+    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+
+    const sourcePane = await screen.findByRole("region", { name: "Sources" })
+    const exportSection = within(sourcePane)
+      .getByRole("heading", {
+        name: "OPML export",
+      })
+      .closest("section")
+
+    expect(exportSection).not.toBeNull()
+
+    const exportScope = within(exportSection as HTMLElement)
+
+    await user.click(exportScope.getByRole("button", { name: "Generate OPML" }))
+
+    const exportedTextarea = exportScope.getByLabelText("Exported OPML") as HTMLTextAreaElement
+
+    await waitFor(() => {
+      expect(exportedTextarea.value).toContain(`<?xml version="1.0" encoding="UTF-8"?>`)
+      expect(exportedTextarea.value).toContain(`text="Daily reading desk"`)
+      expect(exportedTextarea.value).toContain(`xmlUrl="https://freelyrss.dev/feed.xml"`)
+    })
+
+    const feedsExportedSummary = exportScope.getByText("Feeds exported").parentElement
+    const foldersExportedSummary = exportScope.getByText("Folders exported").parentElement
+
+    expect(feedsExportedSummary).not.toBeNull()
+    expect(foldersExportedSummary).not.toBeNull()
+    expect(within(feedsExportedSummary as HTMLElement).getByText("4")).toBeTruthy()
+    expect(within(foldersExportedSummary as HTMLElement).getByText("4")).toBeTruthy()
+
+    const expectedStructure = buildShellStructure(await fetchReaderShellData())
+    const exportedOpml = exportedTextarea.value
+
+    resetMockReaderShellState({ mode: "empty" })
+
+    const imported = await importMockOpml(exportedOpml)
+    const importedStructure = buildShellStructure(imported.shellData)
+
+    expect(imported.report.createdFeedCount).toBe(4)
+    expect(imported.report.createdFolderCount).toBe(4)
+    expect(imported.report.duplicateFeedCount).toBe(0)
+    expect(importedStructure.folderPaths).toEqual(expectedStructure.folderPaths)
+    expect(importedStructure.feedPaths).toEqual(expectedStructure.feedPaths)
   })
 })

@@ -3,8 +3,9 @@ import { type CSSProperties, type Ref, useRef } from "react"
 import type { FeedDto } from "@freelyrss/shared-types"
 import { Button, ListRow, ListSection, SplitPane, Surface } from "@freelyrss/ui"
 
-import type { OpmlImportReport, SourceRow, SubscriptionTreeRow } from "../types"
+import type { OpmlExportReport, OpmlImportReport, SourceRow, SubscriptionTreeRow } from "../types"
 import { FeedEditorCard } from "./feed-editor-card"
+import { OpmlExportCard } from "./opml-export-card"
 import { OpmlImportCard } from "./opml-import-card"
 
 type SourcePaneProps = {
@@ -13,13 +14,18 @@ type SourcePaneProps = {
   canCollapseFolders: boolean
   describedBy?: string
   editorErrorMessage: string | null
+  exportErrorMessage: string | null
+  exportReport: OpmlExportReport | null
+  exportedOpml: string | null
   headingId: string
   importErrorMessage: string | null
   importReport: OpmlImportReport | null
+  isExportingOpml: boolean
   isImportingOpml: boolean
   isRefreshingFeed: boolean
   isSavingFeed: boolean
   onCollapseAllFolders: () => void
+  onExportOpml: () => void
   onImportOpml: (opmlText: string) => void
   onRefreshFeed: (feedId: FeedDto["id"]) => void
   onSelectSource: (sourceId: string) => void
@@ -47,13 +53,18 @@ export function SourcePane({
   canCollapseFolders,
   describedBy,
   editorErrorMessage,
+  exportErrorMessage,
+  exportReport,
+  exportedOpml,
   headingId,
   importErrorMessage,
   importReport,
+  isExportingOpml,
   isImportingOpml,
   isRefreshingFeed,
   isSavingFeed,
   onCollapseAllFolders,
+  onExportOpml,
   onImportOpml,
   onRefreshFeed,
   onSelectSource,
@@ -65,6 +76,7 @@ export function SourcePane({
   subscriptionRows,
 }: SourcePaneProps) {
   const importTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const exportTextareaRef = useRef<HTMLTextAreaElement | null>(null)
 
   return (
     <SplitPane
@@ -82,7 +94,8 @@ export function SourcePane({
           <h2 id={headingId}>Sources</h2>
           <p className="desktop-pane__description">
             Quick views stay route-backed, folder expansion remains local shell state, and feed
-            editing now lives beside source selection instead of leaking into shared DTO assembly.
+            editing plus OPML portability now live beside source selection instead of leaking into
+            shared DTO assembly.
           </p>
         </div>
 
@@ -174,6 +187,15 @@ export function SourcePane({
             onImportOpml={onImportOpml}
             textareaRef={importTextareaRef}
           />
+
+          <OpmlExportCard
+            errorMessage={exportErrorMessage}
+            exportReport={exportReport}
+            exportedOpml={exportedOpml}
+            isExporting={isExportingOpml}
+            onGenerateOpml={onExportOpml}
+            textareaRef={exportTextareaRef}
+          />
         </div>
 
         <div className="desktop-pane__footer">
@@ -182,6 +204,9 @@ export function SourcePane({
           </Button>
           <Button onClick={() => importTextareaRef.current?.focus()} size="sm" tone="neutral">
             Import OPML
+          </Button>
+          <Button onClick={() => exportTextareaRef.current?.focus()} size="sm" tone="ghost">
+            Export OPML
           </Button>
         </div>
       </Surface>

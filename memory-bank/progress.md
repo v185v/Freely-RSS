@@ -589,3 +589,32 @@
 - desktop reader shell owns OPML text acceptance, import feedback, and route-adjacent mutation wiring.
 - shell mock repository owns parsing, deduplication, and full-snapshot replacement for imported source structure.
 - `packages/shared-types` remains DTO-only, and real durable OPML persistence still belongs to later `core-domain/sqlite` wiring.
+
+## 2026-04-20 ASCII Addendum
+
+### Stage 4 Step 36 Completed: OPML export in the desktop shell
+
+- Implemented shell-level OPML export through a dedicated left-pane card that generates a portable OPML payload from the current subscription tree and reports exported feed and folder counts.
+- Kept Step 36 inside the desktop shell boundary. No Rust engine, shared DTO contract, or database schema changes were required for this step.
+- Added OPML serialization to the shell-owned mock repository so the same source-organization layer now owns both OPML import and OPML export in the mock environment.
+- Export now serializes the current folder/feed hierarchy in sort order and uses display titles for visible source labels while preserving canonical feed titles and URLs in standard OPML attributes.
+- To stay aligned with Step 35 lazy folder materialization, export only emits folders that still contain feed descendants. That keeps export/import round-trips structurally stable instead of generating empty groups that the import path intentionally does not materialize.
+- Added a round-trip regression that exports the live shell tree, resets the mock repository to an empty state, re-imports the generated OPML, and verifies that folder paths and feed paths match the pre-export structure.
+- During validation, fixed two verification blockers discovered after the initial implementation:
+- `mock-data.ts`: recursive export helper now declares an explicit boolean return type so `tsc` accepts the round-trip traversal.
+- `opml-export-card.tsx`: switched the React type-only import to `import type` so Biome `useImportType` passes during repository verification.
+
+### Step 36 Verification
+
+- Passed `corepack pnpm --filter @freelyrss/desktop test`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+
+### Next Step (ASCII update)
+
+- Next planned implementation step is `implementation-plan.md` Stage 5 Step 37: article list query flow.
+- Preserve the current boundary split:
+- desktop reader shell owns OPML import/export presentation plus route-adjacent command wiring.
+- shell mock repository owns OPML parsing, OPML serialization, and round-tripable source-structure snapshots.
+- `packages/shared-types` remains DTO-only, and durable OPML persistence plus article-query execution still belong to later `core-domain/sqlite` integration.
