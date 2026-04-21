@@ -279,6 +279,63 @@ describe("reader shell navigation", () => {
     expect(queueScope.getByText(/"value": "reading"/i)).toBeTruthy()
   })
 
+  test("virtualizes long queues and moves the render window when the middle pane scrolls", async () => {
+    window.scrollTo = () => {}
+    resetMockReaderShellState({ mode: "dense-queue" })
+    const user = userEvent.setup()
+
+    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+
+    const sourcePane = await screen.findByRole("region", { name: "Sources" })
+    const subscriptionTree = within(sourcePane)
+      .getByRole("heading", {
+        name: "Subscription tree",
+      })
+      .closest("section")
+
+    expect(subscriptionTree).not.toBeNull()
+
+    const treeScope = within(subscriptionTree as HTMLElement)
+
+    await user.click(
+      treeScope.getByRole("button", {
+        name: /healthy.*Queue Virtualization Lab/i,
+      }),
+    )
+
+    await waitFor(() => {
+      expect(window.location.search).toContain("sourceId=feed-queue-lab")
+    })
+
+    const queuePane = screen.getByRole("region", { name: "Article queue" })
+    const queueScope = within(queuePane)
+    const getQueueRows = () => Array.from(queuePane.querySelectorAll(".desktop-article-row"))
+    const scrollRegion = queuePane.querySelector(".desktop-pane__scroll--queue")
+
+    expect(scrollRegion).not.toBeNull()
+
+    await waitFor(() => {
+      expect(getQueueRows().length).toBeGreaterThan(0)
+      expect(getQueueRows().length).toBeLessThan(48)
+      expect(queueScope.getByText("Queue window article 01")).toBeTruthy()
+      expect(queueScope.queryByText("Queue window article 24")).toBeNull()
+      expect(queueScope.getByText(/Rendering \d+ of 48 rows/i)).toBeTruthy()
+    })
+
+    Object.defineProperty(scrollRegion as HTMLElement, "scrollTop", {
+      configurable: true,
+      value: 3000,
+      writable: true,
+    })
+    fireEvent.scroll(scrollRegion as HTMLElement)
+
+    await waitFor(() => {
+      expect(queueScope.getByText("Queue window article 24")).toBeTruthy()
+      expect(queueScope.queryByText("Queue window article 01")).toBeNull()
+      expect(getQueueRows().length).toBeLessThan(48)
+    })
+  })
+
   test("edits feed metadata and records a manual refresh through the shell command path", async () => {
     window.scrollTo = () => {}
     const user = userEvent.setup()

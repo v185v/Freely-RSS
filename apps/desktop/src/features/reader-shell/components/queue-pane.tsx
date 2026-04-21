@@ -1,8 +1,15 @@
+import { useEffect, useRef } from "react"
 import type { ChangeEvent, Ref } from "react"
 
 import type { ArticleListItemDto } from "@freelyrss/shared-types"
 import { Button, ListRow, ListSection, SplitPane, Surface, TextInput } from "@freelyrss/ui"
+import { useVirtualizer } from "@tanstack/react-virtual"
 
+import {
+  QUEUE_ARTICLE_OVERSCAN,
+  QUEUE_ARTICLE_ROW_ESTIMATE,
+  observeQueueViewportRect,
+} from "../queue-virtualization"
 import { formatArticleMeta } from "../selectors"
 import { READER_STATUS_FILTER_OPTIONS } from "../types"
 import type {
@@ -23,6 +30,7 @@ type QueuePaneProps = {
   onSetStatusFilter: (statusFilter: ReaderStatusFilter) => void
   paneId: string
   paneRef?: Ref<HTMLElement>
+  queryResetKey: string
   querySummary: ReaderArticleQuerySummary
   searchText: string
   sortMode: ReaderSortMode
@@ -41,15 +49,38 @@ export function QueuePane({
   onSetStatusFilter,
   paneId,
   paneRef,
+  queryResetKey,
   querySummary,
   searchText,
   sortMode,
   statusFilter,
   visibleArticles,
 }: QueuePaneProps) {
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+
   function handleSearchTextChange(event: ChangeEvent<HTMLInputElement>) {
     onSearchTextChange(event.target.value)
   }
+
+  const rowVirtualizer = useVirtualizer({
+    count: visibleArticles.length,
+    estimateSize: () => QUEUE_ARTICLE_ROW_ESTIMATE,
+    getItemKey: (index) => visibleArticles[index]?.id ?? index,
+    getScrollElement: () => scrollRef.current,
+    observeElementRect: observeQueueViewportRect,
+    overscan: QUEUE_ARTICLE_OVERSCAN,
+  })
+
+  useEffect(() => {
+    if (!scrollRef.current || queryResetKey.length === 0) {
+      return
+    }
+
+    scrollRef.current.scrollTop = 0
+  }, [queryResetKey])
+
+  const virtualRows = rowVirtualizer.getVirtualItems()
+  const totalHeight = rowVirtualizer.getTotalSize()
 
   return (
     <SplitPane
@@ -139,25 +170,49 @@ export function QueuePane({
           <pre className="desktop-view-state__preview">{querySummary.jsonPreview}</pre>
         </Surface>
 
-        <div className="desktop-pane__scroll">
+        <div className="desktop-pane__scroll desktop-pane__scroll--queue" ref={scrollRef}>
           {visibleArticles.length > 0 ? (
             <ListSection
+              actions={
+                <span className="desktop-queue__virtual-summary">
+                  Rendering {virtualRows.length} of {visibleArticles.length} rows
+                </span>
+              }
               description={`${visibleArticles.length} placeholder article(s) visible for the current route-backed article query.`}
               title="Article queue"
             >
-              {visibleArticles.map((article) => (
-                <ListRow
-                  active={activeArticleId === article.id}
-                  aria-current={activeArticleId === article.id ? "page" : undefined}
-                  className="desktop-article-row"
-                  eyebrow={article.feedTitle}
-                  key={article.id}
-                  meta={formatArticleMeta(article)}
-                  onClick={() => onSelectArticle(article.id)}
-                  summary={article.summary ?? "No summary yet."}
-                  title={article.title}
-                />
-              ))}
+              <div className="desktop-virtual-list" style={{ height: totalHeight }}>
+                {virtualRows.map((virtualRow) => {
+                  const article = visibleArticles[virtualRow.index]
+
+                  if (!article) {
+                    return null
+                  }
+
+                  return (
+                    <div
+                      className="desktop-virtual-list__item"
+                      data-virtual-index={virtualRow.index}
+                      key={article.id}
+                      style={{
+                        height: virtualRow.size,
+                        transform: `translateY(${virtualRow.start}px)`,
+                      }}
+                    >
+                      <ListRow
+                        active={activeArticleId === article.id}
+                        aria-current={activeArticleId === article.id ? "page" : undefined}
+                        className="desktop-article-row"
+                        eyebrow={article.feedTitle}
+                        meta={formatArticleMeta(article)}
+                        onClick={() => onSelectArticle(article.id)}
+                        summary={article.summary ?? "No summary yet."}
+                        title={article.title}
+                      />
+                    </div>
+                  )
+                })}
+              </div>
             </ListSection>
           ) : (
             <div className="desktop-empty-state">

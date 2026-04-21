@@ -462,6 +462,9 @@ const navigationEntries = [
   },
 ] as const
 
+const DENSE_QUEUE_FEED_ID = "feed-queue-lab"
+const DENSE_QUEUE_ARTICLE_COUNT = 48
+
 type MockReaderState = {
   articleDetails: Record<string, ArticleDetailDto>
   articles: ArticleListItemDto[]
@@ -754,6 +757,124 @@ function createEmptyMockReaderState(): MockReaderState {
   }
 }
 
+function padDenseQueueArticleNumber(index: number) {
+  return String(index).padStart(2, "0")
+}
+
+function createDenseQueueFeed(): FeedDto {
+  return {
+    id: DENSE_QUEUE_FEED_ID,
+    title: "Queue Virtualization Lab",
+    siteUrl: "https://queue.example",
+    feedUrl: "https://queue.example/feed.xml",
+    format: "rss",
+    icon: null,
+    folderId: "folder-research",
+    customName: null,
+    sortOrder: 20,
+    updateInterval: 30,
+    healthStatus: "healthy",
+    lastCheckedAt: "2026-04-21T08:20:00Z",
+    lastSuccessAt: "2026-04-21T08:20:00Z",
+    etag: '"queue-virtualization-lab"',
+    lastModified: "Tue, 21 Apr 2026 08:18:00 GMT",
+    lastErrorKind: null,
+    lastErrorMessage: null,
+    lastErrorAt: null,
+    consecutiveFailures: 0,
+  }
+}
+
+function createDenseQueueFixtures(feed: FeedDto) {
+  const generatedArticles: ArticleListItemDto[] = []
+  const generatedDetails: Record<string, ArticleDetailDto> = {}
+
+  for (let index = 1; index <= DENSE_QUEUE_ARTICLE_COUNT; index += 1) {
+    const paddedIndex = padDenseQueueArticleNumber(index)
+    const articleId = `article-queue-window-${paddedIndex}`
+    const publishedAt = new Date(
+      Date.UTC(2026, 3, 21, 8, 0, 0) - (index - 1) * 45 * 60 * 1000,
+    ).toISOString()
+    const title = `Queue window article ${paddedIndex}`
+    const state: ArticleListItemDto["state"] = {
+      articleId,
+      readState: index % 7 === 0 ? "read" : index % 5 === 0 ? "reading" : "unread",
+      starred: index % 9 === 0,
+      liked: index % 6 === 0,
+      importance: index % 8 === 0 ? "high" : index % 3 === 0 ? "low" : "normal",
+      readLater: index % 4 === 0,
+      readingProgress: index % 5 === 0 ? 0.28 : index % 7 === 0 ? 1 : 0,
+      lastOpenedAt: index % 5 === 0 ? publishedAt : null,
+    }
+
+    generatedArticles.push({
+      id: articleId,
+      feedId: feed.id,
+      feedTitle: feed.title,
+      title,
+      author: "Queue Systems Desk",
+      summary: `Virtualization sample ${paddedIndex} keeps the middle pane focused on a render window instead of mounting the full queue.`,
+      publishedAt,
+      thumbnail: null,
+      estimatedReadingMinutes: 4 + (index % 5),
+      state,
+      tagIds: ["tag-product"],
+      attachmentCount: index % 6 === 0 ? 1 : 0,
+    })
+
+    generatedDetails[articleId] = {
+      article: {
+        id: articleId,
+        feedId: feed.id,
+        sourceGuid: `queue-window-${paddedIndex}`,
+        title,
+        author: "Queue Systems Desk",
+        summary: `Virtualization sample ${paddedIndex} keeps the queue efficient without changing the route-backed query contract.`,
+        contentRaw: null,
+        contentExtracted: `This Step 38 fixture exists to prove that long queues should render through a bounded window.\n\nArticle ${paddedIndex} remains query-visible, but the desktop shell should only mount the rows near the current scroll offset.\n\nThat keeps queue rendering separate from query composition and durable storage concerns.`,
+        canonicalUrl: `https://queue.example/articles/${paddedIndex}`,
+        originalUrl: `https://queue.example/articles/${paddedIndex}`,
+        publishedAt,
+        fetchedAt: publishedAt,
+        language: "en",
+        thumbnail: null,
+        wordCount: 540 + index * 3,
+        contentHash: `sha256:queue-window-${paddedIndex}`,
+      },
+      feed: {
+        id: feed.id,
+        title: feed.title,
+        displayTitle: getFeedDisplayTitle(feed),
+        siteUrl: feed.siteUrl,
+        icon: feed.icon,
+      },
+      state,
+      tags: [findTag("tag-product")],
+      attachments:
+        index % 6 === 0
+          ? [
+              {
+                id: `attachment-queue-window-${paddedIndex}`,
+                articleId,
+                type: "file",
+                url: `https://queue.example/assets/${paddedIndex}.json`,
+                mimeType: "application/json",
+                duration: null,
+                size: 1024 + index,
+                localCachePath: null,
+              },
+            ]
+          : [],
+      annotations: [],
+    }
+  }
+
+  return {
+    articleDetails: generatedDetails,
+    articles: generatedArticles,
+  }
+}
+
 function getSortedFolders(state: MockReaderState, parentId: FolderDto["parentId"]) {
   return state.folders
     .filter((folder) => folder.parentId === parentId)
@@ -905,6 +1026,22 @@ function createInitialMockReaderState(): MockReaderState {
   }
 }
 
+function createDenseQueueMockReaderState(): MockReaderState {
+  const baseState = createInitialMockReaderState()
+  const denseQueueFeed = createDenseQueueFeed()
+  const denseQueueFixtures = createDenseQueueFixtures(denseQueueFeed)
+
+  baseState.feedDetails.push(denseQueueFeed)
+  baseState.feedTagIdsByFeedId[denseQueueFeed.id] = ["tag-product"]
+  baseState.articles = [...denseQueueFixtures.articles, ...baseState.articles]
+  baseState.articleDetails = {
+    ...baseState.articleDetails,
+    ...denseQueueFixtures.articleDetails,
+  }
+
+  return baseState
+}
+
 function findFeedOrThrow(feedId: FeedDto["id"]) {
   const feed = mockReaderState.feedDetails.find((entry) => entry.id === feedId)
 
@@ -949,9 +1086,20 @@ function syncFeedPresentation(nextFeed: FeedDto) {
 
 let mockReaderState = createInitialMockReaderState()
 
-export function resetMockReaderShellState(options?: { mode?: "default" | "empty" }) {
-  mockReaderState =
-    options?.mode === "empty" ? createEmptyMockReaderState() : createInitialMockReaderState()
+export function resetMockReaderShellState(options?: {
+  mode?: "default" | "dense-queue" | "empty"
+}) {
+  switch (options?.mode) {
+    case "dense-queue":
+      mockReaderState = createDenseQueueMockReaderState()
+      break
+    case "empty":
+      mockReaderState = createEmptyMockReaderState()
+      break
+    default:
+      mockReaderState = createInitialMockReaderState()
+      break
+  }
 }
 
 export async function fetchReaderShellData(): Promise<ReaderShellData> {

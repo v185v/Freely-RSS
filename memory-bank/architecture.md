@@ -1266,3 +1266,32 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `packages/ui` remains a primitive layer and does not absorb query construction, source-scope expansion, or mock execution logic.
 - `crates/feed-engine` still owns fetch and parse semantics, not queue filtering or article-list query composition.
 - `crates/core-domain` and SQLite remain the future durable execution boundary for article queries; Step 37 only validates the shell-side composition shape before that storage-backed integration.
+
+## 2026-04-21 ASCII Addendum II
+
+### Step 38 Architecture Insights
+
+- Step 38 confirms that queue virtualization is a desktop-shell rendering concern, not a query-construction concern. The queue still consumes one explicit article query; the shell now only changes how that result set is mounted into DOM rows.
+- The route still owns `sourceId` and `articleId`. The shell store still owns only local queue controls and folder collapse state. Virtual scroll offset is intentionally ephemeral component state and is not promoted into routing, shared DTOs, or persistence primitives.
+- Introducing a dedicated queue-virtualization helper is the key architectural decision in this step. Row estimates, overscan, and viewport fallback behavior are now centralized instead of being hidden inside `QueuePane`, which keeps virtualization policy explicit and testable.
+- The dense queue fixture mode in the mock repository is an architectural guardrail rather than a product feature. It creates a shell-only proving ground for long-list rendering without changing the default shell snapshot that other steps rely on.
+- Query reset behavior is now part of the shell contract: when the article query definition changes, the middle pane scroll position resets so the render window stays aligned with the new result set rather than preserving a stale deep offset from a previous route or filter state.
+- No database schema changes were required for Step 38. The existing schema and shared query contract already describe the result set; this step only validates the desktop-shell rendering window ahead of future SQLite-backed large-queue execution.
+
+### Step 38 File Responsibilities
+
+- `apps/desktop/package.json`: wires the desktop shell to `@tanstack/react-virtual`, keeping virtualization as an app-local dependency rather than a workspace-wide primitive.
+- `apps/desktop/src/features/reader-shell/queue-virtualization.ts`: owns queue virtualization policy, including row-height estimates, overscan, and viewport measurement fallback behavior for the shell queue.
+- `apps/desktop/src/features/reader-shell/components/queue-pane.tsx`: owns Step 38 queue rendering; consumes the already-built article query result set, virtualizes row mounting, surfaces the render-window summary, and resets scroll on query changes.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`: remains the shell composition root; now passes the query-reset signature into the queue pane and updates shell copy to describe virtualization rather than only query composition.
+- `apps/desktop/src/features/reader-shell/mock-data.ts`: adds a shell-test-only dense queue mode and generated article/detail fixtures so virtualization can be validated against a long list without changing the default shell snapshot.
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`: protects Step 38 by verifying that the queue initially renders fewer rows than the full result set and that scrolling advances the mounted render window.
+- `apps/desktop/src/styles.css`: contains shell-local queue virtualization presentation rules, including the virtual-list positioning layer and the rendered-row summary badge.
+
+### Step 38 Boundary Notes
+
+- `packages/shared-query` still owns article-query vocabulary and future SQL planning, but it does not own virtualization or DOM render-window policy.
+- `packages/shared-types` remains the DTO boundary only; no virtualization-specific DTO fields were introduced.
+- `packages/ui` remains a primitive layer and does not absorb queue-window management or scroll measurement semantics.
+- `crates/feed-engine` still owns fetch and parse semantics, not queue rendering strategy.
+- `crates/core-domain` and SQLite remain the future durable execution boundary for large queues; Step 38 only validates the shell-side rendering window before storage-backed pagination or streaming is introduced.

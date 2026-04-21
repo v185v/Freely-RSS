@@ -646,3 +646,29 @@
 - desktop reader shell owns route-adjacent query composition, local queue controls, and query preview presentation.
 - `packages/shared-query` owns the reusable query vocabulary and future SQL compilation surface.
 - durable article-query execution against SQLite still belongs to later `core-domain/sqlite` integration rather than the mock shell repository.
+
+## 2026-04-21 ASCII Addendum II
+
+### Stage 5 Step 38 Completed: article list virtualization in the desktop shell
+
+- Implemented shell-local queue virtualization so the middle pane now mounts a bounded render window instead of painting every visible article row at once.
+- Kept Step 38 inside the desktop shell rendering boundary. The route-backed article query contract from Step 37 is unchanged, and no Rust crate, shared DTO schema, or SQLite schema changed in this step.
+- Added `@tanstack/react-virtual` to the desktop app and introduced a dedicated queue virtualization helper that centralizes row-size estimates, overscan, and viewport fallback behavior for the queue pane.
+- Updated `QueuePane` to virtualize the current query result set, show a rendered-row summary, and reset queue scroll position when the query definition changes so route and filter transitions do not strand the user mid-list.
+- Added a dense mock-shell mode that seeds a dedicated long-queue feed with 48 generated article fixtures. This keeps virtualization verification inside the shell test boundary without polluting the default reader-shell snapshot used by other steps.
+- Added a Step 38 regression that selects the dense feed, confirms the queue renders fewer rows than the full result set, then scrolls the middle pane and verifies the render window advances to later articles.
+
+### Step 38 Verification
+
+- Passed `corepack pnpm --filter @freelyrss/desktop test`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+
+### Next Step (ASCII update)
+
+- Next planned implementation step is `implementation-plan.md` Stage 5 Step 39: reading panel base view.
+- Preserve the current boundary split:
+- desktop reader shell owns queue virtualization, scroll-window reset behavior, and route-adjacent queue presentation.
+- the route plus `article-query.ts` still own article-query composition; virtualization consumes the result set but does not redefine it.
+- dense queue fixtures remain a shell-test-only proving ground, while durable queue execution and storage-backed pagination still belong to later `core-domain/sqlite` work.

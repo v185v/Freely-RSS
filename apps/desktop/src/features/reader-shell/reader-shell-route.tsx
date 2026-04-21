@@ -230,8 +230,8 @@ export function ReaderShellRoute() {
     return (
       <main className="desktop-shell">
         <div className="desktop-loading">
-          <p className="desktop-shell__eyebrow">Stage 5 / Step 37</p>
-          <h1>Loading the unified article query flow and route-backed queue context.</h1>
+          <p className="desktop-shell__eyebrow">Stage 5 / Step 38</p>
+          <h1>Loading the virtualized queue shell and route-backed article window.</h1>
         </div>
       </main>
     )
@@ -333,18 +333,18 @@ export function ReaderShellRoute() {
 
       <header className="desktop-shell__header">
         <div className="desktop-shell__title-block">
-          <p className="desktop-shell__eyebrow">Stage 5 / Step 37</p>
+          <p className="desktop-shell__eyebrow">Stage 5 / Step 38</p>
           <h1>
-            Article queues now flow through one explicit query boundary instead of scattered shell
-            filters.
+            Long article queues now render through a shell-local virtual window instead of painting
+            every row.
           </h1>
           <p className="desktop-shell__lead">
             Route state still owns the active source and article, the shell store still owns only
             local queue controls and folder expansion, and the mock repository remains a shell-side
-            snapshot source. Step 37 adds the missing composition layer between those boundaries:
-            the current source scope, search text, status preset, and sort mode now compile into a
-            single article query definition that drives the middle pane without pushing query
-            semantics down into shared DTOs, the Rust host shell, or the feed engine.
+            snapshot source. Step 38 keeps that query composition boundary intact and only changes
+            how the middle pane renders it: the route-backed article result set still comes from one
+            explicit query definition, but the queue now mounts only a scroll window of rows so long
+            lists do not force the desktop shell to paint the entire article set at once.
           </p>
         </div>
 
@@ -376,8 +376,9 @@ export function ReaderShellRoute() {
           </div>
 
           <p className="desktop-summary__note">
-            The queue now consumes one route-backed article query while source editing, OPML
-            portability, and tree expansion remain separate concerns.
+            The queue still consumes one route-backed article query while source editing, OPML
+            portability, and tree expansion remain separate concerns. Step 38 adds a render window,
+            not a new query language.
           </p>
 
           <div className="desktop-shortcuts">
@@ -494,6 +495,7 @@ export function ReaderShellRoute() {
             onSetStatusFilter={setStatusFilter}
             paneId={READER_LANDMARK_IDS.queue}
             paneRef={queuePaneRef}
+            queryResetKey={resolvedArticleQuery.summary.jsonPreview}
             querySummary={resolvedArticleQuery.summary}
             searchText={searchText}
             sortMode={sortMode}

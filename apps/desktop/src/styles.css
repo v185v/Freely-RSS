@@ -295,6 +295,10 @@ body {
   gap: 20px;
 }
 
+.desktop-pane__scroll--queue {
+  position: relative;
+}
+
 .desktop-pane__scroll::-webkit-scrollbar {
   width: 10px;
 }
@@ -488,6 +492,28 @@ body {
   overflow: hidden;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+}
+
+.desktop-queue__virtual-summary {
+  color: var(--fr-text-faint);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.desktop-virtual-list {
+  position: relative;
+  width: 100%;
+}
+
+.desktop-virtual-list__item {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding-bottom: 12px;
 }
 
 .desktop-empty-state {
