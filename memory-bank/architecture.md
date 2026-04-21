@@ -1321,3 +1321,32 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `packages/ui` remains a primitive layer and does not absorb article-detail formatting, summary/body sectioning, or reader-specific empty states.
 - `crates/feed-engine` still owns fetch and parse semantics, not reading-panel presentation or article-switch behavior.
 - `crates/core-domain` and SQLite remain the future durable boundary for read-state mutation, saved reader preferences, and content-mode persistence; Step 39 only validates the shell-side base reading view before that wiring lands.
+
+## 2026-04-21 ASCII Addendum IV
+
+### Step 40 Architecture Insights
+
+- Step 40 confirms that reader content mode is a desktop-shell preference boundary, not a routing concern and not a shared DTO concern. The route still owns `sourceId` and `articleId`; the shell store now additionally owns the last-used content mode.
+- Making raw versus extracted content an explicit toggle is the key architectural decision in this step. The reader no longer hides that choice behind an implicit fallback order, so later extraction work can evolve without changing the reader contract again.
+- Persisting the latest reader-mode selection locally is intentionally a shell concern in this step. The preference is remembered for the next app session without promoting it into SQLite, shared contracts, or server-facing settings before those persistence boundaries are ready.
+- Mock article details now carry visibly different `contentRaw` payloads so the shell can prove the mode boundary before Step 41 introduces real extraction-pipeline behavior. This is a shell-side fixture change, not a new durable article schema.
+- Mode-specific empty states are also a presentation concern. When one representation is missing, the reader preserves metadata and summary while explaining the missing representation instead of silently falling through to the other mode.
+- No database schema changes were required for Step 40. The existing schema and `ArticleDetailDto` already contain both content fields; this step only validates how the desktop shell exposes and remembers that choice.
+
+### Step 40 File Responsibilities
+
+- `apps/desktop/src/features/reader-shell/types.ts`: adds the shell-local `ReaderContentMode` contract so reader-mode state stays explicit without extending shared DTOs.
+- `apps/desktop/src/features/reader-shell/state.ts`: owns the persisted reader-mode preference, keeps it inside the shell-store boundary, and exposes reset behavior that tests can use to simulate an app reopen without leaking preference state across suites.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`: remains the shell composition root and now wires the store-backed content-mode preference into the reader pane while preserving route ownership of the selected source and article.
+- `apps/desktop/src/features/reader-shell/components/reader-pane.tsx`: owns the Step 40 reader-mode UI, including extracted-versus-original mode buttons, representation-specific rendering, and mode-specific empty states.
+- `apps/desktop/src/features/reader-shell/mock-data.ts`: now provides distinct raw-content fixtures for article details so the shell can prove that reader-mode switches change visible output before real extraction work lands.
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`: protects Step 40 by verifying both mode switching and preservation of the latest reader-mode choice across a simulated app reopen.
+- `apps/desktop/src/styles.css`: contains shell-local presentation rules for the reader-mode control group and the raw-content code-style block so this workflow does not leak into shared UI primitives.
+
+### Step 40 Boundary Notes
+
+- `packages/shared-types` remains the DTO boundary only; Step 40 did not add reader-mode fields to cross-app article contracts.
+- `packages/shared-query` still owns article-query vocabulary and execution planning, but it does not own reader content-mode selection or right-pane representation policy.
+- `packages/ui` remains a primitive layer and does not absorb persisted shell preferences, raw-content rendering semantics, or reader-mode workflow logic.
+- `crates/feed-engine` and `crates/content-pipeline` still own fetch, parse, and future extraction semantics, not shell-level toggles or preference persistence.
+- `crates/core-domain` and SQLite remain the future durable boundary for any storage-backed reader preferences or extraction-state policy; Step 40 only validates shell-local preference handling and presentation against existing article detail data.

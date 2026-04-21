@@ -287,7 +287,16 @@ const articleDetails: Record<string, ArticleDetailDto> = {
       author: "FreelyRSS",
       summary:
         "The shell now reads like an application instead of a package showcase: source context on the left, article queue in the center, reading detail on the right.",
-      contentRaw: null,
+      contentRaw: `<article class="post">
+  <header>
+    <h1>Turning the desktop shell into a stable three-pane reader skeleton</h1>
+    <p class="dek">The shell now reads like an application instead of a package showcase.</p>
+  </header>
+  <section>
+    <p>Route params still carry source and article identity.</p>
+    <p>The shell keeps transient queue and reader controls local.</p>
+  </section>
+</article>`,
       contentExtracted:
         "Step 16 is about state ownership. The current source and selected article should be addressable through navigation, while temporary view filters stay local to the shell.\n\nThat split keeps the interface composable. Routing expresses where the user is. View state expresses how the current queue is being shaped. Async queries express where data is loaded from.\n\nOnce those boundaries are explicit, later data access work can arrive without collapsing everything back into a single component.",
       canonicalUrl: "https://freelyrss.dev/articles/layout-shell",
@@ -336,7 +345,11 @@ const articleDetails: Record<string, ArticleDetailDto> = {
       author: "Systems Desk",
       summary:
         "Selection and context can live in the shell without turning the shell into the execution layer.",
-      contentRaw: null,
+      contentRaw: `<div class="entry-content">
+  <p>A common failure mode is to let the first interactive shell absorb every future concern.</p>
+  <p>The result is a giant component that owns selection, filtering, fetching, and rendering rules.</p>
+  <p>FreelyRSS should resist that pressure early.</p>
+</div>`,
       contentExtracted:
         "A common failure mode is to let the first interactive shell absorb every future concern. The result is a giant component that owns source selection, search text, fetching, caching, and rendering rules.\n\nFreelyRSS should resist that. The desktop shell only needs enough local state to prove that the navigation boundary and the view-state boundary are stable.\n\nOnce that line is held, later phases can bring in real storage and query execution without rewriting the surface area the user sees.",
       canonicalUrl: "https://systems.example/articles/source-context",
@@ -369,7 +382,10 @@ const articleDetails: Record<string, ArticleDetailDto> = {
       author: "Query Notes",
       summary:
         "Query semantics are centralized, but Step 16 still stops before real persistence and SQL execution.",
-      contentRaw: null,
+      contentRaw: `<section>
+  <p>The shared query package can describe the filter graph before the shell becomes the execution engine.</p>
+  <p>This raw body intentionally keeps more structural markup than the extracted view will.</p>
+</section>`,
       contentExtracted:
         "The shell can already build a query definition for its local filter controls, but that does not mean it should pretend to be the execution engine yet.\n\nThe important part for this step is that the current filter conditions have a named source and can be inspected independently of the route state.\n\nThat keeps the next persistence step honest: the shell can pass explicit query state down instead of inventing implicit behavior.",
       canonicalUrl: "https://query.example/articles/query-bridge",
@@ -413,7 +429,10 @@ const articleDetails: Record<string, ArticleDetailDto> = {
       author: "FreelyRSS",
       summary:
         "Responsive behavior is part of the architecture contract, not merely a CSS finish pass.",
-      contentRaw: null,
+      contentRaw: `<article>
+  <p>Responsive behavior still matters because route transitions should not destabilize the pane model.</p>
+  <p>Empty queues should settle into a valid empty state instead of leaving stale article references behind.</p>
+</article>`,
       contentExtracted:
         "Responsive behavior still matters in Step 16 because route transitions should not destabilize the pane model.\n\nIf a source changes to an empty queue, the interface should settle into a valid empty state instead of leaving a stale article reference behind.\n\nThis is the kind of small correction that prevents later routing and database work from inheriting brittle assumptions.",
       canonicalUrl: "https://freelyrss.dev/articles/window-behavior",

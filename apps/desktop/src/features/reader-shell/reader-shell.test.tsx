@@ -344,6 +344,70 @@ describe("reader shell navigation", () => {
     ).toBeNull()
   })
 
+  test("switches reader content modes and keeps the latest mode after the app reopens", async () => {
+    window.scrollTo = () => {}
+    const user = userEvent.setup()
+    const renderShell = () =>
+      render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+
+    renderShell()
+
+    const readerPane = await screen.findByRole("region", { name: "Reading panel" })
+    const readerScope = within(readerPane)
+
+    await waitFor(() => {
+      expect(
+        readerScope
+          .getByRole("button", {
+            name: "Extracted content",
+          })
+          .getAttribute("aria-pressed"),
+      ).toBe("true")
+    })
+
+    expect(readerScope.getByText(/Step 16 is about state ownership/i)).toBeTruthy()
+    expect(readerScope.queryByText(/<article class="post">/i)).toBeNull()
+
+    await user.click(
+      readerScope.getByRole("button", {
+        name: "Original content",
+      }),
+    )
+
+    await waitFor(() => {
+      expect(
+        readerScope
+          .getByRole("button", {
+            name: "Original content",
+          })
+          .getAttribute("aria-pressed"),
+      ).toBe("true")
+    })
+
+    expect(readerScope.getByText(/<article class="post">/i)).toBeTruthy()
+    expect(readerScope.queryByText(/Step 16 is about state ownership/i)).toBeNull()
+
+    cleanup()
+    resetReaderViewStore({ preservePersistedReaderContentMode: true })
+    renderShell()
+
+    const reopenedReaderPane = await screen.findByRole("region", { name: "Reading panel" })
+    const reopenedReaderScope = within(reopenedReaderPane)
+
+    await waitFor(() => {
+      expect(
+        reopenedReaderScope
+          .getByRole("button", {
+            name: "Original content",
+          })
+          .getAttribute("aria-pressed"),
+      ).toBe("true")
+    })
+
+    expect(reopenedReaderScope.getByText(/<article class="post">/i)).toBeTruthy()
+    expect(reopenedReaderScope.queryByText(/Step 16 is about state ownership/i)).toBeNull()
+  })
+
   test("virtualizes long queues and moves the render window when the middle pane scrolls", async () => {
     window.scrollTo = () => {}
     resetMockReaderShellState({ mode: "dense-queue" })

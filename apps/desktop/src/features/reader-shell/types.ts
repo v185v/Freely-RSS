@@ -14,6 +14,8 @@ export type ReaderStatusFilter = "all" | "unread" | "reading" | "readLater" | "s
 
 export type ReaderSortMode = "newest" | "oldest"
 
+export type ReaderContentMode = "extracted" | "raw"
+
 export type ReaderThemeTone = "high-contrast" | "midnight"
 
 export interface SourceRow {

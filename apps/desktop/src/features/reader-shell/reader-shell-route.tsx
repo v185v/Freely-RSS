@@ -72,6 +72,8 @@ export function ReaderShellRoute() {
   const setCollapsedFolderIds = useReaderViewStore((state) => state.setCollapsedFolderIds)
   const setSortMode = useReaderViewStore((state) => state.setSortMode)
   const sortMode = useReaderViewStore((state) => state.sortMode)
+  const readerContentMode = useReaderViewStore((state) => state.readerContentMode)
+  const setReaderContentMode = useReaderViewStore((state) => state.setReaderContentMode)
   const setStatusFilter = useReaderViewStore((state) => state.setStatusFilter)
   const statusFilter = useReaderViewStore((state) => state.statusFilter)
   const themeTone = useReaderViewStore((state) => state.themeTone)
@@ -230,8 +232,8 @@ export function ReaderShellRoute() {
     return (
       <main className="desktop-shell">
         <div className="desktop-loading">
-          <p className="desktop-shell__eyebrow">Stage 5 / Step 39</p>
-          <h1>Loading the route-backed reader shell and reading panel base view.</h1>
+          <p className="desktop-shell__eyebrow">Stage 5 / Step 40</p>
+          <h1>Loading the route-backed reader shell and persisted content-mode view.</h1>
         </div>
       </main>
     )
@@ -333,18 +335,17 @@ export function ReaderShellRoute() {
 
       <header className="desktop-shell__header">
         <div className="desktop-shell__title-block">
-          <p className="desktop-shell__eyebrow">Stage 5 / Step 39</p>
+          <p className="desktop-shell__eyebrow">Stage 5 / Step 40</p>
           <h1>
-            The desktop shell now turns route-selected articles into a stable reading panel base
-            view.
+            The desktop shell now lets the reader switch between extracted and original content.
           </h1>
           <p className="desktop-shell__lead">
             Route state still owns the active source and article, the shell store still owns only
-            local queue controls and folder expansion, and the mock repository remains a shell-side
-            snapshot source. Step 39 keeps the Step 37 query boundary and Step 38 virtualization
-            boundary intact, then makes the right pane its own explicit composition surface:
-            metadata, summary, and extracted body content now all switch with the selected queue
-            article instead of leaving the reader as a placeholder detail card.
+            local queue controls, folder expansion, and now the reader content-mode preference, and
+            the mock repository remains a shell-side snapshot source. Step 40 keeps the Step 37
+            query boundary, Step 38 virtualization boundary, and Step 39 reading-panel boundary
+            intact, then makes raw versus extracted content an explicit reader choice instead of an
+            implicit fallback path.
           </p>
         </div>
 
@@ -377,8 +378,9 @@ export function ReaderShellRoute() {
 
           <p className="desktop-summary__note">
             The queue still consumes one route-backed article query while source editing, OPML
-            portability, and tree expansion remain separate concerns. Step 39 adds a stable reader
-            view contract on the right without changing query vocabulary or storage boundaries.
+            portability, and tree expansion remain separate concerns. Step 40 adds a persisted
+            reader-mode preference on the right without changing query vocabulary or storage
+            boundaries.
           </p>
 
           <div className="desktop-shortcuts">
@@ -507,8 +509,10 @@ export function ReaderShellRoute() {
             activeDetail={activeDetail}
             describedBy={READER_SHORTCUT_HINT_ID}
             headingId={READER_LANDMARK_IDS.readerHeading}
+            onSetReaderContentMode={setReaderContentMode}
             paneId={READER_LANDMARK_IDS.reader}
             paneRef={readerPaneRef}
+            readerContentMode={readerContentMode}
           />
         </SplitLayout>
       </div>

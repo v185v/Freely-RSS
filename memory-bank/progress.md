@@ -697,3 +697,30 @@
 - desktop reader shell owns reading-panel presentation and route-adjacent article selection wiring.
 - `packages/shared-types` remains DTO-only, and the reader pane continues to consume resolved article detail rather than executing its own queries.
 - durable article rendering preferences and content-source persistence still belong to later shell/store or `core-domain/sqlite` work rather than this presentation step.
+
+## 2026-04-21 ASCII Addendum IV
+
+### Stage 5 Step 40 Completed: extracted and original reader modes in the desktop shell
+
+- Implemented a shell-local reader content-mode toggle so the right pane can switch between extracted reading text and original source content for the currently selected article.
+- Kept Step 40 inside the desktop shell presentation and local-preference boundary. No Rust crate, SQLite schema, shared DTO contract, or durable article-storage contract changed in this step.
+- Added `ReaderContentMode` and a persisted shell preference in `state.ts`, so the latest reader-mode choice is stored locally and reused when the app reopens.
+- Updated the shell route to treat reader mode like other local view controls: route state still owns `sourceId` and `articleId`, while the shell store now owns the content-mode preference that the reader pane consumes.
+- Expanded the reader pane to present explicit mode buttons, render extracted content as reading paragraphs, render original content as a raw source block, and show mode-specific empty states when one representation is unavailable.
+- Added distinct `contentRaw` fixture payloads to the mock reader-shell article details so the Step 40 mode switch produces visible output changes before the later extraction-pipeline milestone lands.
+- Added a Step 40 regression that toggles the current article between extracted and original modes, then simulates reopening the app and verifies that the latest content-mode choice is preserved.
+
+### Step 40 Verification
+
+- Passed `corepack pnpm --filter @freelyrss/desktop test`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+
+### Next Step (ASCII update)
+
+- Next planned implementation step is `implementation-plan.md` Stage 5 Step 41: content extraction pipeline.
+- Preserve the current boundary split:
+- desktop reader shell owns the reader-mode toggle, local preference persistence, and content-mode presentation.
+- `packages/shared-types` remains DTO-only, and the right pane still consumes already-resolved article detail instead of inventing new reader-specific contracts.
+- durable extraction output generation and any storage-backed content-source policy still belong to later `content-pipeline` and `core-domain/sqlite` work rather than this shell-only presentation step.

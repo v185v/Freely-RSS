@@ -4,13 +4,16 @@ import type { ArticleDetailDto } from "@freelyrss/shared-types"
 import { Button, SplitPane, Surface } from "@freelyrss/ui"
 
 import { formatReaderProgress } from "../selectors"
+import type { ReaderContentMode } from "../types"
 
 type ReaderPaneProps = {
   activeDetail: ArticleDetailDto | null
   describedBy?: string
   headingId: string
+  onSetReaderContentMode: (readerContentMode: ReaderContentMode) => void
   paneId: string
   paneRef?: Ref<HTMLElement>
+  readerContentMode: ReaderContentMode
 }
 
 function formatReaderDate(value: string | null) {
@@ -38,15 +41,19 @@ export function ReaderPane({
   activeDetail,
   describedBy,
   headingId,
+  onSetReaderContentMode,
   paneId,
   paneRef,
+  readerContentMode,
 }: ReaderPaneProps) {
-  const readerContent =
-    activeDetail?.article.contentExtracted ?? activeDetail?.article.contentRaw ?? null
-  const readerParagraphs = readerContent
+  const extractedContent = activeDetail?.article.contentExtracted?.trim() ?? null
+  const rawContent = activeDetail?.article.contentRaw?.trim() ?? null
+  const extractedParagraphs = extractedContent
     ?.split("\n\n")
     .map((paragraph) => paragraph.trim())
     .filter((paragraph) => paragraph.length > 0)
+  const activeReaderContent = readerContentMode === "raw" ? rawContent : extractedContent
+  const alternateReaderContent = readerContentMode === "raw" ? extractedContent : rawContent
   const primaryUrl = activeDetail?.article.canonicalUrl ?? activeDetail?.article.originalUrl ?? null
 
   return (
@@ -69,8 +76,9 @@ export function ReaderPane({
             <p className="desktop-pane__focus-title">No article selected yet</p>
           )}
           <p className="desktop-pane__description">
-            The selected article still comes from route state, but Step 39 turns that selection into
-            a stable base reader view with metadata, summary, and body content.
+            The selected article still comes from route state, but Step 40 adds an explicit reader
+            content mode on top of the Step 39 base view: extracted text and original source content
+            can now be inspected separately without changing article selection.
           </p>
         </div>
 
@@ -119,9 +127,8 @@ export function ReaderPane({
                     <div>
                       <p className="desktop-reader__section-label">Reading body</p>
                       <p className="desktop-reader__body-note">
-                        The right pane now renders a stable article view from the active queue item
-                        instead of a shell placeholder, so article switches do not leave stale text
-                        behind.
+                        Reader mode is a shell-local preference. The latest selection is stored
+                        locally so the next reader session reopens in the same content mode.
                       </p>
                     </div>
                     <div className="desktop-reader__body-meta">
@@ -136,21 +143,68 @@ export function ReaderPane({
                     </div>
                   </div>
 
-                  {readerParagraphs && readerParagraphs.length > 0 ? (
+                  <fieldset className="desktop-toolbar-group desktop-reader__mode-switch">
+                    <legend className="desktop-toolbar-group__legend">Reader mode</legend>
+                    <div className="desktop-toolbar-pills">
+                      <Button
+                        aria-pressed={readerContentMode === "extracted"}
+                        className={
+                          readerContentMode === "extracted"
+                            ? "desktop-pill desktop-pill--active"
+                            : "desktop-pill"
+                        }
+                        onClick={() => onSetReaderContentMode("extracted")}
+                        size="sm"
+                        tone={readerContentMode === "extracted" ? "neutral" : "ghost"}
+                      >
+                        Extracted content
+                      </Button>
+                      <Button
+                        aria-pressed={readerContentMode === "raw"}
+                        className={
+                          readerContentMode === "raw"
+                            ? "desktop-pill desktop-pill--active"
+                            : "desktop-pill"
+                        }
+                        onClick={() => onSetReaderContentMode("raw")}
+                        size="sm"
+                        tone={readerContentMode === "raw" ? "neutral" : "ghost"}
+                      >
+                        Original content
+                      </Button>
+                    </div>
+                    <p className="desktop-reader__mode-note">
+                      Extracted mode prefers cleaned reading text. Original mode keeps the raw
+                      source body visible for comparison and later extraction work.
+                    </p>
+                  </fieldset>
+
+                  {readerContentMode === "extracted" &&
+                  extractedParagraphs &&
+                  extractedParagraphs.length > 0 ? (
                     <div className="desktop-reader__content">
-                      {readerParagraphs.map((paragraph) => (
+                      {extractedParagraphs.map((paragraph) => (
                         <p className="desktop-reader__paragraph" key={paragraph}>
                           {paragraph}
                         </p>
                       ))}
                     </div>
+                  ) : readerContentMode === "raw" && activeReaderContent ? (
+                    <pre className="desktop-reader__raw-content">{activeReaderContent}</pre>
                   ) : (
                     <div className="desktop-empty-state desktop-empty-state--compact">
                       <p className="desktop-empty-state__eyebrow">Body unavailable</p>
-                      <h3>This article does not have extracted body text yet.</h3>
+                      <h3>
+                        {readerContentMode === "raw"
+                          ? "This article does not expose original source content yet."
+                          : "This article does not have extracted body text yet."}
+                      </h3>
                       <p>
-                        The reading panel still keeps summary and metadata visible so the route can
-                        switch cleanly without leaking content from the previously selected article.
+                        {alternateReaderContent
+                          ? `Switch to ${
+                              readerContentMode === "raw" ? "extracted" : "original"
+                            } content to keep reading without changing the selected article.`
+                          : "The reading panel still keeps summary and metadata visible so the route can switch cleanly without leaking content from the previously selected article."}
                       </p>
                     </div>
                   )}
