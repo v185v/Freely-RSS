@@ -18,6 +18,7 @@ import {
   type ReaderShortcutTarget,
   isEditableTarget,
 } from "./accessibility"
+import { buildReaderArticleQuery } from "./article-query"
 import { NavigationStrip } from "./components/navigation-strip"
 import { QueuePane } from "./components/queue-pane"
 import { ReaderPane } from "./components/reader-pane"
@@ -32,13 +33,7 @@ import {
   refreshMockFeed,
   updateMockFeed,
 } from "./mock-data"
-import {
-  buildSubscriptionTreeRows,
-  buildViewFilterSummary,
-  findSourceRow,
-  getVisibleArticles,
-  resolveSelectedArticleId,
-} from "./selectors"
+import { buildSubscriptionTreeRows, findSourceRow, resolveSelectedArticleId } from "./selectors"
 import { useReaderViewStore } from "./state"
 import { DEFAULT_SOURCE_ID } from "./types"
 import type { ReaderRouteSearch } from "./types"
@@ -195,14 +190,14 @@ export function ReaderShellRoute() {
     statusFilter,
   }
   const activeSource = shellData ? findSourceRow(shellData, routeState.sourceId) : null
-  const visibleArticles =
-    shellData && activeSource ? getVisibleArticles(shellData, activeSource.id, filters) : []
+  const articleQuery =
+    shellData && activeSource ? buildReaderArticleQuery(shellData, activeSource.id, filters) : null
+  const visibleArticles = articleQuery?.visibleArticles ?? []
   const activeArticleId = shellData
     ? resolveSelectedArticleId(visibleArticles, routeState.articleId)
     : null
   const activeDetail =
     shellData && activeArticleId ? (shellData.articleDetails[activeArticleId] ?? null) : null
-  const filterSummary = buildViewFilterSummary(filters)
   const subscriptionRows = shellData
     ? buildSubscriptionTreeRows(shellData, collapsedFolderIds, routeState.sourceId)
     : []
@@ -235,8 +230,8 @@ export function ReaderShellRoute() {
     return (
       <main className="desktop-shell">
         <div className="desktop-loading">
-          <p className="desktop-shell__eyebrow">Stage 4 / Step 36</p>
-          <h1>Loading OPML portability controls and route-backed source context.</h1>
+          <p className="desktop-shell__eyebrow">Stage 5 / Step 37</p>
+          <h1>Loading the unified article query flow and route-backed queue context.</h1>
         </div>
       </main>
     )
@@ -259,6 +254,8 @@ export function ReaderShellRoute() {
   }
 
   const resolvedShellData = shellData
+  const resolvedArticleQuery =
+    articleQuery ?? buildReaderArticleQuery(shellData, activeSource.id, filters)
   const highContrastEnabled = themeTone === "high-contrast"
 
   function selectSource(sourceId: string) {
@@ -336,18 +333,18 @@ export function ReaderShellRoute() {
 
       <header className="desktop-shell__header">
         <div className="desktop-shell__title-block">
-          <p className="desktop-shell__eyebrow">Stage 4 / Step 36</p>
+          <p className="desktop-shell__eyebrow">Stage 5 / Step 37</p>
           <h1>
-            OPML portability now extends the left pane without breaking route or tree ownership.
+            Article queues now flow through one explicit query boundary instead of scattered shell
+            filters.
           </h1>
           <p className="desktop-shell__lead">
-            Feed editing plus OPML import and export now sit next to selection in the reader shell:
-            route state still owns the active source and article, the shell store still owns only
-            local tree expansion plus queue view state, and the mock repository stays the single
-            writer for editable feed facts and portable source structure transforms. That keeps Step
-            36 on the desktop command boundary instead of pushing folder reconstruction, duplicate
-            handling, or OPML serialization into shared DTO assembly, the fetch pipeline, or the
-            Rust host shell.
+            Route state still owns the active source and article, the shell store still owns only
+            local queue controls and folder expansion, and the mock repository remains a shell-side
+            snapshot source. Step 37 adds the missing composition layer between those boundaries:
+            the current source scope, search text, status preset, and sort mode now compile into a
+            single article query definition that drives the middle pane without pushing query
+            semantics down into shared DTOs, the Rust host shell, or the feed engine.
           </p>
         </div>
 
@@ -379,8 +376,8 @@ export function ReaderShellRoute() {
           </div>
 
           <p className="desktop-summary__note">
-            Feed edits plus OPML imports and exports now flow through shell-level command paths
-            while grouped selection and collapsed folders remain separate concerns.
+            The queue now consumes one route-backed article query while source editing, OPML
+            portability, and tree expansion remain separate concerns.
           </p>
 
           <div className="desktop-shortcuts">
@@ -490,7 +487,6 @@ export function ReaderShellRoute() {
             activeArticleId={activeArticleId}
             activeSource={activeSource}
             describedBy={READER_SHORTCUT_HINT_ID}
-            filterSummary={filterSummary}
             headingId={READER_LANDMARK_IDS.queueHeading}
             onSearchTextChange={setSearchText}
             onSelectArticle={selectArticle}
@@ -498,6 +494,7 @@ export function ReaderShellRoute() {
             onSetStatusFilter={setStatusFilter}
             paneId={READER_LANDMARK_IDS.queue}
             paneRef={queuePaneRef}
+            querySummary={resolvedArticleQuery.summary}
             searchText={searchText}
             sortMode={sortMode}
             statusFilter={statusFilter}

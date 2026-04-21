@@ -65,6 +65,17 @@ test("SQL compilation produces joins, parameters, and order by clauses", () => {
   assert.ok(plan.orderBy.some((entry) => entry.includes("user_state.importance")))
 })
 
+test("feed id predicates compile directly against the article table", () => {
+  const definition = buildQueryDefinition({
+    clauses: [predicate("feedId", "feed-freelyrss")],
+  })
+
+  const plan = compileQueryToSqlPlan(definition)
+
+  assert.ok(plan.whereClause.includes("article.feed_id = ?"))
+  assert.deepEqual(plan.parameters, ["feed-freelyrss"])
+})
+
 test("invalid predicates surface validation issues", () => {
   const issues = validateQueryDefinition({
     version: 1,

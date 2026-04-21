@@ -101,7 +101,14 @@ function compileFieldPredicate(predicate: QueryPredicateNode, builder: SqlPlanBu
         "article.summary",
         "article.content_extracted",
         "article.content_raw",
+        "COALESCE(feed.custom_name, feed.title)",
       ]
+      builder.ensureJoin({
+        alias: "feed",
+        kind: "inner",
+        on: "feed.id = article.feed_id",
+        table: "Feed",
+      })
       const conditions = columns.map((column) => {
         const placeholder = builder.addParameter(likePattern(value))
         return `${column} LIKE ${placeholder} ESCAPE '\\'`
@@ -109,6 +116,8 @@ function compileFieldPredicate(predicate: QueryPredicateNode, builder: SqlPlanBu
       const joined = conditions.join(" OR ")
       return predicate.operator === "notContains" ? `NOT (${joined})` : `(${joined})`
     }
+    case "feedId":
+      return buildComparison("article.feed_id", predicate, builder)
     case "title":
       return buildComparison("article.title", predicate, builder)
     case "author":

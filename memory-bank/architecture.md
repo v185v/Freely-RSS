@@ -1236,3 +1236,33 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `packages/ui` remains a primitive layer and does not absorb OPML serialization or copy/export workflow semantics.
 - `crates/feed-engine` still owns remote feed fetch and parse semantics, not source-tree portability or OPML serialization.
 - `crates/core-domain` and SQLite remain the later durable boundary for real OPML import/export persistence; Step 36 only validates desktop-shell interaction, reversible structure shape, and shell-side serialization.
+
+## 2026-04-21 ASCII Addendum
+
+### Step 37 Architecture Insights
+
+- Step 37 confirms that article-list composition is now its own desktop-shell boundary. The queue no longer depends on scattered selector filters; it depends on one explicit article query assembled from route scope plus shell-owned view controls.
+- The route still owns `sourceId` and `articleId`. The shell store still owns only local queue controls such as search text, status preset, sort mode, and collapsed folders. Step 37 does not move those concerns into shared DTOs or persistence primitives.
+- `packages/shared-query` is now part of the live shell composition path rather than only a preview helper. Feed routes, folder routes, quick views, search text, and sort order now all converge into the same query vocabulary.
+- Adding `feedId` to the shared query AST is the key architectural decision in this step. It lets concrete source scope compile into the same query language as read-state and text filters, which keeps future SQLite execution aligned with the shell contract.
+- Mock execution remains shell-local in this step. The new article-query module evaluates the shared-query definition against shell snapshots so the queue can prove the composition boundary before real SQLite-backed execution lands.
+- No database schema changes were required for Step 37. The existing schema already contains the facts needed for later durable query execution; this step only validates the desktop-shell query shape and shared vocabulary.
+
+### Step 37 File Responsibilities
+
+- `apps/desktop/src/features/reader-shell/article-query.ts`: owns Step 37 query composition and execution; maps route source scope plus shell filters into a shared-query definition and evaluates that definition against mock article snapshots.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`: remains the shell composition root; now resolves one article query object for the middle pane instead of chaining ad hoc selector filters in the route.
+- `apps/desktop/src/features/reader-shell/components/queue-pane.tsx`: owns queue filter controls and now presents the unified article-query summary and serialized query payload alongside the visible article rows.
+- `apps/desktop/src/features/reader-shell/selectors.ts`: continues to own source-tree projection, active-source lookup, selection fallback, and article-row formatting, but no longer owns article-query execution logic.
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`: protects Step 37 by verifying that route scope, sort mode, search text, and status presets combine into one queue result flow.
+- `packages/shared-query/src/ast.ts`: extends the shared query vocabulary with `feedId`, making source identity a first-class query field rather than a shell-only side channel.
+- `packages/shared-query/src/schema.ts`: defines `feedId` field semantics and aliases so builders, validators, and future text-query inputs understand source-id predicates consistently.
+- `packages/shared-query/src/sql-plan.ts`: compiles `feedId` predicates against the article table and widens `anyText` matching to include feed display titles, keeping SQL planning aligned with current queue-search behavior.
+- `packages/shared-query/test/query.test.mjs`: regression coverage for the query package boundary; now verifies that `feedId` predicates compile directly into SQL plan parameters.
+
+### Step 37 Boundary Notes
+
+- `packages/shared-types` remains the DTO boundary only; Step 37 did not add query-specific DTO fields or push shell query state into cross-app contracts.
+- `packages/ui` remains a primitive layer and does not absorb query construction, source-scope expansion, or mock execution logic.
+- `crates/feed-engine` still owns fetch and parse semantics, not queue filtering or article-list query composition.
+- `crates/core-domain` and SQLite remain the future durable execution boundary for article queries; Step 37 only validates the shell-side composition shape before that storage-backed integration.

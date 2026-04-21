@@ -183,6 +183,102 @@ describe("reader shell navigation", () => {
     ).toBeNull()
   })
 
+  test("combines route scope, shell filters, and sort mode into one article query flow", async () => {
+    window.scrollTo = () => {}
+    const user = userEvent.setup()
+
+    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+
+    const sourcePane = await screen.findByRole("region", { name: "Sources" })
+    const subscriptionTree = within(sourcePane)
+      .getByRole("heading", {
+        name: "Subscription tree",
+      })
+      .closest("section")
+
+    expect(subscriptionTree).not.toBeNull()
+
+    const treeScope = within(subscriptionTree as HTMLElement)
+
+    await user.click(
+      treeScope.getByRole("button", {
+        name: /healthy.*FreelyRSS Engineering/i,
+      }),
+    )
+
+    await waitFor(() => {
+      expect(window.location.search).toContain("sourceId=feed-freelyrss")
+    })
+
+    const queuePane = screen.getByRole("region", { name: "Article queue" })
+    const queueScope = within(queuePane)
+    const getQueueRows = () => Array.from(queuePane.querySelectorAll(".desktop-article-row"))
+
+    await waitFor(() => {
+      const rows = getQueueRows()
+      expect(rows).toHaveLength(2)
+      expect(rows[0]?.textContent).toContain(
+        "Turning the desktop shell into a stable three-pane reader skeleton",
+      )
+    })
+
+    expect(
+      queueScope.getByText(/Route scope "FreelyRSS Engineering" maps to a single feed id\./i, {
+        selector: "p",
+      }),
+    ).toBeTruthy()
+    expect(queueScope.getByText(/"field": "feedId"/i)).toBeTruthy()
+    expect(queueScope.getByText(/"value": "feed-freelyrss"/i)).toBeTruthy()
+    expect(queueScope.getByText(/"direction": "desc"/i)).toBeTruthy()
+
+    await user.click(queueScope.getByRole("button", { name: "Sort: oldest" }))
+
+    await waitFor(() => {
+      const rows = getQueueRows()
+      expect(rows).toHaveLength(2)
+      expect(rows[0]?.textContent).toContain(
+        "Making narrow-window behavior predictable before routing and async data land",
+      )
+    })
+
+    expect(queueScope.getByText(/"direction": "asc"/i)).toBeTruthy()
+
+    fireEvent.change(queueScope.getByLabelText("Article view filter"), {
+      target: { value: "narrow-window" },
+    })
+
+    await waitFor(() => {
+      const rows = getQueueRows()
+      expect(rows).toHaveLength(1)
+      expect(rows[0]?.textContent).toContain(
+        "Making narrow-window behavior predictable before routing and async data land",
+      )
+    })
+
+    await user.click(queueScope.getByRole("button", { name: "Reading" }))
+
+    await waitFor(() => {
+      expect(
+        queueScope.getByText("No placeholder articles are visible for this route yet."),
+      ).toBeTruthy()
+    })
+
+    fireEvent.change(queueScope.getByLabelText("Article view filter"), {
+      target: { value: "" },
+    })
+
+    await waitFor(() => {
+      const rows = getQueueRows()
+      expect(rows).toHaveLength(1)
+      expect(rows[0]?.textContent).toContain(
+        "Turning the desktop shell into a stable three-pane reader skeleton",
+      )
+    })
+
+    expect(queueScope.getByText(/"field": "readState"/i)).toBeTruthy()
+    expect(queueScope.getByText(/"value": "reading"/i)).toBeTruthy()
+  })
+
   test("edits feed metadata and records a manual refresh through the shell command path", async () => {
     window.scrollTo = () => {}
     const user = userEvent.setup()

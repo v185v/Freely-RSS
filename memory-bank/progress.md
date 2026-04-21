@@ -618,3 +618,31 @@
 - desktop reader shell owns OPML import/export presentation plus route-adjacent command wiring.
 - shell mock repository owns OPML parsing, OPML serialization, and round-tripable source-structure snapshots.
 - `packages/shared-types` remains DTO-only, and durable OPML persistence plus article-query execution still belong to later `core-domain/sqlite` integration.
+
+## 2026-04-21 ASCII Addendum
+
+### Stage 5 Step 37 Completed: article list query flow in the desktop shell
+
+- Implemented a dedicated shell-side article query composition layer that turns the current route source, queue search text, status preset, and sort mode into one explicit query definition.
+- Kept Step 37 inside the desktop shell and shared query-boundary layers. No Rust crate, SQLite schema, or durable persistence contract changed in this step.
+- Added `apps/desktop/src/features/reader-shell/article-query.ts` as the Step 37 execution boundary. It now owns source-scope clause generation, shared-query definition assembly, and mock execution against shell snapshots.
+- Moved the middle-pane list away from ad hoc chained filters in `selectors.ts`. The route now resolves a single article query object and uses its visible result set plus serialized preview to drive the queue.
+- Extended `packages/shared-query` with a first-class `feedId` field so feed and folder route scopes can compile into the same query vocabulary used by shell filters and future SQL execution.
+- Widened `anyText` SQL compilation to include feed display titles, which keeps current queue-search semantics aligned with the shared query package rather than leaving feed-title matching as a shell-only special case.
+- Updated queue presentation so the middle pane now shows the active article query summary and serialized shared-query payload, making the route/filter/sort composition boundary visible and inspectable.
+- Added a Step 37 regression that selects a concrete feed route, flips sort order, narrows the queue with search text, then layers on a status preset to verify the queue result set follows one combined query path.
+
+### Step 37 Verification
+
+- Passed `corepack pnpm --filter @freelyrss/desktop test`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+
+### Next Step (ASCII update)
+
+- Next planned implementation step is `implementation-plan.md` Stage 5 Step 38: article list virtualization.
+- Preserve the current boundary split:
+- desktop reader shell owns route-adjacent query composition, local queue controls, and query preview presentation.
+- `packages/shared-query` owns the reusable query vocabulary and future SQL compilation surface.
+- durable article-query execution against SQLite still belongs to later `core-domain/sqlite` integration rather than the mock shell repository.

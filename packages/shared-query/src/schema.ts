@@ -27,6 +27,12 @@ export const QUERY_FIELD_SCHEMAS: Record<QueryField, QueryFieldSchema> = {
     label: "Any text",
     operators: ["contains", "notContains"],
   },
+  feedId: {
+    kind: "text",
+    defaultOperator: "eq",
+    label: "Feed id",
+    operators: ["eq", "neq", "in", "notIn"],
+  },
   title: {
     kind: "text",
     defaultOperator: "contains",
@@ -125,6 +131,7 @@ export const QUERY_FIELD_ALIASES: Record<string, QueryField> = {
   author: "author",
   content: "content",
   feed: "feedTitle",
+  feedid: "feedId",
   hasattachment: "hasAttachment",
   importance: "importance",
   lang: "language",

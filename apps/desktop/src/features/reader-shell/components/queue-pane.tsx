@@ -6,9 +6,9 @@ import { Button, ListRow, ListSection, SplitPane, Surface, TextInput } from "@fr
 import { formatArticleMeta } from "../selectors"
 import { READER_STATUS_FILTER_OPTIONS } from "../types"
 import type {
+  ReaderArticleQuerySummary,
   ReaderSortMode,
   ReaderStatusFilter,
-  ReaderViewFilterSummary,
   SourceRow,
 } from "../types"
 
@@ -16,7 +16,6 @@ type QueuePaneProps = {
   activeArticleId: string | null
   activeSource: SourceRow
   describedBy?: string
-  filterSummary: ReaderViewFilterSummary
   headingId: string
   onSearchTextChange: (searchText: string) => void
   onSelectArticle: (articleId: string) => void
@@ -24,6 +23,7 @@ type QueuePaneProps = {
   onSetStatusFilter: (statusFilter: ReaderStatusFilter) => void
   paneId: string
   paneRef?: Ref<HTMLElement>
+  querySummary: ReaderArticleQuerySummary
   searchText: string
   sortMode: ReaderSortMode
   statusFilter: ReaderStatusFilter
@@ -34,7 +34,6 @@ export function QueuePane({
   activeArticleId,
   activeSource,
   describedBy,
-  filterSummary,
   headingId,
   onSearchTextChange,
   onSelectArticle,
@@ -42,6 +41,7 @@ export function QueuePane({
   onSetStatusFilter,
   paneId,
   paneRef,
+  querySummary,
   searchText,
   sortMode,
   statusFilter,
@@ -72,7 +72,7 @@ export function QueuePane({
         <div className="desktop-pane__toolbar">
           <TextInput
             aria-label="Article view filter"
-            hint="This input lives in the shell store. Its AST preview is built with shared-query."
+            hint="This input lives in the shell store and compiles into the unified article query definition."
             label="Queue filter"
             onChange={handleSearchTextChange}
             placeholder="Filter within the current route"
@@ -132,23 +132,17 @@ export function QueuePane({
 
         <Surface className="desktop-view-state" compact>
           <div className="desktop-view-state__summary">
-            <span className="desktop-summary__label">View State</span>
-            <strong>{filterSummary.summary}</strong>
+            <span className="desktop-summary__label">Article Query</span>
+            <strong>{querySummary.summary}</strong>
           </div>
-          {filterSummary.jsonPreview ? (
-            <pre className="desktop-view-state__preview">{filterSummary.jsonPreview}</pre>
-          ) : (
-            <p className="desktop-view-state__note">
-              No shared-query definition is needed until the shell store adds at least one filter
-              clause.
-            </p>
-          )}
+          <p className="desktop-view-state__note">{querySummary.sourceSummary}</p>
+          <pre className="desktop-view-state__preview">{querySummary.jsonPreview}</pre>
         </Surface>
 
         <div className="desktop-pane__scroll">
           {visibleArticles.length > 0 ? (
             <ListSection
-              description={`${visibleArticles.length} placeholder article(s) visible for the current route and shell-owned view state.`}
+              description={`${visibleArticles.length} placeholder article(s) visible for the current route-backed article query.`}
               title="Article queue"
             >
               {visibleArticles.map((article) => (
@@ -170,8 +164,8 @@ export function QueuePane({
               <p className="desktop-empty-state__eyebrow">Empty queue</p>
               <h3>No placeholder articles are visible for this route yet.</h3>
               <p>
-                This is the Step 16 fallback: the route can point at an empty source without leaving
-                a stale article reference behind.
+                The unified article query now evaluates to zero results for the current route and
+                shell filters without leaving a stale article reference behind.
               </p>
             </div>
           )}

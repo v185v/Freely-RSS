@@ -14,6 +14,7 @@ export const QUERY_OPERATORS = [
 ] as const
 export const QUERY_FIELDS = [
   "anyText",
+  "feedId",
   "title",
   "author",
   "summary",

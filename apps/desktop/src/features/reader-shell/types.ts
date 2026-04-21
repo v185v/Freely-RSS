@@ -1,3 +1,4 @@
+import type { QueryDefinition } from "@freelyrss/shared-query"
 import type {
   ArticleDetailDto,
   ArticleListItemDto,
@@ -82,10 +83,17 @@ export interface ReaderViewFilters {
   statusFilter: ReaderStatusFilter
 }
 
-export interface ReaderViewFilterSummary {
-  conditionCount: number
-  jsonPreview: string | null
+export interface ReaderArticleQuerySummary {
+  clauseCount: number
+  jsonPreview: string
+  sourceSummary: string
   summary: string
+}
+
+export interface ReaderArticleQuery {
+  definition: QueryDefinition
+  summary: ReaderArticleQuerySummary
+  visibleArticles: ArticleListItemDto[]
 }
 
 export const READER_STATUS_FILTER_OPTIONS: Array<{
