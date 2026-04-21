@@ -1350,3 +1350,31 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `packages/ui` remains a primitive layer and does not absorb persisted shell preferences, raw-content rendering semantics, or reader-mode workflow logic.
 - `crates/feed-engine` and `crates/content-pipeline` still own fetch, parse, and future extraction semantics, not shell-level toggles or preference persistence.
 - `crates/core-domain` and SQLite remain the future durable boundary for any storage-backed reader preferences or extraction-state policy; Step 40 only validates shell-local preference handling and presentation against existing article detail data.
+
+## 2026-04-21 ASCII Addendum V
+
+### Step 41 Architecture Insights
+
+- Step 41 confirms that content extraction is now a real Rust-layer boundary rather than a reader-shell fixture concern. The desktop shell still presents extracted versus raw content, but it no longer defines how extraction should work.
+- The key architectural decision in this step is to return one cohesive extraction result object: cleaned HTML, extracted text, thumbnail URL, language estimate, and word-count estimate. That keeps downstream storage and reader integration aligned on one pipeline contract instead of scattering secondary heuristics across multiple layers.
+- Candidate selection and sanitization are both owned by `crates/content-pipeline`. `feed-engine` continues to own transport, format parsing, and feed normalization, but it does not decide which HTML subtree is the readable article body.
+- Thumbnail discovery is also intentionally colocated with extraction. Open Graph and Twitter image metadata, plus first-content-image fallback, belong to the same content-understanding pass as body selection rather than to UI code or feed transport code.
+- Language and word-count estimation now sit next to extracted-text generation. That is the right boundary because both values depend on the final readable text, not on raw transport payloads or shell display logic.
+- No database schema changes were required for Step 41. The existing `Article` schema already has `content_extracted`, `thumbnail`, `language`, and `word_count`; this step only establishes the reusable generation path that can later feed those fields.
+
+### Step 41 File Responsibilities
+
+- `crates/content-pipeline/Cargo.toml`: declares the crate boundary and the minimal parsing, URL-resolution, and error-handling dependencies required for extraction work.
+- `crates/content-pipeline/src/lib.rs`: defines the public surface of the content pipeline and re-exports the stable Step 41 contract and implementation entry points.
+- `crates/content-pipeline/src/error.rs`: owns crate-local failure semantics for invalid or unresolvable URLs encountered during extraction.
+- `crates/content-pipeline/src/model.rs`: defines the pipeline input and output contracts so later feed, storage, or sync integration can consume one explicit result shape.
+- `crates/content-pipeline/src/sanitize.rs`: owns HTML cleanup helpers, including block stripping, wrapper removal, unsafe-attribute removal, comment removal, and whitespace normalization.
+- `crates/content-pipeline/src/extraction.rs`: owns Step 41 extraction behavior end to end, including candidate scoring, readable-text extraction, thumbnail discovery, language estimation, word counting, and crate-level regression tests.
+
+### Step 41 Boundary Notes
+
+- `apps/desktop` still owns reader presentation, content-mode toggles, and local UI preferences; it does not own extraction heuristics or cleaned-body generation.
+- `packages/shared-types` remains the DTO boundary only; Step 41 did not add pipeline-specific cross-app contracts.
+- `packages/ui` remains a primitive layer and does not absorb content scoring, sanitization, thumbnail detection, or text-analysis logic.
+- `crates/feed-engine` still owns remote fetch, feed-format parse, and normalization semantics; Step 41 does not move transport or feed-document concerns into `content-pipeline`.
+- `crates/core-domain` and SQLite remain the later durable boundary that will persist extraction outputs into article records; Step 41 only establishes the reusable Rust processing contract ahead of that storage wiring.

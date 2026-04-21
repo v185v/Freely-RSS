@@ -7,3 +7,9 @@ version.workspace = true
 
 [lib]
 path = "src/lib.rs"
+
+[dependencies]
+freelyrss-core-domain = { path = "../core-domain" }
+scraper = "0.24.0"
+thiserror = "2.0.17"
+url = "2.5.7"

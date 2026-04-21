@@ -724,3 +724,35 @@
 - desktop reader shell owns the reader-mode toggle, local preference persistence, and content-mode presentation.
 - `packages/shared-types` remains DTO-only, and the right pane still consumes already-resolved article detail instead of inventing new reader-specific contracts.
 - durable extraction output generation and any storage-backed content-source policy still belong to later `content-pipeline` and `core-domain/sqlite` work rather than this shell-only presentation step.
+
+## 2026-04-21 ASCII Addendum V
+
+### Stage 5 Step 41 Completed: content extraction pipeline in Rust
+
+- Implemented the first real `crates/content-pipeline` boundary instead of keeping Step 41 as a shell-side placeholder.
+- Added a dedicated content-pipeline contract that accepts raw HTML plus an optional document URL and returns cleaned HTML, extracted text, thumbnail URL, language estimate, and word-count estimate.
+- Kept Step 41 inside the Rust content-processing layer. No desktop-shell route logic, shared DTO contract, SQLite schema, or persistence wiring changed in this step.
+- Added candidate scoring for `article` / `main` / `section` / `div` / `body` nodes so the extraction path prefers likely reading content instead of whole-page boilerplate.
+- Added thumbnail recognition that prefers Open Graph or Twitter image metadata and falls back to the first content image, with relative URLs resolved against the document URL.
+- Added lightweight sanitization that strips comments, scripts, styles, form-like blocks, noisy structural wrappers, and unsafe attributes before returning cleaned HTML.
+- Added language and word-count heuristics so later storage wiring can populate `Article.language` and `Article.word_count` from the same extraction result instead of inventing separate estimators downstream.
+- Added Rust unit coverage for boilerplate removal, extracted-body selection, meta-thumbnail resolution, content-image fallback, and CJK language/word-count estimation.
+
+### Step 41 Verification
+
+- Passed `cargo test -p freelyrss-content-pipeline`
+- Passed `cargo clippy -p freelyrss-content-pipeline --all-targets -- -D warnings`
+- Passed `cargo fmt --all --check`
+- Passed `cargo clippy --workspace --all-targets -- -D warnings`
+- Passed `cargo test --workspace`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+
+### Next Step (ASCII update)
+
+- Next planned implementation step is `implementation-plan.md` Stage 5 Step 42: attachment and podcast enclosure support.
+- Preserve the current boundary split:
+- `crates/content-pipeline` now owns cleaned-body extraction, thumbnail detection, and text-derived language / word-count estimation.
+- `crates/feed-engine` still owns remote fetch and feed-document parse semantics, not reader presentation or desktop-shell state.
+- durable persistence of extraction results still belongs to later `core-domain/sqlite` integration rather than this standalone content-processing step.

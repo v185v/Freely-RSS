@@ -253,6 +253,12 @@ dependencies = [
 [[package]]
 name = "freelyrss-content-pipeline"
 version = "0.1.0"
+dependencies = [
+ "freelyrss-core-domain",
+ "scraper",
+ "thiserror",
+ "url",
+]
 
 [[package]]
 name = "freelyrss-core-domain"
