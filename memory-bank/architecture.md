@@ -1295,3 +1295,29 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `packages/ui` remains a primitive layer and does not absorb queue-window management or scroll measurement semantics.
 - `crates/feed-engine` still owns fetch and parse semantics, not queue rendering strategy.
 - `crates/core-domain` and SQLite remain the future durable execution boundary for large queues; Step 38 only validates the shell-side rendering window before storage-backed pagination or streaming is introduced.
+
+## 2026-04-21 ASCII Addendum III
+
+### Step 39 Architecture Insights
+
+- Step 39 confirms that the reading panel is now its own desktop-shell composition boundary. The right pane no longer acts as a generic detail placeholder; it now consumes one resolved article detail object and renders a stable reader base view from it.
+- The route still owns `sourceId` and `articleId`. The shell store still owns only local queue controls and folder collapse state. Step 39 does not move reading-panel state into routing, shared DTOs, or persistence primitives.
+- Reusing the existing `ArticleDetailDto` without extending it is the key architectural decision in this step. The reader pane proves that the current DTO already carries enough facts for a baseline reading experience, so presentation can advance without inventing shell-only data contracts.
+- Reader-body fallback handling is explicitly a shell presentation concern in this step. When extracted content is missing, the right pane now degrades to summary-plus-metadata without redefining article storage semantics or asking the mock repository for a second content shape.
+- The Step 39 regression is an architectural guardrail, not only a UI smoke test. Verifying that article switches remove stale summary and body text protects the route-to-reader contract before later read-state mutations and content-mode toggles are introduced.
+- No database schema changes were required for Step 39. The existing schema and DTO boundary already describe the article facts needed for the base reading panel; this step only validates shell-side rendering and article-detail consumption.
+
+### Step 39 File Responsibilities
+
+- `apps/desktop/src/features/reader-shell/components/reader-pane.tsx`: owns the Step 39 reader base view, including article metadata formatting, summary rendering, extracted-body presentation, and the compact empty-body fallback.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`: remains the shell composition root and now frames Step 39 explicitly; it still resolves the active article detail from route-backed queue selection and passes that single detail object into the reader pane.
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`: protects Step 39 by verifying that selecting a different queue article updates the reader title, summary, and body while clearing stale content from the previously selected article.
+- `apps/desktop/src/styles.css`: contains shell-local reader-panel layout and presentation rules for the new metadata cards, reader article sections, and compact body-fallback styling.
+
+### Step 39 Boundary Notes
+
+- `packages/shared-types` remains the DTO boundary only; Step 39 did not add reader-specific DTO fields or shell-only article contracts.
+- `packages/shared-query` still owns article-query vocabulary and execution planning, but it does not own right-pane rendering or body fallback presentation.
+- `packages/ui` remains a primitive layer and does not absorb article-detail formatting, summary/body sectioning, or reader-specific empty states.
+- `crates/feed-engine` still owns fetch and parse semantics, not reading-panel presentation or article-switch behavior.
+- `crates/core-domain` and SQLite remain the future durable boundary for read-state mutation, saved reader preferences, and content-mode persistence; Step 39 only validates the shell-side base reading view before that wiring lands.

@@ -672,3 +672,28 @@
 - desktop reader shell owns queue virtualization, scroll-window reset behavior, and route-adjacent queue presentation.
 - the route plus `article-query.ts` still own article-query composition; virtualization consumes the result set but does not redefine it.
 - dense queue fixtures remain a shell-test-only proving ground, while durable queue execution and storage-backed pagination still belong to later `core-domain/sqlite` work.
+
+## 2026-04-21 ASCII Addendum III
+
+### Stage 5 Step 39 Completed: reading panel base view in the desktop shell
+
+- Implemented a stable reader-pane base view so the right pane now renders concrete article metadata, summary, and body content for the route-selected queue item instead of a shell placeholder.
+- Kept Step 39 inside the desktop shell presentation boundary. No Rust crate, SQLite schema, shared DTO contract, or durable persistence logic changed in this step.
+- Expanded the reader pane to show feed title, author, published timestamp, read state, reading progress, language, summary text, extracted-body content, and a stable no-body fallback when an article has metadata but no readable body.
+- Preserved the existing Step 37 and Step 38 contracts: route state still owns `sourceId` and `articleId`, the middle pane still owns query-backed selection flow, and the right pane only consumes the resolved `ArticleDetailDto`.
+- Added a Step 39 regression that switches between two queue articles and verifies the reading panel updates to the new article title, summary, and body while removing stale text from the previously selected article.
+
+### Step 39 Verification
+
+- Passed `corepack pnpm --filter @freelyrss/desktop test`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+
+### Next Step (ASCII update)
+
+- Next planned implementation step is `implementation-plan.md` Stage 5 Step 40: raw-content and extracted-content reader modes.
+- Preserve the current boundary split:
+- desktop reader shell owns reading-panel presentation and route-adjacent article selection wiring.
+- `packages/shared-types` remains DTO-only, and the reader pane continues to consume resolved article detail rather than executing its own queries.
+- durable article rendering preferences and content-source persistence still belong to later shell/store or `core-domain/sqlite` work rather than this presentation step.

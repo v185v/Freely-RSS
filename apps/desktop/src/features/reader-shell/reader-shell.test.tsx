@@ -279,6 +279,71 @@ describe("reader shell navigation", () => {
     expect(queueScope.getByText(/"value": "reading"/i)).toBeTruthy()
   })
 
+  test("renders a stable reading panel base view and swaps article content without stale detail", async () => {
+    window.scrollTo = () => {}
+    const user = userEvent.setup()
+
+    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+
+    const queuePane = await screen.findByRole("region", { name: "Article queue" })
+    const readerPane = screen.getByRole("region", { name: "Reading panel" })
+    const queueScope = within(queuePane)
+    const readerScope = within(readerPane)
+
+    await waitFor(() => {
+      expect(
+        readerScope.getByRole("heading", {
+          name: "Turning the desktop shell into a stable three-pane reader skeleton",
+        }),
+      ).toBeTruthy()
+    })
+
+    expect(readerScope.getByText("FreelyRSS Engineering")).toBeTruthy()
+    expect(readerScope.getByText("FreelyRSS")).toBeTruthy()
+    expect(
+      readerScope.getByText(
+        /The shell now reads like an application instead of a package showcase/i,
+      ),
+    ).toBeTruthy()
+    expect(readerScope.getByText(/Step 16 is about state ownership/i)).toBeTruthy()
+
+    await user.click(
+      queueScope.getByRole("button", {
+        name: /Why layout state should stay separate from source and query state/i,
+      }),
+    )
+
+    await waitFor(() => {
+      expect(window.location.search).toContain("articleId=article-source-context")
+    })
+
+    await waitFor(() => {
+      expect(
+        readerScope.getByRole("heading", {
+          name: "Why layout state should stay separate from source and query state",
+        }),
+      ).toBeTruthy()
+    })
+
+    expect(readerScope.getByText("Systems Desk")).toBeTruthy()
+    expect(
+      readerScope.getByText(
+        /Selection and context can live in the shell without turning the shell into the execution layer/i,
+      ),
+    ).toBeTruthy()
+    expect(
+      readerScope.getByText(
+        /A common failure mode is to let the first interactive shell absorb every future concern/i,
+      ),
+    ).toBeTruthy()
+    expect(readerScope.queryByText(/Step 16 is about state ownership/i)).toBeNull()
+    expect(
+      readerScope.queryByText(
+        /The shell now reads like an application instead of a package showcase/i,
+      ),
+    ).toBeNull()
+  })
+
   test("virtualizes long queues and moves the render window when the middle pane scrolls", async () => {
     window.scrollTo = () => {}
     resetMockReaderShellState({ mode: "dense-queue" })

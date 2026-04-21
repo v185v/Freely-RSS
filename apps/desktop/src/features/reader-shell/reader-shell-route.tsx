@@ -230,8 +230,8 @@ export function ReaderShellRoute() {
     return (
       <main className="desktop-shell">
         <div className="desktop-loading">
-          <p className="desktop-shell__eyebrow">Stage 5 / Step 38</p>
-          <h1>Loading the virtualized queue shell and route-backed article window.</h1>
+          <p className="desktop-shell__eyebrow">Stage 5 / Step 39</p>
+          <h1>Loading the route-backed reader shell and reading panel base view.</h1>
         </div>
       </main>
     )
@@ -333,18 +333,18 @@ export function ReaderShellRoute() {
 
       <header className="desktop-shell__header">
         <div className="desktop-shell__title-block">
-          <p className="desktop-shell__eyebrow">Stage 5 / Step 38</p>
+          <p className="desktop-shell__eyebrow">Stage 5 / Step 39</p>
           <h1>
-            Long article queues now render through a shell-local virtual window instead of painting
-            every row.
+            The desktop shell now turns route-selected articles into a stable reading panel base
+            view.
           </h1>
           <p className="desktop-shell__lead">
             Route state still owns the active source and article, the shell store still owns only
             local queue controls and folder expansion, and the mock repository remains a shell-side
-            snapshot source. Step 38 keeps that query composition boundary intact and only changes
-            how the middle pane renders it: the route-backed article result set still comes from one
-            explicit query definition, but the queue now mounts only a scroll window of rows so long
-            lists do not force the desktop shell to paint the entire article set at once.
+            snapshot source. Step 39 keeps the Step 37 query boundary and Step 38 virtualization
+            boundary intact, then makes the right pane its own explicit composition surface:
+            metadata, summary, and extracted body content now all switch with the selected queue
+            article instead of leaving the reader as a placeholder detail card.
           </p>
         </div>
 
@@ -377,8 +377,8 @@ export function ReaderShellRoute() {
 
           <p className="desktop-summary__note">
             The queue still consumes one route-backed article query while source editing, OPML
-            portability, and tree expansion remain separate concerns. Step 38 adds a render window,
-            not a new query language.
+            portability, and tree expansion remain separate concerns. Step 39 adds a stable reader
+            view contract on the right without changing query vocabulary or storage boundaries.
           </p>
 
           <div className="desktop-shortcuts">

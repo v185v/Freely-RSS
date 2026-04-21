@@ -658,16 +658,84 @@ body {
   line-height: 1.72;
 }
 
+.desktop-reader__article {
+  display: grid;
+  gap: 20px;
+}
+
+.desktop-reader__article-header,
+.desktop-reader__body,
+.desktop-reader__meta-group {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--fr-border);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.desktop-reader__section-label {
+  margin: 0;
+  color: var(--fr-text-faint);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.desktop-reader__article-title {
+  margin: 0;
+  font-family: var(--fr-font-display);
+  font-size: clamp(1.5rem, 2vw, 2rem);
+  line-height: 1.12;
+}
+
+.desktop-reader__body-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.desktop-reader__body-note {
+  max-width: 52ch;
+  color: var(--fr-text-muted);
+  line-height: 1.6;
+}
+
+.desktop-reader__body-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  min-width: min(100%, 220px);
+}
+
+.desktop-reader__body-meta > div {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--fr-border);
+  border-radius: 18px;
+  background: rgba(4, 7, 13, 0.4);
+}
+
 .desktop-reader__content {
   display: grid;
   gap: 16px;
 }
 
 .desktop-reader__meta-group {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.desktop-reader__meta-group > div {
   display: grid;
-  gap: 14px;
-  padding-top: 6px;
-  border-top: 1px solid var(--fr-border);
+  gap: 8px;
+}
+
+.desktop-reader__meta-group p {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 1080px) {
@@ -679,7 +747,8 @@ body {
   .desktop-editor__facts,
   .desktop-export__summary,
   .desktop-import__summary,
-  .desktop-reader__facts {
+  .desktop-reader__facts,
+  .desktop-reader__meta-group {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -704,7 +773,9 @@ body {
   .desktop-export__summary,
   .desktop-import__summary,
   .desktop-summary__metrics,
+  .desktop-reader__body-meta,
   .desktop-reader__facts,
+  .desktop-reader__meta-group,
   .desktop-route-state,
   .desktop-navigation {
     grid-template-columns: 1fr;
