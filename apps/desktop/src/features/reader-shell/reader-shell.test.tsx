@@ -408,6 +408,62 @@ describe("reader shell navigation", () => {
     expect(reopenedReaderScope.queryByText(/Step 16 is about state ownership/i)).toBeNull()
   })
 
+  test("persists reading theme and layout settings after the app reopens and keeps high contrast readable", async () => {
+    window.scrollTo = () => {}
+    const user = userEvent.setup()
+    const renderShell = () =>
+      render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+    const getThemeRoot = () => document.querySelector(".fr-theme-root")
+
+    renderShell()
+
+    const readerPane = await screen.findByRole("region", { name: "Reading panel" })
+    const readerScope = within(readerPane)
+
+    await user.click(readerScope.getByRole("button", { name: "Daylight" }))
+    await user.click(readerScope.getByRole("button", { name: /Technical/i }))
+    await user.click(readerScope.getByRole("button", { name: "Large" }))
+    await user.click(readerScope.getByRole("button", { name: "Airy" }))
+    await user.click(readerScope.getByRole("button", { name: "Wide" }))
+
+    await waitFor(() => {
+      const readerArticle = readerPane.querySelector(".desktop-reader__article")
+
+      expect(getThemeRoot()?.className).toContain("fr-theme-root--daylight")
+      expect(readerArticle?.getAttribute("data-reader-theme-tone")).toBe("daylight")
+      expect(readerArticle?.getAttribute("data-reader-font-family")).toBe("technical")
+      expect(readerArticle?.getAttribute("data-reader-font-scale")).toBe("large")
+      expect(readerArticle?.getAttribute("data-reader-line-height")).toBe("airy")
+      expect(readerArticle?.getAttribute("data-reader-margin-mode")).toBe("wide")
+    })
+
+    cleanup()
+    resetReaderViewStore({ preservePersistedReaderPresentationSettings: true })
+    renderShell()
+
+    const reopenedReaderPane = await screen.findByRole("region", { name: "Reading panel" })
+    const reopenedReaderScope = within(reopenedReaderPane)
+
+    await waitFor(() => {
+      const reopenedReaderArticle = reopenedReaderPane.querySelector(".desktop-reader__article")
+
+      expect(getThemeRoot()?.className).toContain("fr-theme-root--daylight")
+      expect(reopenedReaderArticle?.getAttribute("data-reader-theme-tone")).toBe("daylight")
+      expect(reopenedReaderArticle?.getAttribute("data-reader-font-family")).toBe("technical")
+      expect(reopenedReaderArticle?.getAttribute("data-reader-font-scale")).toBe("large")
+      expect(reopenedReaderArticle?.getAttribute("data-reader-line-height")).toBe("airy")
+      expect(reopenedReaderArticle?.getAttribute("data-reader-margin-mode")).toBe("wide")
+    })
+
+    await user.click(reopenedReaderScope.getByRole("button", { name: "High contrast" }))
+
+    await waitFor(() => {
+      expect(getThemeRoot()?.className).toContain("fr-theme-root--high-contrast")
+    })
+
+    expect(reopenedReaderScope.getByText(/Step 16 is about state ownership/i)).toBeTruthy()
+  })
+
   test("shows podcast enclosure metadata in the reading panel for audio attachments", async () => {
     window.scrollTo = () => {}
     const user = userEvent.setup()

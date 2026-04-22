@@ -1,10 +1,17 @@
-import type { Ref } from "react"
+import type { CSSProperties, Ref } from "react"
 
 import type { ArticleDetailDto } from "@freelyrss/shared-types"
 import { Button, SplitPane, Surface } from "@freelyrss/ui"
 
 import { formatReaderProgress } from "../selectors"
-import type { ReaderContentMode } from "../types"
+import type {
+  ReaderContentMode,
+  ReaderFontFamily,
+  ReaderFontScale,
+  ReaderLineHeight,
+  ReaderMarginMode,
+  ReaderThemeTone,
+} from "../types"
 
 type ReaderStateMutationInput = {
   articleId: ArticleDetailDto["article"]["id"]
@@ -23,10 +30,20 @@ type ReaderPaneProps = {
   headingId: string
   isUpdatingArticleState: boolean
   onSetReaderContentMode: (readerContentMode: ReaderContentMode) => void
+  onSetReaderFontFamily: (readerFontFamily: ReaderFontFamily) => void
+  onSetReaderFontScale: (readerFontScale: ReaderFontScale) => void
+  onSetReaderLineHeight: (readerLineHeight: ReaderLineHeight) => void
+  onSetReaderMarginMode: (readerMarginMode: ReaderMarginMode) => void
+  onSetThemeTone: (themeTone: ReaderThemeTone) => void
   onUpdateArticleState: (input: ReaderStateMutationInput) => void
   paneId: string
   paneRef?: Ref<HTMLElement>
   readerContentMode: ReaderContentMode
+  readerFontFamily: ReaderFontFamily
+  readerFontScale: ReaderFontScale
+  readerLineHeight: ReaderLineHeight
+  readerMarginMode: ReaderMarginMode
+  themeTone: ReaderThemeTone
 }
 
 const READ_STATE_OPTIONS: Array<{
@@ -48,6 +65,52 @@ const IMPORTANCE_OPTIONS: Array<{
 ]
 
 const READING_PROGRESS_OPTIONS = [0, 0.25, 0.5, 0.75, 1] as const
+
+const THEME_TONE_OPTIONS: Array<{
+  label: string
+  value: ReaderThemeTone
+}> = [
+  { label: "Daylight", value: "daylight" },
+  { label: "Midnight", value: "midnight" },
+  { label: "High contrast", value: "high-contrast" },
+]
+
+const FONT_FAMILY_OPTIONS: Array<{
+  label: string
+  note: string
+  value: ReaderFontFamily
+}> = [
+  { label: "Editorial", note: "Serif reading voice", value: "editorial" },
+  { label: "Sans", note: "Clean interface text", value: "sans" },
+  { label: "Technical", note: "Dense operator view", value: "technical" },
+]
+
+const FONT_SCALE_OPTIONS: Array<{
+  label: string
+  value: ReaderFontScale
+}> = [
+  { label: "Compact", value: "compact" },
+  { label: "Comfortable", value: "comfortable" },
+  { label: "Large", value: "large" },
+]
+
+const LINE_HEIGHT_OPTIONS: Array<{
+  label: string
+  value: ReaderLineHeight
+}> = [
+  { label: "Tight", value: "tight" },
+  { label: "Relaxed", value: "relaxed" },
+  { label: "Airy", value: "airy" },
+]
+
+const MARGIN_OPTIONS: Array<{
+  label: string
+  value: ReaderMarginMode
+}> = [
+  { label: "Narrow", value: "narrow" },
+  { label: "Balanced", value: "balanced" },
+  { label: "Wide", value: "wide" },
+]
 
 function formatReaderDate(value: string | null, fallback = "No publish time yet") {
   if (!value) {
@@ -119,6 +182,61 @@ function formatAttachmentName(url: string) {
   return segments.at(-1) ?? url
 }
 
+function formatThemeToneLabel(value: ReaderThemeTone) {
+  switch (value) {
+    case "daylight":
+      return "Daylight"
+    case "high-contrast":
+      return "High contrast"
+    default:
+      return "Midnight"
+  }
+}
+
+function formatFontFamilyLabel(value: ReaderFontFamily) {
+  switch (value) {
+    case "editorial":
+      return "Editorial"
+    case "technical":
+      return "Technical"
+    default:
+      return "Sans"
+  }
+}
+
+function formatFontScaleLabel(value: ReaderFontScale) {
+  switch (value) {
+    case "compact":
+      return "Compact"
+    case "large":
+      return "Large"
+    default:
+      return "Comfortable"
+  }
+}
+
+function formatLineHeightLabel(value: ReaderLineHeight) {
+  switch (value) {
+    case "tight":
+      return "Tight"
+    case "airy":
+      return "Airy"
+    default:
+      return "Relaxed"
+  }
+}
+
+function formatMarginModeLabel(value: ReaderMarginMode) {
+  switch (value) {
+    case "narrow":
+      return "Narrow"
+    case "wide":
+      return "Wide"
+    default:
+      return "Balanced"
+  }
+}
+
 export function ReaderPane({
   activeDetail,
   articleStateErrorMessage,
@@ -126,10 +244,20 @@ export function ReaderPane({
   headingId,
   isUpdatingArticleState,
   onSetReaderContentMode,
+  onSetReaderFontFamily,
+  onSetReaderFontScale,
+  onSetReaderLineHeight,
+  onSetReaderMarginMode,
+  onSetThemeTone,
   onUpdateArticleState,
   paneId,
   paneRef,
   readerContentMode,
+  readerFontFamily,
+  readerFontScale,
+  readerLineHeight,
+  readerMarginMode,
+  themeTone,
 }: ReaderPaneProps) {
   const extractedContent = activeDetail?.article.contentExtracted?.trim() ?? null
   const rawContent = activeDetail?.article.contentRaw?.trim() ?? null
@@ -140,6 +268,11 @@ export function ReaderPane({
   const activeReaderContent = readerContentMode === "raw" ? rawContent : extractedContent
   const alternateReaderContent = readerContentMode === "raw" ? extractedContent : rawContent
   const primaryUrl = activeDetail?.article.canonicalUrl ?? activeDetail?.article.originalUrl ?? null
+  const readerPresentationSummary = `${formatThemeToneLabel(themeTone)} theme, ${formatFontFamilyLabel(readerFontFamily)} font, ${formatFontScaleLabel(readerFontScale)} size, ${formatLineHeightLabel(readerLineHeight).toLowerCase()} leading, ${formatMarginModeLabel(readerMarginMode).toLowerCase()} margins`
+  const readerPresentationStyle = {
+    "--reader-sample-max-width":
+      readerMarginMode === "narrow" ? "78ch" : readerMarginMode === "wide" ? "58ch" : "68ch",
+  } as CSSProperties
 
   return (
     <SplitPane
@@ -162,10 +295,10 @@ export function ReaderPane({
           )}
           <p className="desktop-pane__description">
             The selected article still comes from route state, and the reader still preserves the
-            Step 40 content-mode toggle plus the Step 42 attachment surface. Step 44 keeps the
-            existing article-detail contract intact, then adds keyboard reading flow on top of the
-            Step 43 shell-side article state command path without changing article selection or
-            query ownership.
+            Step 40 content-mode toggle plus the Step 42 attachment surface. Step 45 keeps the
+            existing article-detail contract intact, then adds persisted reading environment
+            settings on top of the Step 43 shell-side article state command path and Step 44
+            keyboard workflow without changing article selection or query ownership.
           </p>
         </div>
 
@@ -219,7 +352,15 @@ export function ReaderPane({
             </div>
 
             <div className="desktop-pane__scroll desktop-pane__scroll--reader">
-              <article className="desktop-reader__article">
+              <article
+                className="desktop-reader__article"
+                data-reader-font-family={readerFontFamily}
+                data-reader-font-scale={readerFontScale}
+                data-reader-line-height={readerLineHeight}
+                data-reader-margin-mode={readerMarginMode}
+                data-reader-theme-tone={themeTone}
+                style={readerPresentationStyle}
+              >
                 <header className="desktop-reader__article-header">
                   <p className="desktop-reader__section-label">Selected article</p>
                   <h3 className="desktop-reader__article-title">{activeDetail.article.title}</h3>
@@ -413,13 +554,164 @@ export function ReaderPane({
                   ) : null}
                 </section>
 
+                <section className="desktop-reader__presentation">
+                  <div className="desktop-reader__presentation-header">
+                    <div>
+                      <p className="desktop-reader__section-label">Reading environment</p>
+                      <p className="desktop-reader__presentation-note">
+                        Step 45 keeps these preferences inside the desktop shell store. Theme, font,
+                        size, line height, and margin choices persist locally so the next app
+                        session reopens with the same reading posture.
+                      </p>
+                    </div>
+                    <div className="desktop-reader__presentation-summary">
+                      <span className="desktop-reader__fact-label">Current profile</span>
+                      <strong>{readerPresentationSummary}</strong>
+                    </div>
+                  </div>
+
+                  <div className="desktop-reader__presentation-preview">
+                    <p className="desktop-reader__section-label">Preview</p>
+                    <h4 className="desktop-reader__presentation-title">
+                      Typography should stay shell-owned until durable reader preferences arrive.
+                    </h4>
+                    <p className="desktop-reader__presentation-sample">
+                      Selection, query scope, and article state still belong to their existing
+                      boundaries. Step 45 only makes the reading surface more comfortable and more
+                      accessible without promoting view preferences into shared contracts.
+                    </p>
+                  </div>
+
+                  <fieldset className="desktop-toolbar-group desktop-reader__control-group">
+                    <legend className="desktop-toolbar-group__legend">Theme</legend>
+                    <div className="desktop-toolbar-pills">
+                      {THEME_TONE_OPTIONS.map((option) => {
+                        const active = themeTone === option.value
+
+                        return (
+                          <Button
+                            aria-pressed={active}
+                            className={
+                              active ? "desktop-pill desktop-pill--active" : "desktop-pill"
+                            }
+                            key={option.value}
+                            onClick={() => onSetThemeTone(option.value)}
+                            size="sm"
+                            tone={active ? "neutral" : "ghost"}
+                          >
+                            {option.label}
+                          </Button>
+                        )
+                      })}
+                    </div>
+                  </fieldset>
+
+                  <fieldset className="desktop-toolbar-group desktop-reader__control-group">
+                    <legend className="desktop-toolbar-group__legend">Font</legend>
+                    <div className="desktop-toolbar-pills">
+                      {FONT_FAMILY_OPTIONS.map((option) => {
+                        const active = readerFontFamily === option.value
+
+                        return (
+                          <Button
+                            aria-label={`${option.label}: ${option.note}`}
+                            aria-pressed={active}
+                            className={
+                              active ? "desktop-pill desktop-pill--active" : "desktop-pill"
+                            }
+                            key={option.value}
+                            onClick={() => onSetReaderFontFamily(option.value)}
+                            size="sm"
+                            tone={active ? "neutral" : "ghost"}
+                          >
+                            {option.label}
+                          </Button>
+                        )
+                      })}
+                    </div>
+                  </fieldset>
+
+                  <fieldset className="desktop-toolbar-group desktop-reader__control-group">
+                    <legend className="desktop-toolbar-group__legend">Size</legend>
+                    <div className="desktop-toolbar-pills">
+                      {FONT_SCALE_OPTIONS.map((option) => {
+                        const active = readerFontScale === option.value
+
+                        return (
+                          <Button
+                            aria-pressed={active}
+                            className={
+                              active ? "desktop-pill desktop-pill--active" : "desktop-pill"
+                            }
+                            key={option.value}
+                            onClick={() => onSetReaderFontScale(option.value)}
+                            size="sm"
+                            tone={active ? "neutral" : "ghost"}
+                          >
+                            {option.label}
+                          </Button>
+                        )
+                      })}
+                    </div>
+                  </fieldset>
+
+                  <fieldset className="desktop-toolbar-group desktop-reader__control-group">
+                    <legend className="desktop-toolbar-group__legend">Line height</legend>
+                    <div className="desktop-toolbar-pills">
+                      {LINE_HEIGHT_OPTIONS.map((option) => {
+                        const active = readerLineHeight === option.value
+
+                        return (
+                          <Button
+                            aria-pressed={active}
+                            className={
+                              active ? "desktop-pill desktop-pill--active" : "desktop-pill"
+                            }
+                            key={option.value}
+                            onClick={() => onSetReaderLineHeight(option.value)}
+                            size="sm"
+                            tone={active ? "neutral" : "ghost"}
+                          >
+                            {option.label}
+                          </Button>
+                        )
+                      })}
+                    </div>
+                  </fieldset>
+
+                  <fieldset className="desktop-toolbar-group desktop-reader__control-group">
+                    <legend className="desktop-toolbar-group__legend">Margins</legend>
+                    <div className="desktop-toolbar-pills">
+                      {MARGIN_OPTIONS.map((option) => {
+                        const active = readerMarginMode === option.value
+
+                        return (
+                          <Button
+                            aria-pressed={active}
+                            className={
+                              active ? "desktop-pill desktop-pill--active" : "desktop-pill"
+                            }
+                            key={option.value}
+                            onClick={() => onSetReaderMarginMode(option.value)}
+                            size="sm"
+                            tone={active ? "neutral" : "ghost"}
+                          >
+                            {option.label}
+                          </Button>
+                        )
+                      })}
+                    </div>
+                  </fieldset>
+                </section>
+
                 <section className="desktop-reader__body">
                   <div className="desktop-reader__body-header">
                     <div>
                       <p className="desktop-reader__section-label">Reading body</p>
                       <p className="desktop-reader__body-note">
-                        Reader mode is a shell-local preference. The latest selection is stored
-                        locally so the next reader session reopens in the same content mode.
+                        Reader mode and reading presentation are both shell-local preferences. The
+                        latest content mode still persists locally, while Step 45 adds theme and
+                        typography persistence around the same route-selected article detail.
                       </p>
                     </div>
                     <div className="desktop-reader__body-meta">

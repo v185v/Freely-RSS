@@ -16,7 +16,25 @@ export type ReaderSortMode = "newest" | "oldest"
 
 export type ReaderContentMode = "extracted" | "raw"
 
-export type ReaderThemeTone = "high-contrast" | "midnight"
+export type ReaderThemeTone = "daylight" | "high-contrast" | "midnight"
+
+export type ReaderBaseThemeTone = Exclude<ReaderThemeTone, "high-contrast">
+
+export type ReaderFontFamily = "editorial" | "sans" | "technical"
+
+export type ReaderFontScale = "compact" | "comfortable" | "large"
+
+export type ReaderLineHeight = "tight" | "relaxed" | "airy"
+
+export type ReaderMarginMode = "narrow" | "balanced" | "wide"
+
+export interface ReaderPresentationSettings {
+  fontFamily: ReaderFontFamily
+  fontScale: ReaderFontScale
+  lineHeight: ReaderLineHeight
+  marginMode: ReaderMarginMode
+  themeTone: ReaderThemeTone
+}
 
 export interface SourceRow {
   description: string

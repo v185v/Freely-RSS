@@ -1459,3 +1459,34 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `packages/ui` remains a primitive layer and does not absorb shell shortcut catalogs, focused-pane command scopes, or article-movement policy.
 - `crates/feed-engine` and `crates/content-pipeline` still own fetch, parse, extraction, and metadata derivation semantics; Step 44 does not move keyboard workflow logic into Rust layers.
 - `crates/core-domain` and SQLite remain the future durable boundary for reader preferences and `UserState` persistence. Step 44 only validates shell-side keyboard routing and reuse of the current mutation path before storage-backed preference work lands.
+
+## 2026-04-22 ASCII Addendum IV
+
+### Step 45 Architecture Insights
+
+- Step 45 confirms that reading presentation preferences are a desktop-shell concern before they become durable domain settings. Theme and typography can evolve quickly in the shell without forcing route, DTO, or database churn.
+- The key architectural decision in this step is to keep one shell-owned preference store for both app-wide theme tone and reader-local typography controls. Content mode and reading presentation now coexist in the same shell boundary, but they still stay outside route state and shared article contracts.
+- `ThemeRoot` owns app-wide tone token application, while `ReaderPane` owns the reader-specific control surface and presentation contract. That split prevents every reader component from reinventing theme logic while still keeping font, spacing, and margin policy out of shared primitives.
+- CSS custom properties and explicit reader data attributes are the rendering contract for this step. The reader article now exposes font, scale, line-height, margin, and tone choices in one stable presentation boundary that tests and future reader work can observe directly.
+- Adding daylight support is intentionally a theme-infrastructure change, not a reader DTO change. The correct boundary is shared UI theme tokens plus shell-local styles, not new fields on `ArticleDetailDto` or article records.
+- No database schema changes were required for Step 45. The existing schema remains unchanged because reading presentation preferences are still shell-local and are not yet promoted into SQLite-backed user settings.
+
+### Step 45 File Responsibilities
+
+- `apps/desktop/src/features/reader-shell/types.ts`: defines the Step 45 theme and typography preference vocabulary so route, store, and reader components share explicit names without inventing new DTO fields.
+- `apps/desktop/src/features/reader-shell/state.ts`: owns Step 45 local preference persistence, including daylight/midnight fallback handling for the high-contrast shortcut, coexistence with reader content-mode persistence, and reset behavior for simulated app reopens.
+- `apps/desktop/src/features/reader-shell/accessibility.ts`: continues to own shell shortcut facts and now clarifies that the contrast shortcut is a theme concern rather than a generic reader-mode concern.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`: remains the shell composition root and now threads persisted reading presentation settings from the store into the header, `ThemeRoot`, and reader pane without changing route ownership.
+- `apps/desktop/src/features/reader-shell/components/reader-pane.tsx`: owns Step 45 reading environment UI, the explicit setting controls, and the data-attribute-driven reader presentation contract applied to the active article.
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`: protects Step 45 by verifying presentation-setting persistence across a simulated app reopen and by confirming that high-contrast theme changes do not hide extracted reader text.
+- `apps/desktop/src/styles.css`: contains shell-local presentation rules for Step 45, including theme-aware surface usage and reader typography, spacing, and margin variables.
+- `packages/ui/src/components/theme-root.tsx`: extends the shared theme boundary so the desktop shell can select `daylight`, `midnight`, or `high-contrast` tone through one primitive wrapper.
+- `packages/ui/src/theme.css`: owns cross-shell tone tokens and tone-aware surface variables that make daylight and high-contrast support available to existing primitives without introducing reader-specific logic into the shared UI package.
+
+### Step 45 Boundary Notes
+
+- `packages/shared-types` remains the DTO boundary only; Step 45 did not add theme, font, or layout fields to article contracts.
+- `packages/shared-query` still owns article-query vocabulary and execution planning, but it does not own reader presentation preferences or theme selection.
+- `packages/ui` now owns reusable tone primitives and token surfaces for daylight, midnight, and high contrast, but it still does not own persistence of reader preferences or article-layout policy.
+- `crates/feed-engine` and `crates/content-pipeline` still own fetch, parse, extraction, and metadata derivation semantics; Step 45 does not move presentation preferences into Rust layers.
+- `crates/core-domain` and SQLite remain the future durable boundary for any storage-backed reader preferences. Step 45 only validates shell-local preference handling, shared theme-token consumption, and reader-side rendering against the existing article detail contract.

@@ -2,15 +2,15 @@
 
 ## 当前状态
 
-- 阶段：阶段 4 Step 33 已完成，桌面端 reader shell 已把共享订阅树 DTO 组合成可查看、展开、折叠与选中的左栏树视图，并保持“共享类型提供树事实、shell store 只持有折叠状态、route 继续拥有当前来源与文章选择”的边界；下一步进入阶段 4 Step 34 的订阅源编辑操作
-- 最后更新：2026-04-18
-- 风险状态：已从“在 Step 32 中补齐网络错误、权限错误、解析错误、内容为空与连续失败升级时，继续让 transport 负责原始失败语义、让 fetcher 负责失败短路与回写触发、让 repository / store 负责健康状态落库，不把错误分类策略或失败阈值回流到 parser、桌面宿主或前端壳层”推进到“在 Step 33 中补齐订阅树与分组管理 UI 时，继续让 `shared-types` 提供树 DTO、让 selectors 负责树投影与分组聚合、让 shell store 只负责本地折叠状态，不把树节点拼装、健康诊断规则或持久化写入回流到宿主、抓取引擎或基础组件层”
+- 阶段：阶段 5 Step 45 已完成，桌面端 reader shell 已支持亮色、暗色、高对比度主题，以及字体、字号、行距、边距设置的本地持久化，并保持“route 继续拥有当前来源与文章、shell store 只持有阅读偏好、ThemeRoot 只消费主题 tone、reader pane 只消费已解析的 `ArticleDetailDto`”的边界；下一步进入阶段 5 Step 46 的高亮与批注。
+- 最后更新：2026-04-22
+- 风险状态：已从“在 Step 44 中保持键盘阅读流与文章状态写入继续停留在桌面 shell 边界，而不把焦点策略、快捷键命令或读写路径回流到 route schema、共享 DTO 或 SQLite 持久层”推进到“在 Step 45 中补齐阅读主题与排版设置时，继续让 shell store 负责本地偏好持久化、让 `ThemeRoot` 负责全局主题令牌、让 reader pane 负责设置 UI 与阅读排版，而不把阅读偏好提升为 `shared-types` DTO、route 参数或数据库 schema”
 
-### 2026-04-18 状态快照
+### 2026-04-22 状态快照
 
-- 当前完成：阶段 4 Step 33 已完成，左栏已支持快速视图与订阅树并存、文件夹展开/折叠、层级展示、按文件夹/订阅源选中，以及把 `Feed.health_status` / 错误摘要消费为树节点文案。
+- 当前完成：阶段 5 Step 45 已完成，右栏阅读面板已支持 `Daylight / Midnight / High contrast` 三种主题，以及 `Editorial / Sans / Technical` 字体、`Compact / Comfortable / Large` 字号、`Tight / Relaxed / Airy` 行距、`Narrow / Balanced / Wide` 边距设置，并在重开应用后继续保留当前选择。
 - 当前验证：`corepack pnpm --filter @freelyrss/desktop test`、`corepack pnpm run desktop:build`、`corepack pnpm run verify` 与 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle` 全部通过。
-- 当前下一步：进入阶段 4 Step 34“实现订阅源编辑操作”，在不破坏 Step 33 的 route / tree / shell store 分层前提下，补齐重命名、自定义显示名、更新频率、图标与手动刷新入口。
+- 当前下一步：进入阶段 5 Step 46“实现高亮与批注”，在不破坏 Step 45 的 shell 偏好边界前提下，把文本选区、锚点与批注回显继续留在 reader interaction / `Annotation` 领域边界，而不是写回共享 DTO 或 route 参数。
 
 ## 已确认决策
 
@@ -26,7 +26,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 4 Step 34 需要在不破坏 Step 25 至 Step 33 已落地的 transport / parser / normalizer / repository / SQLite store 分层、discovery / not-modified / failed-check 短路边界与订阅树 UI 组合边界前提下，把订阅源编辑入口继续留在桌面壳与后续桌面命令层，而不是把用户编辑语义回流到抓取引擎、共享 DTO 或基础 UI 组件层。
+- 当前无阻塞；下一步风险点是阶段 5 Step 46 需要在不破坏 Step 37 至 Step 45 已落地的 route / query / reader / shell store / theme-token 边界前提下，把文本选区、高亮锚点与批注回显继续留在阅读面板与后续 `core-domain/sqlite` 持久层之间，而不是把 DOM 选区语义或批注展示状态回流到共享 DTO、快捷键路由或主题基础设施。
 
 ## 本次执行记录
 
@@ -840,3 +840,30 @@
 - desktop reader shell now owns pane-scoped keyboard reading flow and shortcut routing, but it still does not own durable article-state persistence or storage-backed reader preferences.
 - route state still owns `sourceId` and `articleId`; Step 44 did not introduce a second persisted queue cursor or a shell-only article selection model.
 - keyboard-triggered state changes still reuse the Step 43 shell mutation path, while typography, spacing, and theme preference persistence should remain a shell/store concern before any later `core-domain/sqlite` promotion.
+
+## 2026-04-22 ASCII Addendum IV
+
+### Stage 5 Step 45 Completed: reading theme and layout settings in the desktop shell
+
+- Implemented shell-owned reading presentation preferences for `Daylight`, `Midnight`, and `High contrast` themes plus font family, font size, line height, and margin modes.
+- Kept Step 45 inside the desktop shell view-preference and UI-theme boundaries. No Rust crate, SQLite schema, shared DTO contract, or durable reader-preference persistence changed in this step.
+- Expanded `useReaderViewStore` persistence beyond reader content mode so reading presentation settings now survive an app reopen while still staying in local shell storage rather than moving into route state or durable article settings.
+- Extended `ThemeRoot` and shared theme tokens to support a daylight theme and tone-aware surface variables, so the existing shell UI can switch tones without duplicating theme logic inside each reader component.
+- Added a dedicated reading environment section in the reader pane with explicit theme, font, size, line-height, and margin controls, and bound the current article container to stable data attributes so tests can verify the actual rendered preference state.
+- Updated shell-local CSS to drive reader typography and spacing from CSS custom properties instead of hard-coded dark-mode assumptions, which keeps daylight and high-contrast modes readable across the reading surface.
+- Added a Step 45 regression that changes presentation settings, simulates an app reopen, and verifies that the chosen theme and layout persist while extracted article text remains visible after switching into high contrast.
+
+### Step 45 Verification
+
+- Passed `corepack pnpm --filter @freelyrss/desktop test`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+
+### Next Step (ASCII update)
+
+- Next planned implementation step is `implementation-plan.md` Stage 5 Step 46: highlights and annotations.
+- Preserve the current boundary split:
+- desktop reader shell now owns persisted reading presentation settings, but it still does not own durable annotation storage or anchor serialization.
+- `packages/ui` now provides the reusable theme-token surface for daylight, midnight, and high-contrast tones, but it does not own reader-preference persistence or article-formatting policy.
+- durable annotation anchors, note payloads, and any future cross-session selection replay still belong to later reader-interaction work plus `core-domain/sqlite` integration rather than this shell-only preference step.

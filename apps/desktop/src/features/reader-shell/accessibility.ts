@@ -32,7 +32,7 @@ export const READER_LANDMARK_SHORTCUTS = [
     target: "reader",
   },
   {
-    description: "Toggle high contrast mode",
+    description: "Toggle high contrast theme",
     key: "Alt+Shift+H",
     target: "theme",
   },

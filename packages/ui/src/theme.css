@@ -17,12 +17,59 @@
   --fr-accent-soft: rgba(142, 182, 255, 0.12);
   --fr-success: #7fe2c0;
   --fr-shadow: 0 26px 72px rgba(0, 0, 0, 0.38);
+  --fr-surface-start: rgba(16, 23, 36, 0.94);
+  --fr-surface-end: rgba(9, 14, 22, 0.9);
+  --fr-panel-soft: rgba(255, 255, 255, 0.03);
+  --fr-panel-soft-hover: rgba(255, 255, 255, 0.05);
+  --fr-panel-strong: rgba(255, 255, 255, 0.06);
+  --fr-panel-inset: rgba(4, 7, 13, 0.4);
+  --fr-panel-code: rgba(4, 7, 13, 0.7);
+  --fr-list-active-border: rgba(142, 182, 255, 0.4);
+  --fr-list-active-background: linear-gradient(
+    180deg,
+    rgba(142, 182, 255, 0.14),
+    rgba(142, 182, 255, 0.07)
+  );
+  --fr-input-bg: rgba(255, 255, 255, 0.04);
   color: var(--fr-text-strong);
   font-family: var(--fr-font-body);
   min-height: 100vh;
   background: radial-gradient(circle at top left, rgba(110, 145, 255, 0.2), transparent 28%),
     radial-gradient(circle at bottom right, rgba(84, 212, 176, 0.16), transparent 32%),
     linear-gradient(180deg, #09111a 0%, #04070d 100%);
+}
+
+.fr-theme-root--daylight {
+  --fr-border: rgba(43, 62, 97, 0.16);
+  --fr-border-strong: rgba(43, 62, 97, 0.28);
+  --fr-surface: rgba(255, 250, 242, 0.88);
+  --fr-surface-strong: rgba(255, 252, 246, 0.96);
+  --fr-surface-soft: rgba(21, 33, 55, 0.04);
+  --fr-text-strong: #18263a;
+  --fr-text-muted: rgba(24, 38, 58, 0.76);
+  --fr-text-faint: rgba(24, 38, 58, 0.56);
+  --fr-accent: #145f9e;
+  --fr-accent-strong: #0f4f84;
+  --fr-accent-soft: rgba(20, 95, 158, 0.12);
+  --fr-success: #206c58;
+  --fr-shadow: 0 24px 56px rgba(61, 77, 110, 0.16);
+  --fr-surface-start: rgba(255, 252, 246, 0.98);
+  --fr-surface-end: rgba(247, 241, 228, 0.94);
+  --fr-panel-soft: rgba(255, 255, 255, 0.62);
+  --fr-panel-soft-hover: rgba(255, 255, 255, 0.84);
+  --fr-panel-strong: rgba(24, 38, 58, 0.04);
+  --fr-panel-inset: rgba(24, 38, 58, 0.06);
+  --fr-panel-code: rgba(244, 238, 224, 0.94);
+  --fr-list-active-border: rgba(20, 95, 158, 0.34);
+  --fr-list-active-background: linear-gradient(
+    180deg,
+    rgba(20, 95, 158, 0.13),
+    rgba(20, 95, 158, 0.05)
+  );
+  --fr-input-bg: rgba(255, 255, 255, 0.76);
+  background: radial-gradient(circle at top left, rgba(255, 218, 164, 0.35), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(127, 184, 225, 0.24), transparent 32%),
+    linear-gradient(180deg, #fff8ef 0%, #f3ecdf 100%);
 }
 
 .fr-theme-root--high-contrast {
@@ -39,6 +86,16 @@
   --fr-accent-soft: rgba(248, 255, 115, 0.24);
   --fr-success: #7dffbe;
   --fr-shadow: 0 0 0 rgba(0, 0, 0, 0);
+  --fr-surface-start: rgba(0, 0, 0, 0.96);
+  --fr-surface-end: rgba(0, 0, 0, 0.96);
+  --fr-panel-soft: rgba(255, 255, 255, 0.08);
+  --fr-panel-soft-hover: rgba(255, 255, 255, 0.12);
+  --fr-panel-strong: rgba(255, 255, 255, 0.1);
+  --fr-panel-inset: rgba(255, 255, 255, 0.08);
+  --fr-panel-code: #000000;
+  --fr-list-active-border: var(--fr-accent);
+  --fr-list-active-background: rgba(255, 255, 255, 0.1);
+  --fr-input-bg: rgba(255, 255, 255, 0.08);
   background: #000000;
 }
 
@@ -58,7 +115,7 @@
 .fr-surface {
   border: 1px solid var(--fr-border);
   border-radius: var(--fr-radius-md);
-  background: linear-gradient(180deg, rgba(16, 23, 36, 0.94), rgba(9, 14, 22, 0.9));
+  background: linear-gradient(180deg, var(--fr-surface-start), var(--fr-surface-end));
   box-shadow: var(--fr-shadow);
   padding: 20px;
 }
@@ -112,7 +169,7 @@
 
 .fr-button--neutral {
   border-color: var(--fr-border);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--fr-panel-strong);
   color: var(--fr-text-strong);
 }
 
@@ -145,7 +202,7 @@
   width: 100%;
   border: 1px solid var(--fr-border);
   border-radius: var(--fr-radius-sm);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--fr-input-bg);
   color: var(--fr-text-strong);
   padding: 0 14px;
 }
@@ -189,7 +246,7 @@
   width: 100%;
   border: 1px solid var(--fr-border);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--fr-panel-soft);
   color: inherit;
   cursor: pointer;
   padding: 14px 16px;
@@ -200,12 +257,12 @@
 .fr-list-row:hover {
   transform: translateY(-1px);
   border-color: var(--fr-border-strong);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--fr-panel-soft-hover);
 }
 
 .fr-list-row--active {
-  border-color: rgba(142, 182, 255, 0.4);
-  background: linear-gradient(180deg, rgba(142, 182, 255, 0.14), rgba(142, 182, 255, 0.07));
+  border-color: var(--fr-list-active-border);
+  background: var(--fr-list-active-background);
 }
 
 .fr-theme-root--high-contrast .fr-list-row--active {
