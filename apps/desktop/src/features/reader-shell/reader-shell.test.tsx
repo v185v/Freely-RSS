@@ -544,6 +544,69 @@ describe("reader shell navigation", () => {
     })
   })
 
+  test("supports a keyboard-only reading flow across queue movement, reader focus, and read-state updates", async () => {
+    window.scrollTo = () => {}
+
+    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+
+    const queuePane = await screen.findByRole("region", { name: "Article queue" })
+    const readerPane = screen.getByRole("region", { name: "Reading panel" })
+    const readerScope = within(readerPane)
+
+    await waitFor(() => {
+      expect(window.location.search).toContain("sourceId=view-unread")
+      expect(window.location.search).toContain("articleId=article-layout-shell")
+    })
+
+    fireEvent.keyDown(window, { altKey: true, key: "3" })
+    expect(document.activeElement).toBe(queuePane)
+
+    fireEvent.keyDown(window, { key: "ArrowDown" })
+
+    await waitFor(() => {
+      expect(window.location.search).toContain("articleId=article-source-context")
+    })
+
+    await waitFor(() => {
+      expect(
+        readerScope.getByRole("heading", {
+          name: "Why layout state should stay separate from source and query state",
+        }),
+      ).toBeTruthy()
+    })
+
+    fireEvent.keyDown(window, { key: "Enter" })
+    expect(document.activeElement).toBe(readerPane)
+
+    fireEvent.keyDown(window, { key: "m" })
+
+    await waitFor(() => {
+      expect(window.location.search).toContain("articleId=article-layout-shell")
+      expect(window.location.search).not.toContain("articleId=article-source-context")
+    })
+
+    await waitFor(() => {
+      expect(
+        readerScope.getByRole("heading", {
+          name: "Turning the desktop shell into a stable three-pane reader skeleton",
+        }),
+      ).toBeTruthy()
+    })
+
+    fireEvent.keyDown(window, { key: "j" })
+
+    await waitFor(() => {
+      expect(window.location.search).toContain("articleId=article-query-bridge")
+    })
+
+    expect(document.activeElement).toBe(readerPane)
+    expect(
+      readerScope.getByRole("heading", {
+        name: "Shared-query is ready, but the reader shell still needs a clean composition layer",
+      }),
+    ).toBeTruthy()
+  })
+
   test("persists mutated article state fields and reading progress after the app reopens", async () => {
     window.scrollTo = () => {}
     const user = userEvent.setup()

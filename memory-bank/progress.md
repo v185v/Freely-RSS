@@ -812,3 +812,31 @@
 - desktop reader shell now owns article-state mutation controls and immediate queue/reader echo, but it still does not own durable article-state persistence.
 - `packages/shared-types` remains DTO-only, and `ArticleDetailDto` / `ArticleListItemDto.state` continue to be the single reader-facing state contract.
 - durable writes to `UserState` still belong to later shell-command and `core-domain/sqlite` integration, while Step 44 should focus on keyboard command routing across the already-mutatable reader surface.
+
+## 2026-04-22 ASCII Addendum III
+
+### Stage 5 Step 44 Completed: keyboard reading flow in the desktop shell
+
+- Implemented pane-scoped keyboard reading flow in the desktop shell without introducing a second queue-selection state or changing the route-backed article contract.
+- Kept Step 44 inside the desktop shell interaction boundary. No Rust crate, SQLite schema, shared DTO contract, or durable persistence wiring changed in this step.
+- Extended the shell shortcut catalog so landmark shortcuts and reading-flow shortcuts now share one shell-owned fact source instead of scattering key knowledge across route code, copy, and tests.
+- Added queue-and-reader keyboard routing in `reader-shell-route.tsx`: `J` / `ArrowDown` and `K` / `ArrowUp` move through the visible article result set, `Enter` opens the current queue selection into the reading panel by transferring focus, `M` toggles read state, `S` toggles starred, `F` toggles read later, and `R` focuses the reader.
+- Intentionally scoped the new reading commands to the focused queue or reader landmarks rather than every descendant control. That preserves native button and input behavior and avoids stealing `Enter` from existing reader actions or OPML / source-editing inputs.
+- Reused the existing Step 43 shell-side article mutation path for keyboard-triggered state changes, so queue counts, quick views, and reader facts still echo from one snapshot boundary.
+- Added a Step 44 regression that completes a keyboard-only reading path: focus the queue, move to a different article, open the reader, mark the article read, and move again without using the mouse.
+- While validating the regression, confirmed that the existing stale-selection reconciliation rule still falls back to the first visible article after the current article drops out of the unread route; Step 44 preserves that route behavior instead of introducing a new keyboard-only cursor policy.
+
+### Step 44 Verification
+
+- Passed `corepack pnpm --filter @freelyrss/desktop test`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+
+### Next Step (ASCII update)
+
+- Next planned implementation step is `implementation-plan.md` Stage 5 Step 45: reading theme and layout settings.
+- Preserve the current boundary split:
+- desktop reader shell now owns pane-scoped keyboard reading flow and shortcut routing, but it still does not own durable article-state persistence or storage-backed reader preferences.
+- route state still owns `sourceId` and `articleId`; Step 44 did not introduce a second persisted queue cursor or a shell-only article selection model.
+- keyboard-triggered state changes still reuse the Step 43 shell mutation path, while typography, spacing, and theme preference persistence should remain a shell/store concern before any later `core-domain/sqlite` promotion.

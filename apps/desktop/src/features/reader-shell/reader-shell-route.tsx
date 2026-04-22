@@ -150,6 +150,62 @@ export function ReaderShellRoute() {
     element?.focus()
   })
 
+  const selectKeyboardArticle = useEffectEvent((articleId: string | null) => {
+    if (!articleId || articleId === activeArticleId) {
+      return
+    }
+
+    startTransition(() => {
+      void navigate({
+        to: "/",
+        search: () => buildReaderSearch(routeState.sourceId, articleId),
+      })
+    })
+  })
+
+  const moveKeyboardSelection = useEffectEvent((offset: -1 | 1) => {
+    if (visibleArticles.length === 0) {
+      return
+    }
+
+    const currentIndex = activeArticleId
+      ? visibleArticles.findIndex((article) => article.id === activeArticleId)
+      : -1
+    const fallbackIndex = offset > 0 ? 0 : visibleArticles.length - 1
+    const nextIndex =
+      currentIndex === -1
+        ? fallbackIndex
+        : Math.max(0, Math.min(visibleArticles.length - 1, currentIndex + offset))
+    const nextArticleId = visibleArticles[nextIndex]?.id ?? null
+
+    selectKeyboardArticle(nextArticleId)
+  })
+
+  const updateArticleStateFromKeyboard = useEffectEvent(
+    (
+      input:
+        | {
+            readLater: boolean
+          }
+        | {
+            readState: "read" | "unread"
+          }
+        | {
+            starred: boolean
+          },
+    ) => {
+      if (!activeDetail || updateArticleStateMutation.isPending) {
+        return
+      }
+
+      updateArticleStateMutation.reset()
+      updateArticleStateMutation.mutate({
+        articleId: activeDetail.article.id,
+        ...input,
+      })
+    },
+  )
+
   const handleGlobalShortcut = useEffectEvent((event: KeyboardEvent) => {
     if (
       event.defaultPrevented ||
@@ -167,6 +223,69 @@ export function ReaderShellRoute() {
     }
 
     if (!event.altKey || event.shiftKey) {
+      const activeElement = document.activeElement
+      const focusedCommandScope =
+        activeElement === queuePaneRef.current
+          ? "queue"
+          : activeElement === readerPaneRef.current
+            ? "reader"
+            : null
+
+      if (!focusedCommandScope) {
+        return
+      }
+
+      const normalizedKey = event.key.length === 1 ? event.key.toLowerCase() : event.key
+
+      switch (normalizedKey) {
+        case "ArrowDown":
+        case "j":
+          event.preventDefault()
+          moveKeyboardSelection(1)
+          break
+        case "ArrowUp":
+        case "k":
+          event.preventDefault()
+          moveKeyboardSelection(-1)
+          break
+        case "Enter":
+          if (focusedCommandScope === "queue") {
+            event.preventDefault()
+            focusShortcutTarget("reader")
+          }
+          break
+        case "m":
+          if (focusedCommandScope === "reader" && activeDetail) {
+            event.preventDefault()
+            updateArticleStateFromKeyboard({
+              readState: activeDetail.state.readState === "read" ? "unread" : "read",
+            })
+          }
+          break
+        case "s":
+          if (focusedCommandScope === "reader" && activeDetail) {
+            event.preventDefault()
+            updateArticleStateFromKeyboard({
+              starred: !activeDetail.state.starred,
+            })
+          }
+          break
+        case "f":
+          if (focusedCommandScope === "reader" && activeDetail) {
+            event.preventDefault()
+            updateArticleStateFromKeyboard({
+              readLater: !activeDetail.state.readLater,
+            })
+          }
+          break
+        case "r":
+          event.preventDefault()
+          focusShortcutTarget("reader")
+          break
+        default:
+          break
+      }
+
       return
     }
 
@@ -243,8 +362,8 @@ export function ReaderShellRoute() {
     return (
       <main className="desktop-shell">
         <div className="desktop-loading">
-          <p className="desktop-shell__eyebrow">Stage 5 / Step 43</p>
-          <h1>Loading the route-backed reader shell and article state mutation controls.</h1>
+          <p className="desktop-shell__eyebrow">Stage 5 / Step 44</p>
+          <h1>Loading the route-backed reader shell and keyboard reading workflow.</h1>
         </div>
       </main>
     )
@@ -340,22 +459,26 @@ export function ReaderShellRoute() {
 
       <p className="desktop-sr-only" id={READER_SHORTCUT_HINT_ID}>
         Keyboard shortcuts: Alt+1 focuses primary navigation, Alt+2 focuses sources, Alt+3 focuses
-        the article queue, Alt+4 focuses the reading panel, and Alt+Shift+H toggles high contrast
-        mode.
+        the article queue, Alt+4 focuses the reading panel, Alt+Shift+H toggles high contrast mode,
+        J or ArrowDown moves to the next visible article when the queue or reader is focused, K or
+        ArrowUp moves to the previous visible article, Enter opens the current article into the
+        reading panel from the queue, M toggles read and unread state, S toggles starred, F toggles
+        read later, and R focuses the reading panel.
       </p>
 
       <header className="desktop-shell__header">
         <div className="desktop-shell__title-block">
-          <p className="desktop-shell__eyebrow">Stage 5 / Step 43</p>
-          <h1>The desktop shell now writes article state and reflects it across the queue.</h1>
+          <p className="desktop-shell__eyebrow">Stage 5 / Step 44</p>
+          <h1>The desktop shell now supports a keyboard-first reading flow.</h1>
           <p className="desktop-shell__lead">
             Route state still owns the active source and article, the shell store still owns only
             local queue controls, folder expansion, and the persisted reader content-mode
-            preference, and the mock repository remains a shell-side snapshot source. Step 43 keeps
+            preference, and the mock repository remains a shell-side snapshot source. Step 44 keeps
             the Step 37 query boundary, Step 38 virtualization boundary, Step 39 reading-panel
-            boundary, Step 40 content-mode boundary, and Step 42 attachment presentation boundary
-            intact, then adds shell-level article state writes without pulling durable persistence
-            or feed parsing concerns up into the reader.
+            boundary, Step 40 content-mode boundary, Step 42 attachment presentation boundary, and
+            Step 43 article-state command boundary intact, then adds pane-scoped keyboard routing
+            for queue movement, reader entry, and core article actions without pulling durable
+            persistence or feed parsing concerns up into the shell.
           </p>
         </div>
 
@@ -388,15 +511,18 @@ export function ReaderShellRoute() {
 
           <p className="desktop-summary__note">
             The queue still consumes one route-backed article query while source editing, OPML
-            portability, and tree expansion remain separate concerns. Step 43 now lets the reader
-            update read state, saved-state flags, importance, and progress through one shell-side
-            command path without changing query vocabulary or durable storage boundaries.
+            portability, and tree expansion remain separate concerns. Step 44 keeps landmark
+            shortcuts from Step 17, then layers pane-focused reading commands on top so article
+            movement and core reader actions stay inside the desktop shell instead of leaking into
+            shared DTOs or future persistence layers.
           </p>
 
           <div className="desktop-shortcuts">
             <div className="desktop-shortcuts__summary">
-              <span className="desktop-summary__label">Accessibility</span>
-              <strong>Keyboard landmarks and contrast mode are now shell-level concerns.</strong>
+              <span className="desktop-summary__label">Keyboard workflow</span>
+              <strong>
+                Landmarks and reading commands now share one shell-level shortcut source.
+              </strong>
             </div>
 
             <ul className="desktop-shortcuts__list">

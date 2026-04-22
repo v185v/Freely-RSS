@@ -162,9 +162,10 @@ export function ReaderPane({
           )}
           <p className="desktop-pane__description">
             The selected article still comes from route state, and the reader still preserves the
-            Step 40 content-mode toggle plus the Step 42 attachment surface. Step 43 adds shell-side
-            article state writes on top of that same article-detail contract without changing
-            article selection or query ownership.
+            Step 40 content-mode toggle plus the Step 42 attachment surface. Step 44 keeps the
+            existing article-detail contract intact, then adds keyboard reading flow on top of the
+            Step 43 shell-side article state command path without changing article selection or
+            query ownership.
           </p>
         </div>
 
@@ -234,8 +235,9 @@ export function ReaderPane({
                       <p className="desktop-reader__section-label">Article state</p>
                       <p className="desktop-reader__state-note">
                         Step 43 keeps article state writes inside the desktop shell command path.
-                        The same mutation updates the queue, quick views, feed counts, and the
-                        current reader detail without introducing storage-backed persistence yet.
+                        Step 44 reuses that same mutation boundary for keyboard commands, so the
+                        queue, quick views, feed counts, and current reader detail stay synchronized
+                        without introducing storage-backed persistence yet.
                       </p>
                     </div>
                     <div className="desktop-reader__state-summary">

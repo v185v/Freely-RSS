@@ -1433,3 +1433,29 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `packages/ui` remains a primitive layer and does not absorb article-state policy, progress normalization, or queue-reconciliation rules.
 - `crates/feed-engine` and `crates/content-pipeline` still own fetch, parse, extraction, and metadata derivation semantics; Step 43 does not move article-state writes into those Rust layers.
 - `crates/core-domain` and SQLite remain the future durable boundary for `UserState` writes. Step 43 only validates the shell-side command shape and its immediate UI/query echo before storage-backed persistence is introduced.
+
+## 2026-04-22 ASCII Addendum III
+
+### Step 44 Architecture Insights
+
+- Step 44 confirms that keyboard reading flow is a desktop-shell interaction concern, not a routing-schema concern and not a DTO concern. The route still owns `sourceId` and `articleId`; the shell now additionally owns how focused panes interpret reading commands.
+- The key architectural decision in this step is to bind reading commands to focused landmarks instead of every descendant control. Queue and reader regions act as explicit keyboard command scopes, which preserves native button and input behavior while still enabling a full keyboard workflow.
+- Step 44 intentionally does not introduce a second queue cursor model. Keyboard movement still updates the same route-backed active article that powers queue highlighting and reader detail resolution, so there is no hidden shell-only "selected but unopened" article state to reconcile later.
+- Enter is treated as a focus-transfer boundary, not as a new data mutation. The queue already selects the active article through the existing route contract, so Step 44 only needs to move keyboard focus into the reader rather than inventing a second article-open command surface.
+- Keyboard-triggered read, star, and read-later actions deliberately reuse the Step 43 shell mutation path. That keeps queue counts, quick views, reader facts, and route reconciliation aligned on one snapshot update boundary instead of splitting pointer-driven and keyboard-driven writes.
+- No database schema changes were required for Step 44. The existing `UserState` schema and article DTOs already carry the facts needed for keyboard actions; this step only validates pane-scoped command routing on top of the current shell state model.
+
+### Step 44 File Responsibilities
+
+- `apps/desktop/src/features/reader-shell/accessibility.ts`: now owns the full shell-level shortcut catalog, including both landmark shortcuts and pane-scoped reading-flow commands, so keyboard facts live in one reusable module.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`: remains the shell composition root and now also owns Step 44 keyboard command routing, including focused-pane detection, article movement, reader entry, and keyboard-triggered state writes via the existing mutation boundary.
+- `apps/desktop/src/features/reader-shell/components/reader-pane.tsx`: still owns reader presentation and pointer-driven state controls, and now explicitly documents that keyboard commands land on the same shell-side mutation boundary rather than bypassing the reader contract.
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`: protects Step 44 by verifying a keyboard-only reading path from queue focus through reader focus, read-state mutation, and subsequent article movement.
+
+### Step 44 Boundary Notes
+
+- `packages/shared-types` remains the DTO boundary only; Step 44 did not add keyboard-command DTOs, queue-cursor fields, or reader-only route state.
+- `packages/shared-query` still owns article-query vocabulary and execution planning, but it does not own pane focus policy, keyboard command routing, or reader-entry semantics.
+- `packages/ui` remains a primitive layer and does not absorb shell shortcut catalogs, focused-pane command scopes, or article-movement policy.
+- `crates/feed-engine` and `crates/content-pipeline` still own fetch, parse, extraction, and metadata derivation semantics; Step 44 does not move keyboard workflow logic into Rust layers.
+- `crates/core-domain` and SQLite remain the future durable boundary for reader preferences and `UserState` persistence. Step 44 only validates shell-side keyboard routing and reuse of the current mutation path before storage-backed preference work lands.

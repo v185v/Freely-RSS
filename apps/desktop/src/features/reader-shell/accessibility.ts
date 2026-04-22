@@ -10,7 +10,7 @@ export const READER_LANDMARK_IDS = {
   sourceHeading: "reader-shell-source-heading",
 } as const
 
-export const READER_SHORTCUTS = [
+export const READER_LANDMARK_SHORTCUTS = [
   {
     description: "Focus primary navigation",
     key: "Alt+1",
@@ -38,7 +38,43 @@ export const READER_SHORTCUTS = [
   },
 ] as const
 
-export type ReaderShortcutTarget = (typeof READER_SHORTCUTS)[number]["target"]
+export const READER_READING_FLOW_SHORTCUTS = [
+  {
+    description: "Move to the previous visible article when the queue or reader is focused",
+    key: "K / ArrowUp",
+  },
+  {
+    description: "Move to the next visible article when the queue or reader is focused",
+    key: "J / ArrowDown",
+  },
+  {
+    description: "Open the current article into the reading panel when the queue is focused",
+    key: "Enter",
+  },
+  {
+    description: "Toggle read and unread state when the reading panel is focused",
+    key: "M",
+  },
+  {
+    description: "Toggle starred state when the reading panel is focused",
+    key: "S",
+  },
+  {
+    description: "Toggle read later state when the reading panel is focused",
+    key: "F",
+  },
+  {
+    description: "Focus the reading panel from the current keyboard workflow",
+    key: "R",
+  },
+] as const
+
+export const READER_SHORTCUTS = [
+  ...READER_LANDMARK_SHORTCUTS,
+  ...READER_READING_FLOW_SHORTCUTS,
+] as const
+
+export type ReaderShortcutTarget = (typeof READER_LANDMARK_SHORTCUTS)[number]["target"]
 
 export function isEditableTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) {
