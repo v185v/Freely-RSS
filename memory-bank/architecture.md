@@ -1518,3 +1518,36 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `packages/ui` remains a primitive layer and does not absorb annotation semantics, extracted-paragraph anchoring rules, or reader-side replay logic.
 - `crates/feed-engine` and `crates/content-pipeline` still own fetch, parse, extraction, and metadata derivation semantics; Step 46 does not move selection anchoring or note creation into Rust layers.
 - `crates/core-domain` and SQLite remain the future durable boundary for `Annotation` writes and cross-session replay policy. Step 46 only validates shell-side authoring and replay against the existing annotation schema.
+
+## 2026-04-22 ASCII Addendum VI
+
+### Step 47 Architecture Insights
+
+- Step 47 confirms that query language semantics belong to `packages/shared-query`, not to any individual shell. The desktop queue can now type richer query text, but it still does so by consuming one shared parser and validator boundary instead of inventing shell-only filter grammar.
+- The key architectural decision in this step is to separate parse failures from semantic validation issues. Text input now fails with input-range-aware `QueryTextParseError`, while serialized ASTs and query definitions still use path-based `QueryValidationError` issues; that keeps text UX and persisted-contract validation distinct without splitting the shared query vocabulary.
+- The queue filter remains a shell-owned control, but it no longer owns parsing. Route scope, status presets, and sort mode are still composed in `article-query.ts`; the free-form filter text is now parsed into a `QueryNode` subtree that gets merged with those existing shell constraints.
+- Ignoring queue-local sort directives is also intentional boundary control. The shared parser can understand sort tokens, but the desktop shell keeps sort ownership in its explicit sort buttons rather than letting free-form text silently override local view controls.
+- `parseQueryDefinitionJson` is now a real structural boundary instead of a type cast. Saved rules, smart folders, and later persisted query payloads can fail fast on malformed JSON before they reach SQL planning or future Rust execution layers.
+- No database schema changes were required for Step 47. The existing `Rule.conditions` and `SmartFolder.query_definition` JSON slots are still sufficient; this step only hardens how query definitions are parsed, validated, and surfaced in the shell.
+
+### Step 47 File Responsibilities
+
+- `packages/shared-query/src/errors.ts`: owns structured query parse and validation error models, including input-range-aware text parse errors and path-based semantic issues.
+- `packages/shared-query/src/text-query.ts`: owns Step 47 text-query tokenization, grouped expression parsing, explicit operator support, inline negation handling, sort token capture, and location-aware parse failure boundaries.
+- `packages/shared-query/src/serialize.ts`: owns Step 47 serialized query-definition parsing and structural JSON validation before normalized ASTs reach semantic validation.
+- `packages/shared-query/src/index.ts`: remains the query package export surface and now exposes the new parse-error boundary alongside existing validation exports.
+- `packages/shared-query/test/query.test.mjs`: protects Step 47 by verifying grouped text queries, explicit operators, positioned parse errors, and malformed JSON validation.
+- `apps/desktop/src/features/reader-shell/article-query.ts`: keeps Step 37 query composition ownership and now additionally parses queue filter text through `shared-query`, merges valid query subtrees with route and status clauses, and surfaces parser feedback without moving execution into Rust or SQLite.
+- `apps/desktop/src/features/reader-shell/types.ts`: extends the queue query summary contract so parser messages have an explicit shell-local presentation boundary.
+- `apps/desktop/src/features/reader-shell/components/queue-pane.tsx`: owns Step 47 queue-filter UX copy and renders parser messages beside the compiled query preview.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`: remains the shell composition root and now frames Step 47 explicitly in shell-level copy while still keeping route ownership limited to `sourceId` and `articleId`.
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`: protects Step 47 by verifying both valid grouped text filtering and invalid-query error handling in the live shell.
+- `apps/desktop/src/styles.css`: contains shell-local presentation rules for parser messages in the queue query summary card.
+
+### Step 47 Boundary Notes
+
+- `packages/shared-types` remains DTO-only; Step 47 did not add saved-query DTOs or queue-filter parser state to shared contracts.
+- `packages/shared-query` now owns both query vocabulary and parser and serialized-shape validation, but it still does not own shell route state, queue virtualization, or reader presentation.
+- `packages/ui` remains a primitive layer and does not absorb query grammar, parser messaging policy, or shell query composition rules.
+- `crates/rule-engine` is the next consumer boundary for the stricter query contract; Step 47 intentionally stops before moving rule evaluation or query execution into Rust.
+- `crates/core-domain` and SQLite remain the future durable boundary for persisted rules, smart folders, and saved query definitions. Step 47 only validates the shared contract and the shell-side consumption path that sits in front of those later storage-backed layers.

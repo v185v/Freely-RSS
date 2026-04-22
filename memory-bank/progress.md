@@ -895,3 +895,34 @@
 - desktop reader shell now owns text-selection capture, paragraph-scoped annotation authoring, and reader-side replay in the mock shell, but it still does not own durable annotation storage.
 - `packages/shared-types` remains DTO-only, and Step 46 did not extend `AnnotationDto` beyond the existing reader-facing contract.
 - durable query parsing, validation, and later SQLite-backed annotation persistence still belong to `packages/shared-query` and `core-domain/sqlite` work rather than this shell-local interaction step.
+
+## 2026-04-22 ASCII Addendum VI
+
+### Stage 5 Step 47 Completed: unified query expression parsing and validation
+
+- Implemented a richer shared-query parsing and validation boundary instead of leaving queue text filters on the earlier minimal token scan.
+- Kept Step 47 centered on `packages/shared-query` plus shell-side consumption. No Rust crate, SQLite schema, shared article DTO contract, or durable saved-query persistence changed in this step.
+- Replaced the old flat text-query scan with parser logic that now supports grouped expressions, explicit comparison operators, inline negation, and input-range-aware `QueryTextParseError` failures.
+- Hardened `parseQueryDefinitionJson` so malformed persisted query JSON now fails with structured validation issues before it reaches downstream normalization or future execution layers.
+- Updated the desktop queue filter to route its text through `parseTextQuery`, keep route scope, status presets, and shell sort ownership intact, and surface parser feedback in the existing article-query summary instead of silently diverging inside the shell.
+- Added regressions for two risks:
+- grouped shared-query text syntax now compiles into the queue query and visibly narrows the unread route result set.
+- invalid queue filter text now reports a precise parser error while preserving the route-backed queue instead of clearing the visible articles.
+
+### Step 47 Verification
+
+- Passed `corepack pnpm run format`
+- Passed `corepack pnpm --filter @freelyrss/shared-query check`
+- Passed `corepack pnpm --filter @freelyrss/shared-query test`
+- Passed `corepack pnpm --filter @freelyrss/desktop test`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+
+### Next Step (ASCII update)
+
+- Next planned implementation step is `implementation-plan.md` Stage 5 Step 48: rule-engine hit evaluation.
+- Preserve the current boundary split:
+- `packages/shared-query` now owns text parsing, serialized-shape validation, and query-definition error modeling, but it still does not execute rules or persist saved queries.
+- desktop reader shell only consumes parser output and message state for queue filtering; it still does not own the query language or durable smart-folder and rule storage.
+- durable saved-query persistence and SQLite-backed execution remain later `core-domain/sqlite` work, while Step 48 should move into `crates/rule-engine` on top of the now-stricter shared query contract.

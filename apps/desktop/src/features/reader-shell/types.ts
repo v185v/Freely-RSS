@@ -125,6 +125,8 @@ export interface ReaderViewFilters {
 export interface ReaderArticleQuerySummary {
   clauseCount: number
   jsonPreview: string
+  queryMessage: string | null
+  queryMessageTone: "error" | "note" | null
   sourceSummary: string
   summary: string
 }

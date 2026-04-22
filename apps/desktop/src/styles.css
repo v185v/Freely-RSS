@@ -628,6 +628,27 @@ body {
   line-height: 1.55;
 }
 
+.desktop-query-message {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--fr-border);
+  border-radius: 14px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.desktop-query-message--error {
+  border-color: rgba(255, 125, 125, 0.4);
+  background: rgba(87, 24, 28, 0.4);
+  color: #ffd7d7;
+}
+
+.desktop-query-message--note {
+  border-color: rgba(127, 226, 192, 0.28);
+  background: rgba(21, 40, 36, 0.42);
+  color: var(--fr-text-muted);
+}
+
 .desktop-reader__facts {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

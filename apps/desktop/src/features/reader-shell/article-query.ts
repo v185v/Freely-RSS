@@ -4,10 +4,13 @@ import {
   type QueryField,
   type QueryNode,
   type QuerySort,
+  QueryTextParseError,
+  assertValidQueryDefinition,
   buildQueryDefinition,
+  normalizeQueryDefinition,
+  parseTextQuery,
   predicate,
   serializeQueryDefinition,
-  text,
 } from "@freelyrss/shared-query"
 import type {
   ArticleDetailDto,
@@ -21,6 +24,13 @@ import type { ReaderArticleQuery, ReaderShellData, ReaderViewFilters } from "./t
 type ArticleQueryContext = {
   article: ArticleListItemDto
   detail: ArticleDetailDto | null
+}
+
+type ParsedSearchText = {
+  clauseCount: number
+  message: string | null
+  messageTone: "error" | "note" | null
+  root: QueryNode | null
 }
 
 const EMPTY_SOURCE_SENTINEL = "__empty-source__"
@@ -109,13 +119,8 @@ function buildSourceClauses(
   }
 }
 
-function buildLocalClauses(filters: ReaderViewFilters) {
+function buildStatusClauses(filters: ReaderViewFilters) {
   const clauses: QueryBuilderClause[] = []
-  const trimmedSearch = filters.searchText.trim()
-
-  if (trimmedSearch.length > 0) {
-    clauses.push(text(trimmedSearch))
-  }
 
   switch (filters.statusFilter) {
     case "reading":
@@ -135,6 +140,62 @@ function buildLocalClauses(filters: ReaderViewFilters) {
   }
 
   return clauses
+}
+
+function countQueryNodes(node: QueryNode): number {
+  if (node.kind === "group") {
+    return node.children.reduce((count, child) => count + countQueryNodes(child), 0)
+  }
+
+  if (node.kind === "not") {
+    return countQueryNodes(node.child)
+  }
+
+  return 1
+}
+
+function formatQueryParseMessage(error: unknown) {
+  if (error instanceof QueryTextParseError) {
+    return `Queue filter could not be parsed at line ${error.range.line}, column ${error.range.column}: ${error.message}`
+  }
+
+  return error instanceof Error
+    ? `Queue filter could not be parsed: ${error.message}`
+    : "Queue filter could not be parsed."
+}
+
+function parseSearchTextFilter(searchText: string): ParsedSearchText {
+  const trimmedSearch = searchText.trim()
+
+  if (trimmedSearch.length === 0) {
+    return {
+      root: null,
+      clauseCount: 0,
+      message: null,
+      messageTone: null,
+    }
+  }
+
+  try {
+    const parsed = parseTextQuery(trimmedSearch)
+
+    return {
+      root: parsed.root,
+      clauseCount: countQueryNodes(parsed.root),
+      message:
+        parsed.sort.length > 0
+          ? "Queue filter sort directives are ignored here; use the sort buttons instead."
+          : null,
+      messageTone: parsed.sort.length > 0 ? "note" : null,
+    }
+  } catch (error) {
+    return {
+      root: null,
+      clauseCount: 0,
+      message: formatQueryParseMessage(error),
+      messageTone: "error",
+    }
+  }
 }
 
 function buildSort(filters: ReaderViewFilters): QuerySort[] {
@@ -386,14 +447,29 @@ export function buildReaderArticleQuery(
   filters: ReaderViewFilters,
 ): ReaderArticleQuery {
   const source = buildSourceClauses(data, sourceId)
-  const localClauses = buildLocalClauses(filters)
-  const definition = buildQueryDefinition({
-    clauses: [...source.clauses, ...localClauses],
+  const statusClauses = buildStatusClauses(filters)
+  const parsedSearchText = parseSearchTextFilter(filters.searchText)
+  const baseDefinition = buildQueryDefinition({
+    clauses: [...source.clauses, ...statusClauses],
     sort: buildSort(filters),
   })
+  const definition =
+    parsedSearchText.root === null
+      ? baseDefinition
+      : assertValidQueryDefinition(
+          normalizeQueryDefinition({
+            version: 1,
+            root: {
+              kind: "group",
+              match: "all",
+              children: [baseDefinition.root, parsedSearchText.root],
+            },
+            sort: baseDefinition.sort,
+          }),
+        )
   const visibleArticles = executeReaderArticleQuery(data, definition)
   const sortSummary = filters.sortMode === "newest" ? "newest first" : "oldest first"
-  const shellFilterCount = localClauses.length
+  const shellFilterCount = statusClauses.length + parsedSearchText.clauseCount
   const clauseCount = source.clauses.length + shellFilterCount
 
   return {
@@ -401,6 +477,8 @@ export function buildReaderArticleQuery(
     summary: {
       clauseCount,
       jsonPreview: JSON.stringify(serializeQueryDefinition(definition), null, 2),
+      queryMessage: parsedSearchText.message,
+      queryMessageTone: parsedSearchText.messageTone,
       sourceSummary: source.sourceSummary,
       summary: `${source.sourceSummary} Shell filters contribute ${shellFilterCount} clause(s); sort is ${sortSummary}.`,
     },

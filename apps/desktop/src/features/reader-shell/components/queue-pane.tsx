@@ -103,10 +103,10 @@ export function QueuePane({
         <div className="desktop-pane__toolbar">
           <TextInput
             aria-label="Article view filter"
-            hint="This input lives in the shell store and compiles into the unified article query definition."
+            hint='This shell-owned filter now accepts shared-query text syntax such as tag:product, feed="FreelyRSS Engineering", or (tag:search OR has:attachment).'
             label="Queue filter"
             onChange={handleSearchTextChange}
-            placeholder="Filter within the current route"
+            placeholder='Try tag:product OR "offline first"'
             value={searchText}
           />
 
@@ -167,6 +167,18 @@ export function QueuePane({
             <strong>{querySummary.summary}</strong>
           </div>
           <p className="desktop-view-state__note">{querySummary.sourceSummary}</p>
+          {querySummary.queryMessage ? (
+            <p
+              className={
+                querySummary.queryMessageTone === "error"
+                  ? "desktop-query-message desktop-query-message--error"
+                  : "desktop-query-message desktop-query-message--note"
+              }
+              role={querySummary.queryMessageTone === "error" ? "alert" : undefined}
+            >
+              {querySummary.queryMessage}
+            </p>
+          ) : null}
           <pre className="desktop-view-state__preview">{querySummary.jsonPreview}</pre>
         </Surface>
 

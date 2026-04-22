@@ -312,6 +312,64 @@ describe("reader shell navigation", () => {
     expect(queueScope.getByText(/"value": "reading"/i)).toBeTruthy()
   })
 
+  test("parses shared-query text syntax in the queue filter before executing the route-backed query", async () => {
+    window.scrollTo = () => {}
+
+    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+
+    const queuePane = await screen.findByRole("region", { name: "Article queue" })
+    const queueScope = within(queuePane)
+    const getQueueRows = () => Array.from(queuePane.querySelectorAll(".desktop-article-row"))
+
+    fireEvent.change(queueScope.getByLabelText("Article view filter"), {
+      target: { value: "tag:search OR has:attachment" },
+    })
+
+    await waitFor(() => {
+      const rows = getQueueRows()
+      expect(rows).toHaveLength(2)
+      expect(rows[0]?.textContent).toContain(
+        "Shared-query is ready, but the reader shell still needs a clean composition layer",
+      )
+      expect(rows[1]?.textContent).toContain(
+        "Midnight dispatch 42: attachment boundaries for podcast feeds",
+      )
+    })
+
+    expect(queueScope.queryByText(/Why layout state should stay separate/i)).toBeNull()
+    expect(queueScope.getByText(/"match": "any"/i)).toBeTruthy()
+    expect(queueScope.getByText(/"field": "tag"/i)).toBeTruthy()
+    expect(queueScope.getByText(/"field": "hasAttachment"/i)).toBeTruthy()
+  })
+
+  test("shows queue-filter parse errors without dropping the route-backed result set", async () => {
+    window.scrollTo = () => {}
+
+    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+
+    const queuePane = await screen.findByRole("region", { name: "Article queue" })
+    const queueScope = within(queuePane)
+    const getQueueRows = () => Array.from(queuePane.querySelectorAll(".desktop-article-row"))
+
+    fireEvent.change(queueScope.getByLabelText("Article view filter"), {
+      target: { value: "(" },
+    })
+
+    await waitFor(() => {
+      expect(queueScope.getByRole("alert").textContent ?? "").toMatch(
+        /Queue filter could not be parsed at line 1, column 1:/i,
+      )
+      expect(getQueueRows()).toHaveLength(4)
+    })
+
+    expect(
+      queueScope.getByText(/Turning the desktop shell into a stable three-pane reader skeleton/i),
+    ).toBeTruthy()
+    expect(
+      queueScope.getByText(/Midnight dispatch 42: attachment boundaries for podcast feeds/i),
+    ).toBeTruthy()
+  })
+
   test("renders a stable reading panel base view and swaps article content without stale detail", async () => {
     window.scrollTo = () => {}
     const user = userEvent.setup()

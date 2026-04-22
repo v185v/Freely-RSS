@@ -26,8 +26,8 @@ export {
   QUERY_SORT_NULLS,
 } from "./ast.ts"
 
-export type { QueryValidationIssue } from "./errors.ts"
-export { QueryValidationError } from "./errors.ts"
+export type { QueryTextRange, QueryValidationIssue } from "./errors.ts"
+export { QueryTextParseError, QueryValidationError } from "./errors.ts"
 
 export type { QueryJsonObject, QueryJsonPrimitive, QueryJsonValue } from "./json.ts"
 
