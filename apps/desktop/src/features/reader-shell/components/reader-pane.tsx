@@ -6,19 +6,52 @@ import { Button, SplitPane, Surface } from "@freelyrss/ui"
 import { formatReaderProgress } from "../selectors"
 import type { ReaderContentMode } from "../types"
 
+type ReaderStateMutationInput = {
+  articleId: ArticleDetailDto["article"]["id"]
+  importance?: ArticleDetailDto["state"]["importance"]
+  liked?: ArticleDetailDto["state"]["liked"]
+  readLater?: ArticleDetailDto["state"]["readLater"]
+  readingProgress?: ArticleDetailDto["state"]["readingProgress"]
+  readState?: ArticleDetailDto["state"]["readState"]
+  starred?: ArticleDetailDto["state"]["starred"]
+}
+
 type ReaderPaneProps = {
   activeDetail: ArticleDetailDto | null
+  articleStateErrorMessage: string | null
   describedBy?: string
   headingId: string
+  isUpdatingArticleState: boolean
   onSetReaderContentMode: (readerContentMode: ReaderContentMode) => void
+  onUpdateArticleState: (input: ReaderStateMutationInput) => void
   paneId: string
   paneRef?: Ref<HTMLElement>
   readerContentMode: ReaderContentMode
 }
 
-function formatReaderDate(value: string | null) {
+const READ_STATE_OPTIONS: Array<{
+  label: string
+  value: ArticleDetailDto["state"]["readState"]
+}> = [
+  { label: "Unread", value: "unread" },
+  { label: "Reading", value: "reading" },
+  { label: "Read", value: "read" },
+]
+
+const IMPORTANCE_OPTIONS: Array<{
+  label: string
+  value: ArticleDetailDto["state"]["importance"]
+}> = [
+  { label: "Low", value: "low" },
+  { label: "Normal", value: "normal" },
+  { label: "High", value: "high" },
+]
+
+const READING_PROGRESS_OPTIONS = [0, 0.25, 0.5, 0.75, 1] as const
+
+function formatReaderDate(value: string | null, fallback = "No publish time yet") {
   if (!value) {
-    return "No publish time yet"
+    return fallback
   }
 
   const timestamp = Date.parse(value)
@@ -35,6 +68,10 @@ function formatReaderDate(value: string | null) {
     timeZone: "UTC",
     year: "numeric",
   }).format(timestamp)} UTC`
+}
+
+function formatBooleanState(value: boolean) {
+  return value ? "Yes" : "No"
 }
 
 function formatAttachmentLabel(type: ArticleDetailDto["attachments"][number]["type"]) {
@@ -84,9 +121,12 @@ function formatAttachmentName(url: string) {
 
 export function ReaderPane({
   activeDetail,
+  articleStateErrorMessage,
   describedBy,
   headingId,
+  isUpdatingArticleState,
   onSetReaderContentMode,
+  onUpdateArticleState,
   paneId,
   paneRef,
   readerContentMode,
@@ -122,8 +162,9 @@ export function ReaderPane({
           )}
           <p className="desktop-pane__description">
             The selected article still comes from route state, and the reader still preserves the
-            Step 40 content-mode toggle. Step 42 layers attachment and podcast enclosure visibility
-            on top of that same article-detail contract without changing article selection.
+            Step 40 content-mode toggle plus the Step 42 attachment surface. Step 43 adds shell-side
+            article state writes on top of that same article-detail contract without changing
+            article selection or query ownership.
           </p>
         </div>
 
@@ -151,6 +192,26 @@ export function ReaderPane({
                 <strong>{formatReaderProgress(activeDetail.state.readingProgress)}</strong>
               </div>
               <div>
+                <span className="desktop-reader__fact-label">Starred state</span>
+                <strong>{formatBooleanState(activeDetail.state.starred)}</strong>
+              </div>
+              <div>
+                <span className="desktop-reader__fact-label">Liked state</span>
+                <strong>{formatBooleanState(activeDetail.state.liked)}</strong>
+              </div>
+              <div>
+                <span className="desktop-reader__fact-label">Read later state</span>
+                <strong>{formatBooleanState(activeDetail.state.readLater)}</strong>
+              </div>
+              <div>
+                <span className="desktop-reader__fact-label">Importance level</span>
+                <strong>{activeDetail.state.importance}</strong>
+              </div>
+              <div>
+                <span className="desktop-reader__fact-label">Last opened</span>
+                <strong>{formatReaderDate(activeDetail.state.lastOpenedAt, "Never opened")}</strong>
+              </div>
+              <div>
                 <span className="desktop-reader__fact-label">Language</span>
                 <strong>{activeDetail.article.language ?? "Unknown"}</strong>
               </div>
@@ -166,6 +227,189 @@ export function ReaderPane({
                       "This article does not expose a summary yet, so the reading panel falls back to the extracted body."}
                   </p>
                 </header>
+
+                <section className="desktop-reader__state-controls">
+                  <div className="desktop-reader__state-controls-header">
+                    <div>
+                      <p className="desktop-reader__section-label">Article state</p>
+                      <p className="desktop-reader__state-note">
+                        Step 43 keeps article state writes inside the desktop shell command path.
+                        The same mutation updates the queue, quick views, feed counts, and the
+                        current reader detail without introducing storage-backed persistence yet.
+                      </p>
+                    </div>
+                    <div className="desktop-reader__state-summary">
+                      <span className="desktop-reader__fact-label">Pending write</span>
+                      <strong>{isUpdatingArticleState ? "Updating..." : "Idle"}</strong>
+                    </div>
+                  </div>
+
+                  <fieldset className="desktop-toolbar-group desktop-reader__control-group">
+                    <legend className="desktop-toolbar-group__legend">Read state</legend>
+                    <div className="desktop-toolbar-pills">
+                      {READ_STATE_OPTIONS.map((option) => {
+                        const active = activeDetail.state.readState === option.value
+
+                        return (
+                          <Button
+                            aria-pressed={active}
+                            className={
+                              active ? "desktop-pill desktop-pill--active" : "desktop-pill"
+                            }
+                            disabled={isUpdatingArticleState}
+                            key={option.value}
+                            onClick={() =>
+                              onUpdateArticleState({
+                                articleId: activeDetail.article.id,
+                                readState: option.value,
+                              })
+                            }
+                            size="sm"
+                            tone={active ? "neutral" : "ghost"}
+                          >
+                            {option.label}
+                          </Button>
+                        )
+                      })}
+                    </div>
+                  </fieldset>
+
+                  <fieldset className="desktop-toolbar-group desktop-reader__control-group">
+                    <legend className="desktop-toolbar-group__legend">State toggles</legend>
+                    <div className="desktop-toolbar-pills">
+                      <Button
+                        aria-pressed={activeDetail.state.starred}
+                        className={
+                          activeDetail.state.starred
+                            ? "desktop-pill desktop-pill--active"
+                            : "desktop-pill"
+                        }
+                        disabled={isUpdatingArticleState}
+                        onClick={() =>
+                          onUpdateArticleState({
+                            articleId: activeDetail.article.id,
+                            starred: !activeDetail.state.starred,
+                          })
+                        }
+                        size="sm"
+                        tone={activeDetail.state.starred ? "neutral" : "ghost"}
+                      >
+                        Starred
+                      </Button>
+                      <Button
+                        aria-pressed={activeDetail.state.liked}
+                        className={
+                          activeDetail.state.liked
+                            ? "desktop-pill desktop-pill--active"
+                            : "desktop-pill"
+                        }
+                        disabled={isUpdatingArticleState}
+                        onClick={() =>
+                          onUpdateArticleState({
+                            articleId: activeDetail.article.id,
+                            liked: !activeDetail.state.liked,
+                          })
+                        }
+                        size="sm"
+                        tone={activeDetail.state.liked ? "neutral" : "ghost"}
+                      >
+                        Liked
+                      </Button>
+                      <Button
+                        aria-pressed={activeDetail.state.readLater}
+                        className={
+                          activeDetail.state.readLater
+                            ? "desktop-pill desktop-pill--active"
+                            : "desktop-pill"
+                        }
+                        disabled={isUpdatingArticleState}
+                        onClick={() =>
+                          onUpdateArticleState({
+                            articleId: activeDetail.article.id,
+                            readLater: !activeDetail.state.readLater,
+                          })
+                        }
+                        size="sm"
+                        tone={activeDetail.state.readLater ? "neutral" : "ghost"}
+                      >
+                        Read later
+                      </Button>
+                    </div>
+                  </fieldset>
+
+                  <fieldset className="desktop-toolbar-group desktop-reader__control-group">
+                    <legend className="desktop-toolbar-group__legend">Importance</legend>
+                    <div className="desktop-toolbar-pills">
+                      {IMPORTANCE_OPTIONS.map((option) => {
+                        const active = activeDetail.state.importance === option.value
+
+                        return (
+                          <Button
+                            aria-pressed={active}
+                            className={
+                              active ? "desktop-pill desktop-pill--active" : "desktop-pill"
+                            }
+                            disabled={isUpdatingArticleState}
+                            key={option.value}
+                            onClick={() =>
+                              onUpdateArticleState({
+                                articleId: activeDetail.article.id,
+                                importance: option.value,
+                              })
+                            }
+                            size="sm"
+                            tone={active ? "neutral" : "ghost"}
+                          >
+                            {option.label}
+                          </Button>
+                        )
+                      })}
+                    </div>
+                  </fieldset>
+
+                  <fieldset className="desktop-toolbar-group desktop-reader__control-group">
+                    <legend className="desktop-toolbar-group__legend">Reading progress</legend>
+                    <div className="desktop-toolbar-pills desktop-reader__progress-grid">
+                      {READING_PROGRESS_OPTIONS.map((progress) => {
+                        const label = `${Math.round(progress * 100)}%`
+                        const active = activeDetail.state.readingProgress === progress
+
+                        return (
+                          <Button
+                            aria-label={`Set reading progress to ${label}`}
+                            aria-pressed={active}
+                            className={
+                              active ? "desktop-pill desktop-pill--active" : "desktop-pill"
+                            }
+                            disabled={isUpdatingArticleState}
+                            key={progress}
+                            onClick={() =>
+                              onUpdateArticleState({
+                                articleId: activeDetail.article.id,
+                                readingProgress: progress,
+                              })
+                            }
+                            size="sm"
+                            tone={active ? "neutral" : "ghost"}
+                          >
+                            {label}
+                          </Button>
+                        )
+                      })}
+                    </div>
+                    <p className="desktop-reader__mode-note">
+                      Progress writes also keep read-state transitions coherent: `0%` maps to
+                      unread, values between `0%` and `100%` map to reading, and `100%` maps to
+                      read.
+                    </p>
+                  </fieldset>
+
+                  {articleStateErrorMessage ? (
+                    <p className="desktop-reader__error" role="alert">
+                      {articleStateErrorMessage}
+                    </p>
+                  ) : null}
+                </section>
 
                 <section className="desktop-reader__body">
                   <div className="desktop-reader__body-header">
@@ -350,18 +594,6 @@ export function ReaderPane({
                   </div>
                 </div>
               </article>
-            </div>
-
-            <div className="desktop-pane__footer">
-              <Button size="sm" tone="neutral">
-                Mark read
-              </Button>
-              <Button size="sm" tone="ghost">
-                Toggle star
-              </Button>
-              <Button size="sm" tone="ghost">
-                Open source link
-              </Button>
             </div>
           </>
         ) : (

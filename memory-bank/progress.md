@@ -783,3 +783,32 @@
 - desktop reader shell now owns attachment presentation, enclosure labeling, and empty-route fixture coverage, but it still does not own attachment discovery or persistence.
 - `packages/shared-types` remains DTO-only, and `ArticleDetailDto` continues to be the single detail contract consumed by the reader.
 - durable read-state, starring, liking, read-later, and progress writes still belong to later shell-command and `core-domain/sqlite` integration rather than this presentation-only step.
+
+## 2026-04-22 ASCII Addendum II
+
+### Stage 5 Step 43 Completed: article state mutations in the desktop shell
+
+- Implemented shell-level article state writes for `readState`, `starred`, `liked`, `readLater`, `importance`, and `readingProgress`.
+- Kept Step 43 inside the desktop shell command and presentation boundary. No Rust crate, SQLite schema, shared DTO contract, or durable persistence wiring changed in this step.
+- Added one shell-owned mutation path in the mock repository so article list rows, article details, quick-view counts, and feed unread counts all derive from the same updated snapshot instead of drifting between list and detail copies.
+- Expanded the reading panel with explicit state controls and visible state summaries, replacing the old placeholder footer buttons with real interaction for read-state transitions, saved-state toggles, importance changes, and progress writes.
+- Preserved the Step 37 query boundary: the queue still consumes one composed article query, and Step 43 now proves that changing article state can immediately re-shape that result set without moving query execution or persistence into the reader pane.
+- Fixed a fixture baseline inconsistency while landing the feature: the `article-window-behavior` detail now points at its own user-state fixture instead of reusing the podcast article state.
+- Added regressions for two risks:
+- mutating the active article to `read` while on the unread route now removes it from the queue and reconciles route selection to the next visible article.
+- mutating star / like / read-later / importance / progress now survives an app reopen within the mock shell.
+
+### Step 43 Verification
+
+- Passed `corepack pnpm --filter @freelyrss/desktop test`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+
+### Next Step (ASCII update)
+
+- Next planned implementation step is `implementation-plan.md` Stage 5 Step 44: keyboard reading flow.
+- Preserve the current boundary split:
+- desktop reader shell now owns article-state mutation controls and immediate queue/reader echo, but it still does not own durable article-state persistence.
+- `packages/shared-types` remains DTO-only, and `ArticleDetailDto` / `ArticleListItemDto.state` continue to be the single reader-facing state contract.
+- durable writes to `UserState` still belong to later shell-command and `core-domain/sqlite` integration, while Step 44 should focus on keyboard command routing across the already-mutatable reader surface.

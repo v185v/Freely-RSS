@@ -1406,3 +1406,30 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `crates/feed-engine` still owns feed-level enclosure discovery, attachment typing, and normalized persistence inputs; Step 42 does not move parsing or classification logic into the shell.
 - `crates/content-pipeline` still owns cleaned-body extraction and text-derived metadata, not reader attachment rendering.
 - `crates/core-domain` and SQLite remain the durable boundary for attachment records and later article-state mutations; Step 42 only validates shell-side consumption of already-available attachment facts.
+
+## 2026-04-22 ASCII Addendum II
+
+### Step 43 Architecture Insights
+
+- Step 43 confirms that article-state mutation is a desktop-shell command concern before it becomes a durable storage concern. The reader can now write state, but it still does so through a shell-owned mutation path rather than directly through SQLite or Rust domain services.
+- The route still owns `sourceId` and `articleId`. The shell store still owns only local queue controls, folder collapse state, theme tone, and reader content mode. Article-state writes do not promote read-state or progress into route params or shell-store persistence.
+- Keeping one shell-owned article-state mutation path in `mock-data.ts` is the key architectural decision in this step. The same command now synchronizes article-list items and article-detail state so query-driven queue results, quick views, and reader facts update from one snapshot instead of splitting across separate local copies.
+- Read-state normalization is also intentionally centralized in the mock repository boundary. Progress changes now imply coherent `readState` transitions (`0%` => unread, partial => reading, `100%` => read) instead of making the reader pane invent those rules ad hoc.
+- The reader pane remains a consumer plus command issuer. It renders state summaries and exposes controls, but it does not become the source of truth for unread counts, quick-view metrics, or queue filtering behavior.
+- No database schema changes were required for Step 43. The existing `UserState` schema already covers `read_state`, `starred`, `liked`, `importance`, `read_later`, `reading_progress`, and `last_opened_at`; this step only validates the shell-side mutation flow ahead of later SQLite-backed persistence wiring.
+
+### Step 43 File Responsibilities
+
+- `apps/desktop/src/features/reader-shell/mock-data.ts`: owns the Step 43 shell-side mutation command, including state normalization, list/detail synchronization, snapshot rebuilding, and the corrected baseline fixture for `article-window-behavior`.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`: remains the shell composition root and now wires the article-state mutation command into React Query so state writes replace the current shell snapshot without changing route ownership.
+- `apps/desktop/src/features/reader-shell/components/reader-pane.tsx`: owns the Step 43 state-control UI, visible reader-side state summaries, and mutation-triggering buttons for read state, saved-state toggles, importance, and reading progress.
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`: protects Step 43 by verifying route reconciliation when an unread-queue article becomes read and by verifying that mutated state survives an app reopen within the mock shell.
+- `apps/desktop/src/styles.css`: contains shell-local presentation rules for the new reader state-control section, state summary card, progress button layout, and mutation error styling.
+
+### Step 43 Boundary Notes
+
+- `packages/shared-types` remains the DTO boundary only; Step 43 did not add mutation-command DTOs or shell-only state fields.
+- `packages/shared-query` still owns query vocabulary and future SQL planning, but it does not own state-write semantics. Step 43 only proves that changed article state can flow back through the existing query composition boundary.
+- `packages/ui` remains a primitive layer and does not absorb article-state policy, progress normalization, or queue-reconciliation rules.
+- `crates/feed-engine` and `crates/content-pipeline` still own fetch, parse, extraction, and metadata derivation semantics; Step 43 does not move article-state writes into those Rust layers.
+- `crates/core-domain` and SQLite remain the future durable boundary for `UserState` writes. Step 43 only validates the shell-side command shape and its immediate UI/query echo before storage-backed persistence is introduced.

@@ -472,6 +472,162 @@ describe("reader shell navigation", () => {
     expect(readerScope.getByText("episode-42-cover.jpg")).toBeTruthy()
   })
 
+  test("writes article read state through the shell command path and reconciles the unread route", async () => {
+    window.scrollTo = () => {}
+    const user = userEvent.setup()
+
+    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+
+    const sourcePane = await screen.findByRole("region", { name: "Sources" })
+    const queuePane = screen.getByRole("region", { name: "Article queue" })
+    const readerPane = screen.getByRole("region", { name: "Reading panel" })
+    const readerScope = within(readerPane)
+
+    await waitFor(() => {
+      expect(
+        readerScope.getByRole("heading", {
+          name: "Turning the desktop shell into a stable three-pane reader skeleton",
+        }),
+      ).toBeTruthy()
+      expect(window.location.search).toContain("articleId=article-layout-shell")
+    })
+
+    await user.click(
+      readerScope.getByRole("button", {
+        name: "Read",
+      }),
+    )
+
+    await waitFor(() => {
+      expect(window.location.search).toContain("sourceId=view-unread")
+      expect(window.location.search).toContain("articleId=article-source-context")
+    })
+
+    expect(
+      within(queuePane).queryByRole("button", {
+        name: /Turning the desktop shell into a stable three-pane reader skeleton/i,
+      }),
+    ).toBeNull()
+
+    const subscriptionTree = within(sourcePane)
+      .getByRole("heading", {
+        name: "Subscription tree",
+      })
+      .closest("section")
+
+    expect(subscriptionTree).not.toBeNull()
+
+    await user.click(
+      within(subscriptionTree as HTMLElement).getByRole("button", {
+        name: /healthy.*FreelyRSS Engineering/i,
+      }),
+    )
+
+    await waitFor(() => {
+      expect(window.location.search).toContain("sourceId=feed-freelyrss")
+    })
+
+    await user.click(
+      within(queuePane).getByRole("button", {
+        name: /Turning the desktop shell into a stable three-pane reader skeleton/i,
+      }),
+    )
+
+    await waitFor(() => {
+      const stateSummary = readerScope.getByText("State").parentElement
+      const progressSummary = readerScope.getByText("Progress").parentElement
+
+      expect(stateSummary).not.toBeNull()
+      expect(progressSummary).not.toBeNull()
+      expect(within(stateSummary as HTMLElement).getByText("read")).toBeTruthy()
+      expect(within(progressSummary as HTMLElement).getByText("100%")).toBeTruthy()
+    })
+  })
+
+  test("persists mutated article state fields and reading progress after the app reopens", async () => {
+    window.scrollTo = () => {}
+    const user = userEvent.setup()
+    const renderShell = () =>
+      render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+
+    renderShell()
+
+    const queuePane = await screen.findByRole("region", { name: "Article queue" })
+    const readerPane = screen.getByRole("region", { name: "Reading panel" })
+    const queueScope = within(queuePane)
+    const readerScope = within(readerPane)
+
+    await user.click(
+      queueScope.getByRole("button", {
+        name: /Why layout state should stay separate from source and query state/i,
+      }),
+    )
+
+    await waitFor(() => {
+      expect(window.location.search).toContain("articleId=article-source-context")
+    })
+
+    await user.click(readerScope.getByRole("button", { name: "Starred" }))
+    await user.click(readerScope.getByRole("button", { name: "Liked" }))
+    await user.click(readerScope.getByRole("button", { name: "Read later" }))
+    await user.click(readerScope.getByRole("button", { name: "High" }))
+    await user.click(
+      readerScope.getByRole("button", {
+        name: "Set reading progress to 75%",
+      }),
+    )
+
+    await waitFor(() => {
+      const stateSummary = readerScope.getByText("State").parentElement
+      const progressSummary = readerScope.getByText("Progress").parentElement
+      const starredSummary = readerScope.getByText("Starred state").parentElement
+      const likedSummary = readerScope.getByText("Liked state").parentElement
+      const readLaterSummary = readerScope.getByText("Read later state").parentElement
+      const importanceSummary = readerScope.getByText("Importance level").parentElement
+
+      expect(stateSummary).not.toBeNull()
+      expect(progressSummary).not.toBeNull()
+      expect(starredSummary).not.toBeNull()
+      expect(likedSummary).not.toBeNull()
+      expect(readLaterSummary).not.toBeNull()
+      expect(importanceSummary).not.toBeNull()
+      expect(within(stateSummary as HTMLElement).getByText("reading")).toBeTruthy()
+      expect(within(progressSummary as HTMLElement).getByText("75%")).toBeTruthy()
+      expect(within(starredSummary as HTMLElement).getByText("Yes")).toBeTruthy()
+      expect(within(likedSummary as HTMLElement).getByText("No")).toBeTruthy()
+      expect(within(readLaterSummary as HTMLElement).getByText("Yes")).toBeTruthy()
+      expect(within(importanceSummary as HTMLElement).getByText("high")).toBeTruthy()
+    })
+
+    cleanup()
+    renderShell()
+
+    const reopenedReaderPane = await screen.findByRole("region", { name: "Reading panel" })
+    const reopenedReaderScope = within(reopenedReaderPane)
+
+    await waitFor(() => {
+      const stateSummary = reopenedReaderScope.getByText("State").parentElement
+      const progressSummary = reopenedReaderScope.getByText("Progress").parentElement
+      const starredSummary = reopenedReaderScope.getByText("Starred state").parentElement
+      const likedSummary = reopenedReaderScope.getByText("Liked state").parentElement
+      const readLaterSummary = reopenedReaderScope.getByText("Read later state").parentElement
+      const importanceSummary = reopenedReaderScope.getByText("Importance level").parentElement
+
+      expect(stateSummary).not.toBeNull()
+      expect(progressSummary).not.toBeNull()
+      expect(starredSummary).not.toBeNull()
+      expect(likedSummary).not.toBeNull()
+      expect(readLaterSummary).not.toBeNull()
+      expect(importanceSummary).not.toBeNull()
+      expect(within(stateSummary as HTMLElement).getByText("reading")).toBeTruthy()
+      expect(within(progressSummary as HTMLElement).getByText("75%")).toBeTruthy()
+      expect(within(starredSummary as HTMLElement).getByText("Yes")).toBeTruthy()
+      expect(within(likedSummary as HTMLElement).getByText("No")).toBeTruthy()
+      expect(within(readLaterSummary as HTMLElement).getByText("Yes")).toBeTruthy()
+      expect(within(importanceSummary as HTMLElement).getByText("high")).toBeTruthy()
+    })
+  })
+
   test("virtualizes long queues and moves the render window when the middle pane scrolls", async () => {
     window.scrollTo = () => {}
     resetMockReaderShellState({ mode: "dense-queue" })

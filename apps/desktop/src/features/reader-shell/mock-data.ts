@@ -6,6 +6,7 @@ import type {
   FolderDto,
   SubscriptionTreeNodeDto,
   TagDto,
+  UserStateDto,
 } from "@freelyrss/shared-types"
 
 import type { OpmlExportReport, OpmlImportReport, ReaderShellData, SourceRow } from "./types"
@@ -497,7 +498,7 @@ const articleDetails: Record<string, ArticleDetailDto> = {
       siteUrl: "https://freelyrss.dev",
       icon: null,
     },
-    state: articles[3].state,
+    state: articles[4].state,
     tags: [findTag("tag-product")],
     attachments: [],
     annotations: [],
@@ -592,6 +593,7 @@ const navigationEntries = [
 
 const DENSE_QUEUE_FEED_ID = "feed-queue-lab"
 const DENSE_QUEUE_ARTICLE_COUNT = 48
+const DEFAULT_READING_PROGRESS = 0.25
 
 type MockReaderState = {
   articleDetails: Record<string, ArticleDetailDto>
@@ -774,6 +776,75 @@ function findOrCreateImportedFolder(input: {
 
 function cloneValue<T>(value: T): T {
   return structuredClone(value)
+}
+
+function clampReadingProgress(value: number) {
+  return Math.min(1, Math.max(0, Math.round(value * 100) / 100))
+}
+
+function resolveReadStateFromProgress(progress: number): UserStateDto["readState"] {
+  if (progress >= 1) {
+    return "read"
+  }
+
+  if (progress > 0) {
+    return "reading"
+  }
+
+  return "unread"
+}
+
+function normalizeArticleState(
+  currentState: UserStateDto,
+  input: {
+    importance?: UserStateDto["importance"]
+    liked?: UserStateDto["liked"]
+    readLater?: UserStateDto["readLater"]
+    readingProgress?: UserStateDto["readingProgress"]
+    readState?: UserStateDto["readState"]
+    starred?: UserStateDto["starred"]
+  },
+): UserStateDto {
+  const nextState: UserStateDto = {
+    ...currentState,
+    articleId: currentState.articleId,
+    importance: input.importance ?? currentState.importance,
+    liked: input.liked ?? currentState.liked,
+    readLater: input.readLater ?? currentState.readLater,
+    readState: input.readState ?? currentState.readState,
+    readingProgress: currentState.readingProgress,
+    starred: input.starred ?? currentState.starred,
+  }
+
+  if (typeof input.readingProgress === "number") {
+    nextState.readingProgress = clampReadingProgress(input.readingProgress)
+    nextState.readState = resolveReadStateFromProgress(nextState.readingProgress)
+  } else if (input.readState) {
+    switch (input.readState) {
+      case "read":
+        nextState.readingProgress = 1
+        break
+      case "unread":
+        nextState.readingProgress = 0
+        break
+      case "reading":
+        nextState.readingProgress =
+          currentState.readingProgress > 0 && currentState.readingProgress < 1
+            ? clampReadingProgress(currentState.readingProgress)
+            : DEFAULT_READING_PROGRESS
+        break
+    }
+  }
+
+  if (
+    typeof input.readingProgress === "number" ||
+    input.readState === "reading" ||
+    input.readState === "read"
+  ) {
+    nextState.lastOpenedAt = new Date().toISOString()
+  }
+
+  return nextState
 }
 
 function getFeedDisplayTitle(feed: FeedDto) {
@@ -1180,10 +1251,60 @@ function findFeedOrThrow(feedId: FeedDto["id"]) {
   return feed
 }
 
+function findArticleStateOrThrow(articleId: ArticleListItemDto["id"]) {
+  const article = mockReaderState.articles.find((entry) => entry.id === articleId)
+
+  if (!article) {
+    throw new Error(`Unknown article id: ${articleId}`)
+  }
+
+  return article.state
+}
+
 function replaceFeed(nextFeed: FeedDto) {
   mockReaderState.feedDetails = mockReaderState.feedDetails.map((feed) =>
     feed.id === nextFeed.id ? nextFeed : feed,
   )
+}
+
+function replaceArticleState(nextState: UserStateDto) {
+  let articleFound = false
+  let detailFound = false
+
+  mockReaderState.articles = mockReaderState.articles.map((article) => {
+    if (article.id !== nextState.articleId) {
+      return article
+    }
+
+    articleFound = true
+    return {
+      ...article,
+      state: cloneValue(nextState),
+    }
+  })
+
+  mockReaderState.articleDetails = Object.fromEntries(
+    Object.entries(mockReaderState.articleDetails).map(([articleId, detail]) => {
+      if (articleId !== nextState.articleId) {
+        return [articleId, detail]
+      }
+
+      detailFound = true
+      return [
+        articleId,
+        {
+          ...detail,
+          state: cloneValue(nextState),
+        },
+      ]
+    }),
+  )
+
+  if (!articleFound || !detailFound) {
+    throw new Error(
+      `Article state could not be synchronized for article id: ${nextState.articleId}`,
+    )
+  }
 }
 
 function syncFeedPresentation(nextFeed: FeedDto) {
@@ -1280,6 +1401,23 @@ export async function refreshMockFeed(feedId: FeedDto["id"]): Promise<ReaderShel
   }
 
   replaceFeed(nextFeed)
+
+  return buildReaderShellSnapshot(mockReaderState)
+}
+
+export async function updateMockArticleState(input: {
+  articleId: ArticleListItemDto["id"]
+  importance?: UserStateDto["importance"]
+  liked?: UserStateDto["liked"]
+  readLater?: UserStateDto["readLater"]
+  readingProgress?: UserStateDto["readingProgress"]
+  readState?: UserStateDto["readState"]
+  starred?: UserStateDto["starred"]
+}): Promise<ReaderShellData> {
+  const currentState = findArticleStateOrThrow(input.articleId)
+  const nextState = normalizeArticleState(currentState, input)
+
+  replaceArticleState(nextState)
 
   return buildReaderShellSnapshot(mockReaderState)
 }

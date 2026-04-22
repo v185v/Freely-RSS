@@ -31,6 +31,7 @@ import {
   importMockOpml,
   readerShellQueryKey,
   refreshMockFeed,
+  updateMockArticleState,
   updateMockFeed,
 } from "./mock-data"
 import { buildSubscriptionTreeRows, findSourceRow, resolveSelectedArticleId } from "./selectors"
@@ -101,6 +102,12 @@ export function ReaderShellRoute() {
   })
   const refreshFeedMutation = useMutation({
     mutationFn: refreshMockFeed,
+    onSuccess: (nextShellData) => {
+      queryClient.setQueryData(readerShellQueryKey, nextShellData)
+    },
+  })
+  const updateArticleStateMutation = useMutation({
+    mutationFn: updateMockArticleState,
     onSuccess: (nextShellData) => {
       queryClient.setQueryData(readerShellQueryKey, nextShellData)
     },
@@ -213,6 +220,10 @@ export function ReaderShellRoute() {
   const editorErrorMessage =
     (saveFeedMutation.error instanceof Error ? saveFeedMutation.error.message : null) ??
     (refreshFeedMutation.error instanceof Error ? refreshFeedMutation.error.message : null)
+  const articleStateErrorMessage =
+    updateArticleStateMutation.error instanceof Error
+      ? updateArticleStateMutation.error.message
+      : null
 
   useEffect(() => {
     if (shellData && activeArticleId !== routeState.articleId) {
@@ -232,8 +243,8 @@ export function ReaderShellRoute() {
     return (
       <main className="desktop-shell">
         <div className="desktop-loading">
-          <p className="desktop-shell__eyebrow">Stage 5 / Step 42</p>
-          <h1>Loading the route-backed reader shell and attachment-aware article detail view.</h1>
+          <p className="desktop-shell__eyebrow">Stage 5 / Step 43</p>
+          <h1>Loading the route-backed reader shell and article state mutation controls.</h1>
         </div>
       </main>
     )
@@ -335,15 +346,16 @@ export function ReaderShellRoute() {
 
       <header className="desktop-shell__header">
         <div className="desktop-shell__title-block">
-          <p className="desktop-shell__eyebrow">Stage 5 / Step 42</p>
-          <h1>The desktop shell now surfaces attachments and podcast enclosures in the reader.</h1>
+          <p className="desktop-shell__eyebrow">Stage 5 / Step 43</p>
+          <h1>The desktop shell now writes article state and reflects it across the queue.</h1>
           <p className="desktop-shell__lead">
             Route state still owns the active source and article, the shell store still owns only
             local queue controls, folder expansion, and the persisted reader content-mode
-            preference, and the mock repository remains a shell-side snapshot source. Step 42 keeps
+            preference, and the mock repository remains a shell-side snapshot source. Step 43 keeps
             the Step 37 query boundary, Step 38 virtualization boundary, Step 39 reading-panel
-            boundary, and Step 40 content-mode boundary intact, then makes article attachments
-            visible without pulling enclosure parsing or persistence up into the shell.
+            boundary, Step 40 content-mode boundary, and Step 42 attachment presentation boundary
+            intact, then adds shell-level article state writes without pulling durable persistence
+            or feed parsing concerns up into the reader.
           </p>
         </div>
 
@@ -376,9 +388,9 @@ export function ReaderShellRoute() {
 
           <p className="desktop-summary__note">
             The queue still consumes one route-backed article query while source editing, OPML
-            portability, and tree expansion remain separate concerns. Step 42 keeps reader-mode
-            preference behavior intact while adding attachment visibility on the right without
-            changing query vocabulary or storage boundaries.
+            portability, and tree expansion remain separate concerns. Step 43 now lets the reader
+            update read state, saved-state flags, importance, and progress through one shell-side
+            command path without changing query vocabulary or durable storage boundaries.
           </p>
 
           <div className="desktop-shortcuts">
@@ -505,9 +517,15 @@ export function ReaderShellRoute() {
 
           <ReaderPane
             activeDetail={activeDetail}
+            articleStateErrorMessage={articleStateErrorMessage}
             describedBy={READER_SHORTCUT_HINT_ID}
             headingId={READER_LANDMARK_IDS.readerHeading}
+            isUpdatingArticleState={updateArticleStateMutation.isPending}
             onSetReaderContentMode={setReaderContentMode}
+            onUpdateArticleState={(input) => {
+              updateArticleStateMutation.reset()
+              updateArticleStateMutation.mutate(input)
+            }}
             paneId={READER_LANDMARK_IDS.reader}
             paneRef={readerPaneRef}
             readerContentMode={readerContentMode}
