@@ -232,8 +232,8 @@ export function ReaderShellRoute() {
     return (
       <main className="desktop-shell">
         <div className="desktop-loading">
-          <p className="desktop-shell__eyebrow">Stage 5 / Step 40</p>
-          <h1>Loading the route-backed reader shell and persisted content-mode view.</h1>
+          <p className="desktop-shell__eyebrow">Stage 5 / Step 42</p>
+          <h1>Loading the route-backed reader shell and attachment-aware article detail view.</h1>
         </div>
       </main>
     )
@@ -335,17 +335,15 @@ export function ReaderShellRoute() {
 
       <header className="desktop-shell__header">
         <div className="desktop-shell__title-block">
-          <p className="desktop-shell__eyebrow">Stage 5 / Step 40</p>
-          <h1>
-            The desktop shell now lets the reader switch between extracted and original content.
-          </h1>
+          <p className="desktop-shell__eyebrow">Stage 5 / Step 42</p>
+          <h1>The desktop shell now surfaces attachments and podcast enclosures in the reader.</h1>
           <p className="desktop-shell__lead">
             Route state still owns the active source and article, the shell store still owns only
-            local queue controls, folder expansion, and now the reader content-mode preference, and
-            the mock repository remains a shell-side snapshot source. Step 40 keeps the Step 37
-            query boundary, Step 38 virtualization boundary, and Step 39 reading-panel boundary
-            intact, then makes raw versus extracted content an explicit reader choice instead of an
-            implicit fallback path.
+            local queue controls, folder expansion, and the persisted reader content-mode
+            preference, and the mock repository remains a shell-side snapshot source. Step 42 keeps
+            the Step 37 query boundary, Step 38 virtualization boundary, Step 39 reading-panel
+            boundary, and Step 40 content-mode boundary intact, then makes article attachments
+            visible without pulling enclosure parsing or persistence up into the shell.
           </p>
         </div>
 
@@ -378,9 +376,9 @@ export function ReaderShellRoute() {
 
           <p className="desktop-summary__note">
             The queue still consumes one route-backed article query while source editing, OPML
-            portability, and tree expansion remain separate concerns. Step 40 adds a persisted
-            reader-mode preference on the right without changing query vocabulary or storage
-            boundaries.
+            portability, and tree expansion remain separate concerns. Step 42 keeps reader-mode
+            preference behavior intact while adding attachment visibility on the right without
+            changing query vocabulary or storage boundaries.
           </p>
 
           <div className="desktop-shortcuts">

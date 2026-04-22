@@ -664,6 +664,7 @@ body {
 }
 
 .desktop-reader__article-header,
+.desktop-reader__attachments,
 .desktop-reader__body,
 .desktop-reader__meta-group {
   display: grid;
@@ -735,6 +736,109 @@ body {
   gap: 16px;
 }
 
+.desktop-reader__attachments-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.desktop-reader__attachments-note {
+  max-width: 56ch;
+  margin: 0;
+  color: var(--fr-text-muted);
+  line-height: 1.6;
+}
+
+.desktop-reader__attachments-summary {
+  display: grid;
+  gap: 6px;
+  min-width: 140px;
+  padding: 12px 14px;
+  border: 1px solid var(--fr-border);
+  border-radius: 18px;
+  background: rgba(4, 7, 13, 0.4);
+}
+
+.desktop-reader__attachment-list {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.desktop-reader__attachment-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--fr-border);
+  border-radius: 18px;
+  background: rgba(4, 7, 13, 0.35);
+}
+
+.desktop-reader__attachment-card--audio {
+  border-color: rgba(243, 139, 168, 0.3);
+}
+
+.desktop-reader__attachment-card--image {
+  border-color: rgba(127, 226, 192, 0.28);
+}
+
+.desktop-reader__attachment-card--video {
+  border-color: rgba(142, 182, 255, 0.28);
+}
+
+.desktop-reader__attachment-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.desktop-reader__attachment-title {
+  margin: 0;
+  font-family: var(--fr-font-display);
+  font-size: 1.1rem;
+  line-height: 1.2;
+}
+
+.desktop-reader__attachment-badge {
+  align-self: start;
+  padding: 6px 10px;
+  border: 1px solid var(--fr-border);
+  border-radius: 999px;
+  color: var(--fr-text-faint);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.desktop-reader__attachment-url {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--fr-text-muted);
+  font-family: "Cascadia Code", "Consolas", monospace;
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.desktop-reader__attachment-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.desktop-reader__attachment-facts > div {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--fr-border);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
 .desktop-reader__raw-content {
   margin: 0;
   overflow: auto;
@@ -772,6 +876,7 @@ body {
   .desktop-editor__facts,
   .desktop-export__summary,
   .desktop-import__summary,
+  .desktop-reader__attachment-facts,
   .desktop-reader__facts,
   .desktop-reader__meta-group {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -799,6 +904,7 @@ body {
   .desktop-import__summary,
   .desktop-summary__metrics,
   .desktop-reader__body-meta,
+  .desktop-reader__attachment-facts,
   .desktop-reader__facts,
   .desktop-reader__meta-group,
   .desktop-route-state,

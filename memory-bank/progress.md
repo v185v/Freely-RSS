@@ -756,3 +756,30 @@
 - `crates/content-pipeline` now owns cleaned-body extraction, thumbnail detection, and text-derived language / word-count estimation.
 - `crates/feed-engine` still owns remote fetch and feed-document parse semantics, not reader presentation or desktop-shell state.
 - durable persistence of extraction results still belongs to later `core-domain/sqlite` integration rather than this standalone content-processing step.
+
+## 2026-04-22 ASCII Addendum
+
+### Stage 5 Step 42 Completed: attachment and podcast enclosure support in the desktop shell
+
+- Implemented attachment visibility in the reader pane so the right side now renders concrete attachment metadata cards instead of stopping at an attachment count.
+- Kept Step 42 inside the desktop shell presentation boundary. No Rust crate, SQLite schema, shared DTO contract, or durable attachment-persistence logic changed in this step.
+- Added a dedicated podcast fixture path in the shell mock repository: `Night Audio Digest` now exposes a real article detail with an MP3 enclosure, companion artwork, cache-path metadata, and attachment-aware queue counts.
+- Added a separate empty feed fixture so the earlier stale-selection regression still validates empty-route reconciliation without overloading the podcast source with two conflicting responsibilities.
+- Expanded the reader pane to distinguish audio, image, video, and generic file attachments, surface MIME type, duration, size, cache status, and raw attachment URL, and label audio entries explicitly as podcast enclosures.
+- Updated shell copy so Step 42 is reflected in the route frame and reader-panel description without changing the underlying route/query/state ownership model.
+- Added a Step 42 regression that selects the podcast feed, opens the article detail, and verifies that audio enclosure metadata plus companion image metadata are visible in the reader.
+
+### Step 42 Verification
+
+- Passed `corepack pnpm --filter @freelyrss/desktop test`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+
+### Next Step (ASCII update)
+
+- Next planned implementation step is `implementation-plan.md` Stage 5 Step 43: article state mutations.
+- Preserve the current boundary split:
+- desktop reader shell now owns attachment presentation, enclosure labeling, and empty-route fixture coverage, but it still does not own attachment discovery or persistence.
+- `packages/shared-types` remains DTO-only, and `ArticleDetailDto` continues to be the single detail contract consumed by the reader.
+- durable read-state, starring, liking, read-later, and progress writes still belong to later shell-command and `core-domain/sqlite` integration rather than this presentation-only step.

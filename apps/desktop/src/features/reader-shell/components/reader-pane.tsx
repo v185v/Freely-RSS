@@ -37,6 +37,51 @@ function formatReaderDate(value: string | null) {
   }).format(timestamp)} UTC`
 }
 
+function formatAttachmentLabel(type: ArticleDetailDto["attachments"][number]["type"]) {
+  switch (type) {
+    case "audio":
+      return "Podcast enclosure"
+    case "image":
+      return "Image attachment"
+    case "video":
+      return "Video attachment"
+    default:
+      return "Linked file"
+  }
+}
+
+function formatAttachmentDuration(value: number | null) {
+  if (value === null) {
+    return "Unknown"
+  }
+
+  const minutes = Math.floor(value / 60)
+  const seconds = value % 60
+
+  return `${minutes}:${String(seconds).padStart(2, "0")}`
+}
+
+function formatAttachmentSize(value: number | null) {
+  if (value === null) {
+    return "Unknown"
+  }
+
+  if (value < 1024) {
+    return `${value} B`
+  }
+
+  if (value < 1024 * 1024) {
+    return `${(value / 1024).toFixed(1)} KB`
+  }
+
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function formatAttachmentName(url: string) {
+  const segments = url.split("/")
+  return segments.at(-1) ?? url
+}
+
 export function ReaderPane({
   activeDetail,
   describedBy,
@@ -76,9 +121,9 @@ export function ReaderPane({
             <p className="desktop-pane__focus-title">No article selected yet</p>
           )}
           <p className="desktop-pane__description">
-            The selected article still comes from route state, but Step 40 adds an explicit reader
-            content mode on top of the Step 39 base view: extracted text and original source content
-            can now be inspected separately without changing article selection.
+            The selected article still comes from route state, and the reader still preserves the
+            Step 40 content-mode toggle. Step 42 layers attachment and podcast enclosure visibility
+            on top of that same article-detail contract without changing article selection.
           </p>
         </div>
 
@@ -205,6 +250,82 @@ export function ReaderPane({
                               readerContentMode === "raw" ? "extracted" : "original"
                             } content to keep reading without changing the selected article.`
                           : "The reading panel still keeps summary and metadata visible so the route can switch cleanly without leaking content from the previously selected article."}
+                      </p>
+                    </div>
+                  )}
+                </section>
+
+                <section className="desktop-reader__attachments">
+                  <div className="desktop-reader__attachments-header">
+                    <div>
+                      <p className="desktop-reader__section-label">Attachments</p>
+                      <p className="desktop-reader__attachments-note">
+                        Step 42 makes attachment records visible in the reading panel. The shell
+                        still only renders one resolved article detail object; enclosure discovery
+                        and persistence remain below this boundary.
+                      </p>
+                    </div>
+                    <div className="desktop-reader__attachments-summary">
+                      <span className="desktop-reader__fact-label">Visible attachments</span>
+                      <strong>{activeDetail.attachments.length}</strong>
+                    </div>
+                  </div>
+
+                  {activeDetail.attachments.length > 0 ? (
+                    <ul className="desktop-reader__attachment-list">
+                      {activeDetail.attachments.map((attachment) => (
+                        <li
+                          className={`desktop-reader__attachment-card desktop-reader__attachment-card--${attachment.type}`}
+                          key={attachment.id}
+                        >
+                          <div className="desktop-reader__attachment-header">
+                            <div>
+                              <p className="desktop-reader__section-label">
+                                {formatAttachmentLabel(attachment.type)}
+                              </p>
+                              <h4 className="desktop-reader__attachment-title">
+                                {formatAttachmentName(attachment.url)}
+                              </h4>
+                            </div>
+                            <span className="desktop-reader__attachment-badge">
+                              {attachment.type}
+                            </span>
+                          </div>
+
+                          <p className="desktop-reader__attachment-url">{attachment.url}</p>
+
+                          <div className="desktop-reader__attachment-facts">
+                            <div>
+                              <span className="desktop-reader__fact-label">Mime type</span>
+                              <strong>{attachment.mimeType ?? "Unknown"}</strong>
+                            </div>
+                            <div>
+                              <span className="desktop-reader__fact-label">Size</span>
+                              <strong>{formatAttachmentSize(attachment.size)}</strong>
+                            </div>
+                            <div>
+                              <span className="desktop-reader__fact-label">Duration</span>
+                              <strong>
+                                {attachment.type === "audio" || attachment.type === "video"
+                                  ? formatAttachmentDuration(attachment.duration)
+                                  : "Not timed"}
+                              </strong>
+                            </div>
+                            <div>
+                              <span className="desktop-reader__fact-label">Cache</span>
+                              <strong>{attachment.localCachePath ?? "Not cached locally"}</strong>
+                            </div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="desktop-empty-state desktop-empty-state--compact">
+                      <p className="desktop-empty-state__eyebrow">No attachments</p>
+                      <h3>This article does not expose attachment metadata yet.</h3>
+                      <p>
+                        When feeds surface images, audio enclosures, video, or linked files, the
+                        reader can present them here without changing the article-detail contract.
                       </p>
                     </div>
                   )}

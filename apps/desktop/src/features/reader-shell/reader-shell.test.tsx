@@ -59,16 +59,16 @@ describe("reader shell navigation", () => {
 
   test("reconciles stale article selection when switching through an empty route", async () => {
     window.scrollTo = () => {}
-    window.history.pushState({}, "", "/?sourceId=feed-night-audio&articleId=article-layout-shell")
+    window.history.pushState({}, "", "/?sourceId=feed-empty-holding&articleId=article-layout-shell")
     const user = userEvent.setup()
 
     render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
 
-    await screen.findAllByText("Night Audio Digest")
+    await screen.findAllByText("Archive holding pen")
     await screen.findByText("No placeholder articles are visible for this route yet.")
 
     await waitFor(() => {
-      expect(window.location.search).toContain("sourceId=feed-night-audio")
+      expect(window.location.search).toContain("sourceId=feed-empty-holding")
       expect(window.location.search).not.toContain("article-layout-shell")
     })
 
@@ -408,6 +408,70 @@ describe("reader shell navigation", () => {
     expect(reopenedReaderScope.queryByText(/Step 16 is about state ownership/i)).toBeNull()
   })
 
+  test("shows podcast enclosure metadata in the reading panel for audio attachments", async () => {
+    window.scrollTo = () => {}
+    const user = userEvent.setup()
+
+    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+
+    const sourcePane = await screen.findByRole("region", { name: "Sources" })
+    const subscriptionTree = within(sourcePane)
+      .getByRole("heading", {
+        name: "Subscription tree",
+      })
+      .closest("section")
+
+    expect(subscriptionTree).not.toBeNull()
+
+    const treeScope = within(subscriptionTree as HTMLElement)
+
+    await user.click(
+      treeScope.getByRole("button", {
+        name: /paused.*Night Audio Digest/i,
+      }),
+    )
+
+    await waitFor(() => {
+      expect(window.location.search).toContain("sourceId=feed-night-audio")
+    })
+
+    const queuePane = screen.getByRole("region", { name: "Article queue" })
+    const readerPane = screen.getByRole("region", { name: "Reading panel" })
+    const queueScope = within(queuePane)
+    const readerScope = within(readerPane)
+
+    await waitFor(() => {
+      expect(
+        queueScope.getByRole("button", {
+          name: /Midnight dispatch 42: attachment boundaries for podcast feeds/i,
+        }),
+      ).toBeTruthy()
+    })
+
+    await user.click(
+      queueScope.getByRole("button", {
+        name: /Midnight dispatch 42: attachment boundaries for podcast feeds/i,
+      }),
+    )
+
+    await waitFor(() => {
+      expect(
+        readerScope.getByRole("heading", {
+          name: "Midnight dispatch 42: attachment boundaries for podcast feeds",
+        }),
+      ).toBeTruthy()
+    })
+
+    expect(readerScope.getByText("Podcast enclosure")).toBeTruthy()
+    expect(readerScope.getByText("dispatch-42.mp3")).toBeTruthy()
+    expect(readerScope.getByText("audio/mpeg")).toBeTruthy()
+    expect(readerScope.getByText("52:06")).toBeTruthy()
+    expect(readerScope.getByText("14.4 MB")).toBeTruthy()
+    expect(readerScope.getByText("cache/media/night-audio/dispatch-42.mp3")).toBeTruthy()
+    expect(readerScope.getByText("Image attachment")).toBeTruthy()
+    expect(readerScope.getByText("episode-42-cover.jpg")).toBeTruthy()
+  })
+
   test("virtualizes long queues and moves the render window when the middle pane scrolls", async () => {
     window.scrollTo = () => {}
     resetMockReaderShellState({ mode: "dense-queue" })
@@ -690,7 +754,7 @@ describe("reader shell navigation", () => {
 
     expect(feedsExportedSummary).not.toBeNull()
     expect(foldersExportedSummary).not.toBeNull()
-    expect(within(feedsExportedSummary as HTMLElement).getByText("4")).toBeTruthy()
+    expect(within(feedsExportedSummary as HTMLElement).getByText("5")).toBeTruthy()
     expect(within(foldersExportedSummary as HTMLElement).getByText("4")).toBeTruthy()
 
     const expectedStructure = buildShellStructure(await fetchReaderShellData())
@@ -701,7 +765,7 @@ describe("reader shell navigation", () => {
     const imported = await importMockOpml(exportedOpml)
     const importedStructure = buildShellStructure(imported.shellData)
 
-    expect(imported.report.createdFeedCount).toBe(4)
+    expect(imported.report.createdFeedCount).toBe(5)
     expect(imported.report.createdFolderCount).toBe(4)
     expect(imported.report.duplicateFeedCount).toBe(0)
     expect(importedStructure.folderPaths).toEqual(expectedStructure.folderPaths)

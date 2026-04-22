@@ -1378,3 +1378,31 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `packages/ui` remains a primitive layer and does not absorb content scoring, sanitization, thumbnail detection, or text-analysis logic.
 - `crates/feed-engine` still owns remote fetch, feed-format parse, and normalization semantics; Step 41 does not move transport or feed-document concerns into `content-pipeline`.
 - `crates/core-domain` and SQLite remain the later durable boundary that will persist extraction outputs into article records; Step 41 only establishes the reusable Rust processing contract ahead of that storage wiring.
+
+## 2026-04-22 ASCII Addendum
+
+### Step 42 Architecture Insights
+
+- Step 42 confirms that attachment rendering is a desktop-shell presentation concern, not a parser concern and not a DTO-schema concern. The shell now makes attachment facts visible, but it still does not define how those facts are discovered or stored.
+- The route still owns `sourceId` and `articleId`. The shell store still owns local queue controls, folder collapse state, theme tone, and reader content mode. Attachment visibility does not introduce a new route parameter or a new persisted shell preference.
+- Reusing the existing `ArticleDetailDto.attachments` collection without extending the DTO is the key architectural decision in this step. The current cross-app contract already carries the facts needed for podcast enclosure and rich-media presentation, so the shell can advance without inventing reader-only transport models.
+- Introducing a dedicated empty-feed fixture alongside the podcast fixture is an architectural guardrail, not extra product scope. It preserves the earlier stale-selection regression while allowing the podcast feed to become a real attachment-bearing source instead of an overloaded empty-state placeholder.
+- Attachment labeling is intentionally a shell concern in this step. Terms like "podcast enclosure" and display formatting for duration, file size, cache state, and filenames belong to presentation, while MIME classification and attachment typing remain upstream responsibilities.
+- No database schema changes were required for Step 42. The existing `Attachment` schema and `ArticleDetailDto` boundary already describe audio, image, video, and generic file metadata; this step only validates how those facts are surfaced in the reader.
+
+### Step 42 File Responsibilities
+
+- `apps/desktop/src/features/reader-shell/components/reader-pane.tsx`: owns Step 42 attachment presentation, including type-specific labels, size and duration formatting, cache-state display, and the reader-side enclosure card layout.
+- `apps/desktop/src/features/reader-shell/mock-data.ts`: owns the Step 42 shell fixtures, including the podcast article detail with audio and image attachments plus the separate empty feed used to keep stale-route coverage intact.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`: remains the shell composition root and now frames Step 42 explicitly in shell-level copy while continuing to pass one resolved `ArticleDetailDto` into the reader pane.
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`: protects Step 42 by verifying that selecting the podcast feed exposes audio enclosure metadata and companion artwork metadata in the reading panel, while existing empty-route and OPML regressions stay valid.
+- `apps/desktop/src/styles.css`: contains shell-local attachment-card presentation rules, including attachment section layout, badge styling, and responsive attachment fact grids.
+
+### Step 42 Boundary Notes
+
+- `packages/shared-types` remains the DTO boundary only; Step 42 did not add attachment-display-specific fields or podcast-only contracts.
+- `packages/shared-query` still owns article-query vocabulary and execution planning, but it does not own attachment card rendering, enclosure naming, or file-size formatting.
+- `packages/ui` remains a primitive layer and does not absorb attachment semantics, podcast presentation rules, or shell-specific empty-feed fixtures.
+- `crates/feed-engine` still owns feed-level enclosure discovery, attachment typing, and normalized persistence inputs; Step 42 does not move parsing or classification logic into the shell.
+- `crates/content-pipeline` still owns cleaned-body extraction and text-derived metadata, not reader attachment rendering.
+- `crates/core-domain` and SQLite remain the durable boundary for attachment records and later article-state mutations; Step 42 only validates shell-side consumption of already-available attachment facts.

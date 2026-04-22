@@ -128,6 +128,27 @@ const feedDetails: FeedDto[] = [
     lastErrorAt: null,
     consecutiveFailures: 0,
   },
+  {
+    id: "feed-empty-holding",
+    title: "Archive holding pen",
+    siteUrl: "https://archive.example",
+    feedUrl: "https://archive.example/empty.xml",
+    format: "rss",
+    icon: null,
+    folderId: null,
+    customName: null,
+    sortOrder: 40,
+    updateInterval: 240,
+    healthStatus: "paused",
+    lastCheckedAt: "2026-04-17T18:00:00Z",
+    lastSuccessAt: "2026-04-17T18:00:00Z",
+    etag: '"archive-holding-paused"',
+    lastModified: "Thu, 17 Apr 2026 18:00:00 GMT",
+    lastErrorKind: null,
+    lastErrorMessage: null,
+    lastErrorAt: null,
+    consecutiveFailures: 0,
+  },
 ]
 
 const feedTagIdsByFeedId: Record<string, string[]> = {
@@ -135,6 +156,7 @@ const feedTagIdsByFeedId: Record<string, string[]> = {
   "feed-rust-systems": ["tag-ops"],
   "feed-query-notes": ["tag-search"],
   "feed-night-audio": ["tag-audio"],
+  "feed-empty-holding": [],
 }
 
 const tags: TagDto[] = [
@@ -250,6 +272,30 @@ const articles: ArticleListItemDto[] = [
     },
     tagIds: ["tag-search"],
     attachmentCount: 1,
+  },
+  {
+    id: "article-midnight-dispatch",
+    feedId: "feed-night-audio",
+    feedTitle: "Night Audio Digest",
+    title: "Midnight dispatch 42: attachment boundaries for podcast feeds",
+    author: "Night Audio",
+    summary:
+      "A JSON Feed episode with a podcast enclosure and companion artwork keeps attachment presentation visible in the reader.",
+    publishedAt: "2026-04-06T23:20:00Z",
+    thumbnail: "https://audio.example/episodes/42/cover.jpg",
+    estimatedReadingMinutes: 18,
+    state: {
+      articleId: "article-midnight-dispatch",
+      readState: "unread",
+      starred: false,
+      liked: true,
+      importance: "normal",
+      readLater: true,
+      readingProgress: 0,
+      lastOpenedAt: null,
+    },
+    tagIds: ["tag-audio"],
+    attachmentCount: 2,
   },
   {
     id: "article-window-behavior",
@@ -456,6 +502,69 @@ const articleDetails: Record<string, ArticleDetailDto> = {
     attachments: [],
     annotations: [],
   },
+  "article-midnight-dispatch": {
+    article: {
+      id: "article-midnight-dispatch",
+      feedId: "feed-night-audio",
+      sourceGuid: "midnight-dispatch-42",
+      title: "Midnight dispatch 42: attachment boundaries for podcast feeds",
+      author: "Night Audio",
+      summary:
+        "The reader can now expose podcast enclosure metadata directly from the article detail shape instead of hiding attachment facts behind queue counts alone.",
+      contentRaw: `<article class="episode">
+  <header>
+    <h1>Midnight dispatch 42: attachment boundaries for podcast feeds</h1>
+    <p class="deck">Audio, artwork, and cache metadata now stay visible in the reading panel.</p>
+  </header>
+  <section>
+    <p>This feed item includes an MP3 enclosure plus a cover image attachment.</p>
+    <p>The shell still consumes one resolved article detail object instead of inventing a second media-only contract.</p>
+  </section>
+</article>`,
+      contentExtracted:
+        "This Night Audio episode exists to make podcast enclosure metadata visible in the reading panel.\n\nThe article detail already carries attachment facts such as type, mime type, duration, size, and cache path. Step 42 turns those facts into a concrete reader surface instead of leaving them buried behind attachment counts.\n\nThat keeps enclosure handling inside the article detail boundary while the feed parser and storage layers continue to own attachment discovery and persistence.",
+      canonicalUrl: "https://audio.example/episodes/42",
+      originalUrl: "https://audio.example/episodes/42",
+      publishedAt: "2026-04-06T23:20:00Z",
+      fetchedAt: "2026-04-06T23:25:00Z",
+      language: "en",
+      thumbnail: "https://audio.example/episodes/42/cover.jpg",
+      wordCount: 824,
+      contentHash: "sha256:midnight-dispatch-42",
+    },
+    feed: {
+      id: "feed-night-audio",
+      title: "Night Audio Digest",
+      displayTitle: "Night Audio Digest",
+      siteUrl: "https://audio.example",
+      icon: "https://audio.example/assets/night-audio.png",
+    },
+    state: articles[3].state,
+    tags: [findTag("tag-audio")],
+    attachments: [
+      {
+        id: "attachment-midnight-dispatch-audio",
+        articleId: "article-midnight-dispatch",
+        type: "audio",
+        url: "https://audio.example/episodes/42/dispatch-42.mp3",
+        mimeType: "audio/mpeg",
+        duration: 3126,
+        size: 15099494,
+        localCachePath: "cache/media/night-audio/dispatch-42.mp3",
+      },
+      {
+        id: "attachment-midnight-dispatch-cover",
+        articleId: "article-midnight-dispatch",
+        type: "image",
+        url: "https://audio.example/episodes/42/episode-42-cover.jpg",
+        mimeType: "image/jpeg",
+        duration: null,
+        size: 248231,
+        localCachePath: null,
+      },
+    ],
+    annotations: [],
+  },
 }
 
 const navigationEntries = [
@@ -475,8 +584,8 @@ const navigationEntries = [
     description: "Route into protected saved articles.",
   },
   {
-    id: "feed-night-audio",
-    title: "Audio backlog",
+    id: "feed-empty-holding",
+    title: "Archive holding",
     description: "An intentionally empty feed route used to validate fallback behavior.",
   },
 ] as const
