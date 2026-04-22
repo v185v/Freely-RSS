@@ -49,6 +49,39 @@ function buildShellStructure(shellData: ReaderShellData) {
   }
 }
 
+function findTextNode(container: HTMLElement, searchText: string) {
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
+  let currentNode = walker.nextNode()
+
+  while (currentNode) {
+    const textContent = currentNode.textContent ?? ""
+    const offset = textContent.indexOf(searchText)
+
+    if (offset >= 0) {
+      return {
+        node: currentNode,
+        offset,
+      }
+    }
+
+    currentNode = walker.nextNode()
+  }
+
+  throw new Error(`Could not find text node containing "${searchText}".`)
+}
+
+function selectReaderText(container: HTMLElement, searchText: string) {
+  const { node, offset } = findTextNode(container, searchText)
+  const selection = window.getSelection()
+  const range = document.createRange()
+
+  range.setStart(node, offset)
+  range.setEnd(node, offset + searchText.length)
+  selection?.removeAllRanges()
+  selection?.addRange(range)
+  fireEvent(document, new Event("selectionchange"))
+}
+
 describe("reader shell navigation", () => {
   afterEach(() => {
     cleanup()
@@ -462,6 +495,107 @@ describe("reader shell navigation", () => {
     })
 
     expect(reopenedReaderScope.getByText(/Step 16 is about state ownership/i)).toBeTruthy()
+  })
+
+  test("creates anchored highlights and notes from extracted reader selections and replays them after reopening", async () => {
+    window.scrollTo = () => {}
+    const user = userEvent.setup()
+    const renderShell = () =>
+      render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+
+    renderShell()
+
+    const queuePane = await screen.findByRole("region", { name: "Article queue" })
+    const readerPane = screen.getByRole("region", { name: "Reading panel" })
+    const queueScope = within(queuePane)
+    const readerScope = within(readerPane)
+
+    await user.click(
+      queueScope.getByRole("button", {
+        name: /Why layout state should stay separate from source and query state/i,
+      }),
+    )
+
+    await waitFor(() => {
+      expect(window.location.search).toContain("articleId=article-source-context")
+    })
+
+    const highlightText = "first interactive shell absorb every future concern"
+    const noteText = "desktop shell only needs enough local state"
+
+    await waitFor(() => {
+      expect(
+        readerScope.getByRole("heading", {
+          name: "Why layout state should stay separate from source and query state",
+        }),
+      ).toBeTruthy()
+      expect(readerPane.querySelector('[data-reader-paragraph-index="0"]')).toBeTruthy()
+      expect(readerPane.querySelector('[data-reader-paragraph-index="1"]')).toBeTruthy()
+    })
+
+    selectReaderText(
+      readerPane.querySelector('[data-reader-paragraph-index="0"]') as HTMLElement,
+      highlightText,
+    )
+
+    await waitFor(() => {
+      expect(readerScope.getByText(highlightText, { selector: "blockquote" })).toBeTruthy()
+    })
+
+    await user.click(readerScope.getByRole("button", { name: "Create highlight" }))
+
+    await waitFor(() => {
+      expect(readerPane.querySelectorAll('[data-annotation-type="highlight"]')).toHaveLength(1)
+    })
+
+    selectReaderText(
+      readerPane.querySelector('[data-reader-paragraph-index="1"]') as HTMLElement,
+      noteText,
+    )
+
+    await waitFor(() => {
+      expect(readerScope.getByText(noteText, { selector: "blockquote" })).toBeTruthy()
+    })
+
+    await user.type(
+      readerScope.getByLabelText("Annotation note"),
+      "Keep durable anchors out of route state until SQLite wiring lands.",
+    )
+    await user.click(readerScope.getByRole("button", { name: "Create note" }))
+
+    await waitFor(() => {
+      expect(readerPane.querySelectorAll('[data-annotation-type="highlight"]')).toHaveLength(1)
+      expect(readerPane.querySelectorAll('[data-annotation-type="note"]')).toHaveLength(1)
+      expect(
+        readerScope.getByText("Keep durable anchors out of route state until SQLite wiring lands."),
+      ).toBeTruthy()
+      expect(readerScope.getByText("2 anchored item(s) in the reader.")).toBeTruthy()
+    })
+
+    cleanup()
+    renderShell()
+
+    const reopenedReaderPane = await screen.findByRole("region", { name: "Reading panel" })
+    const reopenedReaderScope = within(reopenedReaderPane)
+
+    await waitFor(() => {
+      expect(
+        reopenedReaderScope.getByRole("heading", {
+          name: "Why layout state should stay separate from source and query state",
+        }),
+      ).toBeTruthy()
+      expect(
+        reopenedReaderPane.querySelectorAll('[data-annotation-type="highlight"]'),
+      ).toHaveLength(1)
+      expect(reopenedReaderPane.querySelectorAll('[data-annotation-type="note"]')).toHaveLength(1)
+    })
+
+    expect(
+      reopenedReaderScope.getByText(
+        "Keep durable anchors out of route state until SQLite wiring lands.",
+      ),
+    ).toBeTruthy()
+    expect(reopenedReaderScope.getByText("2 anchored item(s) in the reader.")).toBeTruthy()
   })
 
   test("shows podcast enclosure metadata in the reading panel for audio attachments", async () => {

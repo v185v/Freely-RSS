@@ -1,10 +1,22 @@
-import type { CSSProperties, Ref } from "react"
+import {
+  type CSSProperties,
+  type ReactNode,
+  type Ref,
+  useEffect,
+  useEffectEvent,
+  useId,
+  useRef,
+  useState,
+} from "react"
 
 import type { ArticleDetailDto } from "@freelyrss/shared-types"
 import { Button, SplitPane, Surface } from "@freelyrss/ui"
 
 import { formatReaderProgress } from "../selectors"
 import type {
+  CreateReaderAnnotationInput,
+  ReaderAnnotationAnchor,
+  ReaderAnnotationKind,
   ReaderContentMode,
   ReaderFontFamily,
   ReaderFontScale,
@@ -23,12 +35,21 @@ type ReaderStateMutationInput = {
   starred?: ArticleDetailDto["state"]["starred"]
 }
 
+type ReaderPendingSelection = {
+  anchor: ReaderAnnotationAnchor
+  paragraphText: string
+  selectedText: string
+}
+
 type ReaderPaneProps = {
   activeDetail: ArticleDetailDto | null
+  annotationErrorMessage: string | null
   articleStateErrorMessage: string | null
   describedBy?: string
   headingId: string
+  isCreatingAnnotation: boolean
   isUpdatingArticleState: boolean
+  onCreateAnnotation: (input: CreateReaderAnnotationInput) => void
   onSetReaderContentMode: (readerContentMode: ReaderContentMode) => void
   onSetReaderFontFamily: (readerFontFamily: ReaderFontFamily) => void
   onSetReaderFontScale: (readerFontScale: ReaderFontScale) => void
@@ -111,6 +132,11 @@ const MARGIN_OPTIONS: Array<{
   { label: "Balanced", value: "balanced" },
   { label: "Wide", value: "wide" },
 ]
+
+const DEFAULT_ANNOTATION_COLORS: Record<ReaderAnnotationKind, string> = {
+  highlight: "#f4b860",
+  note: "#8eb6ff",
+}
 
 function formatReaderDate(value: string | null, fallback = "No publish time yet") {
   if (!value) {
@@ -237,12 +263,170 @@ function formatMarginModeLabel(value: ReaderMarginMode) {
   }
 }
 
+function formatAnnotationTypeLabel(type: ArticleDetailDto["annotations"][number]["type"]) {
+  switch (type) {
+    case "highlight":
+      return "Highlight"
+    case "note":
+      return "Note"
+    default:
+      return "Comment"
+  }
+}
+
+function getExtractedParagraphs(content: ArticleDetailDto["article"]["contentExtracted"]) {
+  return (
+    content
+      ?.split("\n\n")
+      .map((paragraph) => paragraph.trim())
+      .filter((paragraph) => paragraph.length > 0) ?? []
+  )
+}
+
+function isHexColor(value: string | null | undefined): value is `#${string}` {
+  return value ? /^#[\da-f]{6}$/i.test(value) : false
+}
+
+function withAlpha(color: string | null | undefined, alpha: string) {
+  return isHexColor(color) ? `${color}${alpha}` : null
+}
+
+function buildAnnotationStyle(annotation: ArticleDetailDto["annotations"][number]) {
+  const accent =
+    annotation.type === "highlight"
+      ? (annotation.color ?? DEFAULT_ANNOTATION_COLORS.highlight)
+      : (annotation.color ?? DEFAULT_ANNOTATION_COLORS.note)
+
+  return {
+    "--reader-annotation-accent": accent,
+    "--reader-annotation-accent-soft": withAlpha(accent, "2b") ?? `${accent}2b`,
+  } as CSSProperties
+}
+
+function isReaderAnnotationAnchor(anchor: unknown): anchor is ReaderAnnotationAnchor {
+  if (!anchor || typeof anchor !== "object") {
+    return false
+  }
+
+  const candidate = anchor as Partial<ReaderAnnotationAnchor>
+
+  return (
+    candidate.contentMode === "extracted" &&
+    Number.isInteger(candidate.paragraphIndex) &&
+    Number.isInteger(candidate.startOffset) &&
+    Number.isInteger(candidate.endOffset) &&
+    (candidate.paragraphIndex ?? -1) >= 0 &&
+    (candidate.startOffset ?? -1) >= 0 &&
+    (candidate.endOffset ?? -1) > (candidate.startOffset ?? -1)
+  )
+}
+
+function findClosestParagraphElement(node: Node | null) {
+  if (!node) {
+    return null
+  }
+
+  const element = node instanceof Element ? node : node.parentElement
+  return element?.closest<HTMLElement>("[data-reader-paragraph-index]") ?? null
+}
+
+function measureTextOffset(root: HTMLElement, node: Node, offset: number) {
+  try {
+    const range = root.ownerDocument.createRange()
+    range.selectNodeContents(root)
+    range.setEnd(node, offset)
+    return range.toString().length
+  } catch {
+    return null
+  }
+}
+
+function clearWindowSelection() {
+  try {
+    window.getSelection()?.removeAllRanges()
+  } catch {}
+}
+
+function collectParagraphAnnotations(
+  annotations: ArticleDetailDto["annotations"],
+  paragraphIndex: number,
+) {
+  return annotations
+    .map((annotation) => ({
+      annotation,
+      anchor: isReaderAnnotationAnchor(annotation.anchor) ? annotation.anchor : null,
+    }))
+    .filter(
+      (
+        entry,
+      ): entry is {
+        annotation: ArticleDetailDto["annotations"][number]
+        anchor: ReaderAnnotationAnchor
+      } => entry.anchor !== null && entry.anchor.paragraphIndex === paragraphIndex,
+    )
+    .sort(
+      (left, right) =>
+        left.anchor.startOffset - right.anchor.startOffset ||
+        left.anchor.endOffset - right.anchor.endOffset,
+    )
+}
+
+function renderAnnotatedParagraph(
+  paragraphText: string,
+  paragraphIndex: number,
+  annotations: ArticleDetailDto["annotations"],
+) {
+  const paragraphAnnotations = collectParagraphAnnotations(annotations, paragraphIndex)
+
+  if (paragraphAnnotations.length === 0) {
+    return paragraphText
+  }
+
+  const fragments: ReactNode[] = []
+  let cursor = 0
+
+  for (const { annotation, anchor } of paragraphAnnotations) {
+    const startOffset = Math.max(0, Math.min(paragraphText.length, anchor.startOffset))
+    const endOffset = Math.max(startOffset, Math.min(paragraphText.length, anchor.endOffset))
+
+    if (endOffset <= startOffset || startOffset < cursor) {
+      continue
+    }
+
+    if (startOffset > cursor) {
+      fragments.push(paragraphText.slice(cursor, startOffset))
+    }
+
+    fragments.push(
+      <mark
+        className={`desktop-reader__annotation desktop-reader__annotation--${annotation.type}`}
+        data-annotation-id={annotation.id}
+        data-annotation-type={annotation.type}
+        key={annotation.id}
+        style={buildAnnotationStyle(annotation)}
+      >
+        {paragraphText.slice(startOffset, endOffset)}
+      </mark>,
+    )
+    cursor = endOffset
+  }
+
+  if (cursor < paragraphText.length) {
+    fragments.push(paragraphText.slice(cursor))
+  }
+
+  return fragments
+}
+
 export function ReaderPane({
   activeDetail,
+  annotationErrorMessage,
   articleStateErrorMessage,
   describedBy,
   headingId,
+  isCreatingAnnotation,
   isUpdatingArticleState,
+  onCreateAnnotation,
   onSetReaderContentMode,
   onSetReaderFontFamily,
   onSetReaderFontScale,
@@ -259,20 +443,141 @@ export function ReaderPane({
   readerMarginMode,
   themeTone,
 }: ReaderPaneProps) {
+  const [annotationNoteDraft, setAnnotationNoteDraft] = useState("")
+  const [pendingSelection, setPendingSelection] = useState<ReaderPendingSelection | null>(null)
+  const [selectionErrorMessage, setSelectionErrorMessage] = useState<string | null>(null)
+  const contentRef = useRef<HTMLDivElement | null>(null)
+  const annotationNoteId = useId()
   const extractedContent = activeDetail?.article.contentExtracted?.trim() ?? null
   const rawContent = activeDetail?.article.contentRaw?.trim() ?? null
-  const extractedParagraphs = extractedContent
-    ?.split("\n\n")
-    .map((paragraph) => paragraph.trim())
-    .filter((paragraph) => paragraph.length > 0)
+  const extractedParagraphs = getExtractedParagraphs(extractedContent)
   const activeReaderContent = readerContentMode === "raw" ? rawContent : extractedContent
   const alternateReaderContent = readerContentMode === "raw" ? extractedContent : rawContent
   const primaryUrl = activeDetail?.article.canonicalUrl ?? activeDetail?.article.originalUrl ?? null
+  const annotationResetKey = `${activeDetail?.article.id ?? "none"}:${readerContentMode}`
   const readerPresentationSummary = `${formatThemeToneLabel(themeTone)} theme, ${formatFontFamilyLabel(readerFontFamily)} font, ${formatFontScaleLabel(readerFontScale)} size, ${formatLineHeightLabel(readerLineHeight).toLowerCase()} leading, ${formatMarginModeLabel(readerMarginMode).toLowerCase()} margins`
   const readerPresentationStyle = {
     "--reader-sample-max-width":
       readerMarginMode === "narrow" ? "78ch" : readerMarginMode === "wide" ? "58ch" : "68ch",
   } as CSSProperties
+
+  useEffect(() => {
+    void annotationResetKey
+    setAnnotationNoteDraft("")
+    setPendingSelection(null)
+    setSelectionErrorMessage(null)
+    clearWindowSelection()
+  }, [annotationResetKey])
+
+  const handleSelectionChange = useEffectEvent(() => {
+    if (
+      !activeDetail ||
+      readerContentMode !== "extracted" ||
+      !contentRef.current ||
+      extractedParagraphs.length === 0
+    ) {
+      setPendingSelection(null)
+      return
+    }
+
+    const selection = window.getSelection()
+
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+      return
+    }
+
+    const range = selection.getRangeAt(0)
+
+    if (!contentRef.current.contains(range.commonAncestorContainer)) {
+      return
+    }
+
+    const startParagraph = findClosestParagraphElement(range.startContainer)
+    const endParagraph = findClosestParagraphElement(range.endContainer)
+
+    if (!startParagraph || startParagraph !== endParagraph) {
+      setPendingSelection(null)
+      setSelectionErrorMessage(
+        "Annotations currently require a text selection inside one extracted paragraph.",
+      )
+      return
+    }
+
+    const paragraphIndex = Number(startParagraph.dataset.readerParagraphIndex)
+    const paragraphText = extractedParagraphs[paragraphIndex]
+
+    if (!Number.isInteger(paragraphIndex) || !paragraphText) {
+      setPendingSelection(null)
+      return
+    }
+
+    const startOffset = measureTextOffset(startParagraph, range.startContainer, range.startOffset)
+    const endOffset = measureTextOffset(startParagraph, range.endContainer, range.endOffset)
+
+    if (startOffset === null || endOffset === null || endOffset <= startOffset) {
+      setPendingSelection(null)
+      return
+    }
+
+    const selectedText = paragraphText.slice(startOffset, endOffset).trim()
+
+    if (selectedText.length === 0) {
+      setPendingSelection(null)
+      return
+    }
+
+    setSelectionErrorMessage(null)
+    setPendingSelection({
+      anchor: {
+        contentMode: "extracted",
+        paragraphIndex,
+        startOffset,
+        endOffset,
+      },
+      paragraphText,
+      selectedText,
+    })
+  })
+
+  useEffect(() => {
+    document.addEventListener("selectionchange", handleSelectionChange)
+
+    return () => {
+      document.removeEventListener("selectionchange", handleSelectionChange)
+    }
+  }, [handleSelectionChange])
+
+  function clearPendingSelection() {
+    setPendingSelection(null)
+    setSelectionErrorMessage(null)
+    clearWindowSelection()
+  }
+
+  function handleCreateAnnotation(type: ReaderAnnotationKind) {
+    if (!activeDetail || !pendingSelection) {
+      setSelectionErrorMessage("Select extracted article text before creating an annotation.")
+      return
+    }
+
+    const normalizedNote = annotationNoteDraft.trim()
+
+    if (type === "note" && normalizedNote.length === 0) {
+      setSelectionErrorMessage("Enter a note before saving a note annotation.")
+      return
+    }
+
+    setSelectionErrorMessage(null)
+    onCreateAnnotation({
+      articleId: activeDetail.article.id,
+      type,
+      selectedText: pendingSelection.selectedText,
+      anchor: pendingSelection.anchor,
+      note: type === "note" ? normalizedNote : null,
+      color: DEFAULT_ANNOTATION_COLORS[type],
+    })
+    setAnnotationNoteDraft("")
+    clearPendingSelection()
+  }
 
   return (
     <SplitPane
@@ -295,10 +600,9 @@ export function ReaderPane({
           )}
           <p className="desktop-pane__description">
             The selected article still comes from route state, and the reader still preserves the
-            Step 40 content-mode toggle plus the Step 42 attachment surface. Step 45 keeps the
-            existing article-detail contract intact, then adds persisted reading environment
-            settings on top of the Step 43 shell-side article state command path and Step 44
-            keyboard workflow without changing article selection or query ownership.
+            Step 40 content-mode toggle plus the Step 42 attachment surface. Step 46 now adds
+            shell-side text selection, anchored highlights, and note creation without changing
+            article selection, shared DTO ownership, or durable SQLite persistence boundaries.
           </p>
         </div>
 
@@ -709,9 +1013,10 @@ export function ReaderPane({
                     <div>
                       <p className="desktop-reader__section-label">Reading body</p>
                       <p className="desktop-reader__body-note">
-                        Reader mode and reading presentation are both shell-local preferences. The
-                        latest content mode still persists locally, while Step 45 adds theme and
-                        typography persistence around the same route-selected article detail.
+                        Reader mode and reading presentation are both shell-local preferences. Step
+                        46 now keeps text-selection capture and annotation replay in the reader
+                        shell as well, while durable anchor storage still belongs to later
+                        `core-domain/sqlite` work.
                       </p>
                     </div>
                     <div className="desktop-reader__body-meta">
@@ -762,13 +1067,19 @@ export function ReaderPane({
                     </p>
                   </fieldset>
 
-                  {readerContentMode === "extracted" &&
-                  extractedParagraphs &&
-                  extractedParagraphs.length > 0 ? (
-                    <div className="desktop-reader__content">
-                      {extractedParagraphs.map((paragraph) => (
-                        <p className="desktop-reader__paragraph" key={paragraph}>
-                          {paragraph}
+                  {readerContentMode === "extracted" && extractedParagraphs.length > 0 ? (
+                    <div className="desktop-reader__content" ref={contentRef}>
+                      {extractedParagraphs.map((paragraph, paragraphIndex) => (
+                        <p
+                          className="desktop-reader__paragraph"
+                          data-reader-paragraph-index={paragraphIndex}
+                          key={`${paragraphIndex}-${paragraph}`}
+                        >
+                          {renderAnnotatedParagraph(
+                            paragraph,
+                            paragraphIndex,
+                            activeDetail.annotations,
+                          )}
                         </p>
                       ))}
                     </div>
@@ -788,6 +1099,181 @@ export function ReaderPane({
                               readerContentMode === "raw" ? "extracted" : "original"
                             } content to keep reading without changing the selected article.`
                           : "The reading panel still keeps summary and metadata visible so the route can switch cleanly without leaking content from the previously selected article."}
+                      </p>
+                    </div>
+                  )}
+                </section>
+
+                <section className="desktop-reader__annotations">
+                  <div className="desktop-reader__annotations-header">
+                    <div>
+                      <p className="desktop-reader__section-label">Highlights and notes</p>
+                      <p className="desktop-reader__annotations-note">
+                        Step 46 keeps annotation authoring in the desktop shell: select text from
+                        extracted mode, capture one paragraph-scoped anchor, and replay the
+                        resulting highlight or note from the resolved article detail without
+                        changing shared DTO ownership.
+                      </p>
+                    </div>
+                    <div className="desktop-reader__annotations-summary">
+                      <span className="desktop-reader__fact-label">Anchored items</span>
+                      <strong>{activeDetail.annotations.length}</strong>
+                    </div>
+                  </div>
+
+                  <div className="desktop-reader__selection-card">
+                    <div className="desktop-reader__selection-header">
+                      <div>
+                        <p className="desktop-reader__section-label">Current selection</p>
+                        <p className="desktop-reader__selection-note">
+                          Selection capture is only enabled for extracted reader paragraphs so the
+                          shell can serialize one stable text anchor instead of raw markup ranges.
+                        </p>
+                      </div>
+                      <div className="desktop-reader__selection-meta">
+                        <span className="desktop-reader__fact-label">Pending annotation</span>
+                        <strong>
+                          {isCreatingAnnotation ? "Saving..." : pendingSelection ? "Ready" : "Idle"}
+                        </strong>
+                      </div>
+                    </div>
+
+                    {readerContentMode !== "extracted" ? (
+                      <div className="desktop-empty-state desktop-empty-state--compact">
+                        <p className="desktop-empty-state__eyebrow">Extracted mode required</p>
+                        <h3>Switch back to extracted content to anchor highlights or notes.</h3>
+                        <p>
+                          Raw mode keeps the source body visible for inspection, but Step 46 only
+                          captures anchors against the extracted reader text.
+                        </p>
+                      </div>
+                    ) : pendingSelection ? (
+                      <div className="desktop-reader__selection-details">
+                        <div className="desktop-reader__selection-quote">
+                          <span className="desktop-reader__fact-label">Selected text</span>
+                          <blockquote>{pendingSelection.selectedText}</blockquote>
+                        </div>
+                        <div className="desktop-reader__selection-grid">
+                          <div>
+                            <span className="desktop-reader__fact-label">Paragraph</span>
+                            <strong>{pendingSelection.anchor.paragraphIndex + 1}</strong>
+                          </div>
+                          <div>
+                            <span className="desktop-reader__fact-label">Offsets</span>
+                            <strong>
+                              {pendingSelection.anchor.startOffset}-
+                              {pendingSelection.anchor.endOffset}
+                            </strong>
+                          </div>
+                        </div>
+
+                        <label className="fr-field">
+                          <span className="fr-field__label">Annotation note</span>
+                          <textarea
+                            aria-label="Annotation note"
+                            className="fr-input desktop-reader__annotation-textarea"
+                            id={annotationNoteId}
+                            onChange={(event) => setAnnotationNoteDraft(event.target.value)}
+                            placeholder="Optional for a highlight, required for a note."
+                            value={annotationNoteDraft}
+                          />
+                        </label>
+
+                        <div className="desktop-reader__annotation-actions">
+                          <Button
+                            disabled={isCreatingAnnotation}
+                            onClick={() => handleCreateAnnotation("highlight")}
+                            size="sm"
+                            tone="neutral"
+                          >
+                            Create highlight
+                          </Button>
+                          <Button
+                            disabled={isCreatingAnnotation}
+                            onClick={() => handleCreateAnnotation("note")}
+                            size="sm"
+                            tone="ghost"
+                          >
+                            Create note
+                          </Button>
+                          <Button
+                            disabled={isCreatingAnnotation}
+                            onClick={clearPendingSelection}
+                            size="sm"
+                            tone="ghost"
+                          >
+                            Clear selection
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="desktop-empty-state desktop-empty-state--compact">
+                        <p className="desktop-empty-state__eyebrow">Selection idle</p>
+                        <h3>Select text inside one extracted paragraph.</h3>
+                        <p>
+                          The shell will capture offsets for that paragraph, then let you save a
+                          highlight or a note without changing the current route or reader mode.
+                        </p>
+                      </div>
+                    )}
+
+                    {selectionErrorMessage || annotationErrorMessage ? (
+                      <p className="desktop-reader__error" role="alert">
+                        {selectionErrorMessage ?? annotationErrorMessage}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  {activeDetail.annotations.length > 0 ? (
+                    <ul className="desktop-reader__annotation-list">
+                      {activeDetail.annotations.map((annotation) => {
+                        const anchor = isReaderAnnotationAnchor(annotation.anchor)
+                          ? annotation.anchor
+                          : null
+
+                        return (
+                          <li className="desktop-reader__annotation-card" key={annotation.id}>
+                            <div className="desktop-reader__annotation-card-header">
+                              <div className="desktop-reader__annotation-badges">
+                                <span
+                                  className={`desktop-reader__annotation-badge desktop-reader__annotation-badge--${annotation.type}`}
+                                  style={buildAnnotationStyle(annotation)}
+                                >
+                                  {formatAnnotationTypeLabel(annotation.type)}
+                                </span>
+                                <span className="desktop-reader__annotation-badge desktop-reader__annotation-badge--meta">
+                                  {anchor
+                                    ? `Paragraph ${anchor.paragraphIndex + 1}`
+                                    : "Legacy anchor"}
+                                </span>
+                              </div>
+                              <span className="desktop-reader__annotation-time">
+                                {formatReaderDate(annotation.createdAt, annotation.createdAt)}
+                              </span>
+                            </div>
+                            <blockquote className="desktop-reader__annotation-quote">
+                              {annotation.selectedText}
+                            </blockquote>
+                            {annotation.note ? (
+                              <p className="desktop-reader__annotation-note-copy">
+                                {annotation.note}
+                              </p>
+                            ) : (
+                              <p className="desktop-reader__annotation-note-copy desktop-reader__annotation-note-copy--empty">
+                                No note body attached to this anchor.
+                              </p>
+                            )}
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  ) : (
+                    <div className="desktop-empty-state desktop-empty-state--compact">
+                      <p className="desktop-empty-state__eyebrow">No annotations yet</p>
+                      <h3>This article does not have anchored reader notes yet.</h3>
+                      <p>
+                        New highlights and notes will appear here after you select extracted text
+                        and save the annotation.
                       </p>
                     </div>
                   )}
@@ -884,7 +1370,7 @@ export function ReaderPane({
                   </div>
                   <div>
                     <span className="desktop-reader__fact-label">Annotations</span>
-                    <p>{activeDetail.annotations.length} note(s) anchored in the reader.</p>
+                    <p>{activeDetail.annotations.length} anchored item(s) in the reader.</p>
                   </div>
                 </div>
               </article>

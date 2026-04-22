@@ -23,3 +23,12 @@
 - Added regression coverage in `apps/desktop/src/features/reader-shell/reader-shell.test.tsx` for mode switching and reopening the app with the latest mode preserved.
 - Verified the work with `corepack pnpm --filter @freelyrss/desktop test`, `corepack pnpm run desktop:build`, `corepack pnpm run verify`, and `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`.
 - Updated `memory-bank/progress.md` and `memory-bank/architecture.md` with the Step 40 implementation record, architectural insights, and file-responsibility notes for the next developer.
+
+## 2026-04-22
+
+- Reviewed every file in `memory-bank/` and re-read both `memory-bank/progress.md` and root `progress.md` to resume from the latest completed milestone.
+- Confirmed the next implementation target was `memory-bank/implementation-plan.md` Stage 5 Step 46: highlights and annotations.
+- Implemented paragraph-scoped extracted-text annotation anchors and shell-side highlight and note creation in the desktop reader shell.
+- Updated `apps/desktop/src/features/reader-shell/types.ts`, `apps/desktop/src/features/reader-shell/mock-data.ts`, `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`, `apps/desktop/src/features/reader-shell/components/reader-pane.tsx`, `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`, and `apps/desktop/src/styles.css` for annotation authoring, replay, and regression coverage.
+- Verified the work with `corepack pnpm run format`, `corepack pnpm --filter @freelyrss/desktop test`, `corepack pnpm run desktop:build`, `corepack pnpm run verify`, and `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`.
+- Updated `memory-bank/progress.md` and `memory-bank/architecture.md` with the Step 46 implementation record, architectural boundary notes, and per-file responsibility details for the next developer.

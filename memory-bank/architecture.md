@@ -1490,3 +1490,31 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `packages/ui` now owns reusable tone primitives and token surfaces for daylight, midnight, and high contrast, but it still does not own persistence of reader preferences or article-layout policy.
 - `crates/feed-engine` and `crates/content-pipeline` still own fetch, parse, extraction, and metadata derivation semantics; Step 45 does not move presentation preferences into Rust layers.
 - `crates/core-domain` and SQLite remain the future durable boundary for any storage-backed reader preferences. Step 45 only validates shell-local preference handling, shared theme-token consumption, and reader-side rendering against the existing article detail contract.
+
+## 2026-04-22 ASCII Addendum V
+
+### Step 46 Architecture Insights
+
+- Step 46 confirms that annotation authoring is a desktop-shell interaction concern before it becomes durable storage. The reader can create highlights and notes, but it still does so through a shell-owned mutation path rather than SQLite or Rust domain services.
+- The key architectural decision in this step is to serialize paragraph-scoped extracted-text anchors instead of raw DOM `Range` data. Anchors now depend on `contentMode`, `paragraphIndex`, `startOffset`, and `endOffset`, which is stable enough for shell replay without promoting browser-specific structures into shared contracts or database migrations.
+- Selection capture and note drafting remain in `ReaderPane`, while mutation wiring remains in `reader-shell-route.tsx`. That split keeps route ownership unchanged: `sourceId` and `articleId` still live in the route, and the reader remains the interaction surface rather than becoming a query or persistence layer.
+- Shell-side annotation validation is intentionally colocated with snapshot mutation in `mock-data.ts`. The mock repository now verifies that anchors target one extracted paragraph and that offsets match current extracted text before it writes the next shell snapshot.
+- Annotation replay is also deliberately limited to extracted mode in this step. Step 46 proves stable shell-side anchoring against normalized extracted paragraphs before later work tackles durable cross-mode or cross-device replay semantics.
+- No database schema changes were required for Step 46. The existing `Annotation` schema already covers `id`, `article_id`, `type`, `selected_text`, `anchor`, `note`, `color`, and `created_at`; this step only validates shell-side authoring and replay against that existing shape.
+
+### Step 46 File Responsibilities
+
+- `apps/desktop/src/features/reader-shell/types.ts`: defines the shell-local annotation authoring vocabulary, including `ReaderAnnotationKind`, `ReaderAnnotationAnchor`, and `CreateReaderAnnotationInput`.
+- `apps/desktop/src/features/reader-shell/mock-data.ts`: owns Step 46 mock annotation creation, extracted-paragraph anchor validation, default annotation colors, and snapshot updates that let created annotations survive a simulated app reopen.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`: remains the shell composition root and now wires the Step 46 annotation mutation through React Query while keeping route ownership unchanged.
+- `apps/desktop/src/features/reader-shell/components/reader-pane.tsx`: owns Step 46 selection capture, pending-selection state, note drafting, highlight and note creation actions, inline annotation replay, and the annotation list UI.
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`: protects Step 46 by verifying highlight and note creation on extracted text plus replay after reopening the mock shell.
+- `apps/desktop/src/styles.css`: contains shell-local presentation rules for the Step 46 selection card, inline annotation replay, annotation cards, and note textarea.
+
+### Step 46 Boundary Notes
+
+- `packages/shared-types` remains the DTO boundary only; Step 46 did not add reader-selection structures, DOM-range payloads, or browser-specific anchor fields to shared contracts.
+- `packages/shared-query` still owns query vocabulary and future parsing and validation work, but it does not own annotation capture, paragraph replay, or note-draft UI behavior.
+- `packages/ui` remains a primitive layer and does not absorb annotation semantics, extracted-paragraph anchoring rules, or reader-side replay logic.
+- `crates/feed-engine` and `crates/content-pipeline` still own fetch, parse, extraction, and metadata derivation semantics; Step 46 does not move selection anchoring or note creation into Rust layers.
+- `crates/core-domain` and SQLite remain the future durable boundary for `Annotation` writes and cross-session replay policy. Step 46 only validates shell-side authoring and replay against the existing annotation schema.

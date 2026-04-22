@@ -1,4 +1,5 @@
 import type {
+  AnnotationDto,
   ArticleDetailDto,
   ArticleListItemDto,
   FeedDto,
@@ -9,7 +10,13 @@ import type {
   UserStateDto,
 } from "@freelyrss/shared-types"
 
-import type { OpmlExportReport, OpmlImportReport, ReaderShellData, SourceRow } from "./types"
+import type {
+  CreateReaderAnnotationInput,
+  OpmlExportReport,
+  OpmlImportReport,
+  ReaderShellData,
+  SourceRow,
+} from "./types"
 
 export const readerShellQueryKey = ["desktop-reader-shell", "mock-data"] as const
 
@@ -373,9 +380,10 @@ const articleDetails: Record<string, ArticleDetailDto> = {
         selectedText:
           "current source and selected article should be addressable through navigation",
         anchor: {
-          endOffset: 69,
-          path: ["article", "paragraph", 0],
-          startOffset: 0,
+          contentMode: "extracted",
+          endOffset: 114,
+          paragraphIndex: 0,
+          startOffset: 38,
         },
         note: "Route search params now own these selections.",
         color: "#8eb6ff",
@@ -594,6 +602,10 @@ const navigationEntries = [
 const DENSE_QUEUE_FEED_ID = "feed-queue-lab"
 const DENSE_QUEUE_ARTICLE_COUNT = 48
 const DEFAULT_READING_PROGRESS = 0.25
+const DEFAULT_ANNOTATION_COLORS: Record<CreateReaderAnnotationInput["type"], string> = {
+  highlight: "#f4b860",
+  note: "#8eb6ff",
+}
 
 type MockReaderState = {
   articleDetails: Record<string, ArticleDetailDto>
@@ -845,6 +857,54 @@ function normalizeArticleState(
   }
 
   return nextState
+}
+
+function getExtractedParagraphs(content: ArticleDetailDto["article"]["contentExtracted"]) {
+  return (
+    content
+      ?.split("\n\n")
+      .map((paragraph) => paragraph.trim())
+      .filter((paragraph) => paragraph.length > 0) ?? []
+  )
+}
+
+function isReaderAnnotationAnchor(
+  anchor: unknown,
+): anchor is CreateReaderAnnotationInput["anchor"] {
+  if (!anchor || typeof anchor !== "object") {
+    return false
+  }
+
+  const candidate = anchor as Partial<CreateReaderAnnotationInput["anchor"]>
+
+  return (
+    candidate.contentMode === "extracted" &&
+    Number.isInteger(candidate.paragraphIndex) &&
+    Number.isInteger(candidate.startOffset) &&
+    Number.isInteger(candidate.endOffset) &&
+    (candidate.paragraphIndex ?? -1) >= 0 &&
+    (candidate.startOffset ?? -1) >= 0 &&
+    (candidate.endOffset ?? -1) > (candidate.startOffset ?? -1)
+  )
+}
+
+function isHexColor(value: string | null): value is `#${string}` {
+  return value ? /^#[\da-f]{6}$/i.test(value) : false
+}
+
+function normalizeAnnotationColor(
+  type: CreateReaderAnnotationInput["type"],
+  color: CreateReaderAnnotationInput["color"],
+) {
+  const normalizedColor = normalizeOptionalText(color)
+  return isHexColor(normalizedColor) ? normalizedColor : DEFAULT_ANNOTATION_COLORS[type]
+}
+
+function createAnnotationId(
+  articleId: ArticleDetailDto["article"]["id"],
+  type: CreateReaderAnnotationInput["type"],
+) {
+  return `annotation-${slugifySegment(articleId)}-${type}-${Date.now()}`
 }
 
 function getFeedDisplayTitle(feed: FeedDto) {
@@ -1261,6 +1321,16 @@ function findArticleStateOrThrow(articleId: ArticleListItemDto["id"]) {
   return article.state
 }
 
+function findArticleDetailOrThrow(articleId: ArticleDetailDto["article"]["id"]) {
+  const detail = mockReaderState.articleDetails[articleId]
+
+  if (!detail) {
+    throw new Error(`Unknown article detail id: ${articleId}`)
+  }
+
+  return detail
+}
+
 function replaceFeed(nextFeed: FeedDto) {
   mockReaderState.feedDetails = mockReaderState.feedDetails.map((feed) =>
     feed.id === nextFeed.id ? nextFeed : feed,
@@ -1304,6 +1374,21 @@ function replaceArticleState(nextState: UserStateDto) {
     throw new Error(
       `Article state could not be synchronized for article id: ${nextState.articleId}`,
     )
+  }
+}
+
+function replaceArticleAnnotations(
+  articleId: ArticleDetailDto["article"]["id"],
+  nextAnnotations: AnnotationDto[],
+) {
+  const detail = findArticleDetailOrThrow(articleId)
+
+  mockReaderState.articleDetails = {
+    ...mockReaderState.articleDetails,
+    [articleId]: {
+      ...detail,
+      annotations: cloneValue(nextAnnotations),
+    },
   }
 }
 
@@ -1418,6 +1503,59 @@ export async function updateMockArticleState(input: {
   const nextState = normalizeArticleState(currentState, input)
 
   replaceArticleState(nextState)
+
+  return buildReaderShellSnapshot(mockReaderState)
+}
+
+export async function createMockAnnotation(
+  input: CreateReaderAnnotationInput,
+): Promise<ReaderShellData> {
+  const detail = findArticleDetailOrThrow(input.articleId)
+  const selectedText = input.selectedText.trim()
+
+  if (selectedText.length === 0) {
+    throw new Error("Select extracted article text before creating an annotation.")
+  }
+
+  if (!isReaderAnnotationAnchor(input.anchor)) {
+    throw new Error("Annotation anchors must target one extracted paragraph with valid offsets.")
+  }
+
+  const paragraphs = getExtractedParagraphs(detail.article.contentExtracted)
+  const paragraphText = paragraphs[input.anchor.paragraphIndex]
+
+  if (!paragraphText) {
+    throw new Error("The selected paragraph is no longer available for this article.")
+  }
+
+  if (input.anchor.endOffset > paragraphText.length) {
+    throw new Error("The selected text range falls outside the current extracted paragraph.")
+  }
+
+  const anchoredText = paragraphText.slice(input.anchor.startOffset, input.anchor.endOffset)
+
+  if (anchoredText !== selectedText) {
+    throw new Error("The selected text no longer matches the current extracted article body.")
+  }
+
+  const note = normalizeOptionalText(input.note)
+
+  if (input.type === "note" && !note) {
+    throw new Error("Notes require text in the annotation note field.")
+  }
+
+  const nextAnnotation: AnnotationDto = {
+    id: createAnnotationId(input.articleId, input.type),
+    articleId: input.articleId,
+    type: input.type,
+    selectedText,
+    anchor: cloneValue(input.anchor),
+    note,
+    color: normalizeAnnotationColor(input.type, input.color),
+    createdAt: new Date().toISOString(),
+  }
+
+  replaceArticleAnnotations(input.articleId, [...detail.annotations, nextAnnotation])
 
   return buildReaderShellSnapshot(mockReaderState)
 }

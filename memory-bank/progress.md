@@ -867,3 +867,31 @@
 - desktop reader shell now owns persisted reading presentation settings, but it still does not own durable annotation storage or anchor serialization.
 - `packages/ui` now provides the reusable theme-token surface for daylight, midnight, and high-contrast tones, but it does not own reader-preference persistence or article-formatting policy.
 - durable annotation anchors, note payloads, and any future cross-session selection replay still belong to later reader-interaction work plus `core-domain/sqlite` integration rather than this shell-only preference step.
+
+## 2026-04-22 ASCII Addendum V
+
+### Stage 5 Step 46 Completed: highlights and annotations in the desktop shell
+
+- Implemented extracted-text selection capture plus shell-side highlight and note creation in the reader pane.
+- Kept Step 46 inside the desktop shell interaction boundary. No Rust crate, SQLite schema, shared DTO contract, or durable annotation persistence changed in this step.
+- Added paragraph-scoped extracted-text anchors with `contentMode`, `paragraphIndex`, `startOffset`, and `endOffset` so annotation replay depends on stable article-text positions rather than raw DOM range objects.
+- Added one shell-owned annotation creation path in the mock repository so new annotations validate against extracted paragraphs, append into the current article snapshot, and survive a simulated app reopen without changing route ownership.
+- Expanded the reader pane with inline replay, a pending-selection card, note drafting, annotation cards, and selection-aware validation messaging.
+- Added a Step 46 regression that creates one highlight and one note on `article-source-context`, reopens the app, and verifies both anchors replay plus note text persistence.
+- Boundary reminder: durable annotation storage, cross-device anchor portability, and SQLite-backed replay still belong to later `core-domain/sqlite` integration rather than the mock shell repository.
+
+### Step 46 Verification
+
+- Passed `corepack pnpm run format`
+- Passed `corepack pnpm --filter @freelyrss/desktop test`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+
+### Next Step (ASCII update)
+
+- Next planned implementation step is `implementation-plan.md` Stage 5 Step 47: unified query expression parsing and validation.
+- Preserve the current boundary split:
+- desktop reader shell now owns text-selection capture, paragraph-scoped annotation authoring, and reader-side replay in the mock shell, but it still does not own durable annotation storage.
+- `packages/shared-types` remains DTO-only, and Step 46 did not extend `AnnotationDto` beyond the existing reader-facing contract.
+- durable query parsing, validation, and later SQLite-backed annotation persistence still belong to `packages/shared-query` and `core-domain/sqlite` work rather than this shell-local interaction step.

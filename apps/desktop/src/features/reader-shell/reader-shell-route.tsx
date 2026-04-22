@@ -26,6 +26,7 @@ import { SourcePane } from "./components/source-pane"
 import {
   type MockOpmlExportResult,
   type MockOpmlImportResult,
+  createMockAnnotation,
   exportMockOpml,
   fetchReaderShellData,
   importMockOpml,
@@ -117,6 +118,12 @@ export function ReaderShellRoute() {
   })
   const updateArticleStateMutation = useMutation({
     mutationFn: updateMockArticleState,
+    onSuccess: (nextShellData) => {
+      queryClient.setQueryData(readerShellQueryKey, nextShellData)
+    },
+  })
+  const createAnnotationMutation = useMutation({
+    mutationFn: createMockAnnotation,
     onSuccess: (nextShellData) => {
       queryClient.setQueryData(readerShellQueryKey, nextShellData)
     },
@@ -352,6 +359,8 @@ export function ReaderShellRoute() {
     updateArticleStateMutation.error instanceof Error
       ? updateArticleStateMutation.error.message
       : null
+  const annotationErrorMessage =
+    createAnnotationMutation.error instanceof Error ? createAnnotationMutation.error.message : null
 
   useEffect(() => {
     if (shellData && activeArticleId !== routeState.articleId) {
@@ -371,8 +380,8 @@ export function ReaderShellRoute() {
     return (
       <main className="desktop-shell">
         <div className="desktop-loading">
-          <p className="desktop-shell__eyebrow">Stage 5 / Step 45</p>
-          <h1>Loading the route-backed reader shell and persisted reading preferences.</h1>
+          <p className="desktop-shell__eyebrow">Stage 5 / Step 46</p>
+          <h1>Loading the route-backed reader shell and anchored annotation workflow.</h1>
         </div>
       </main>
     )
@@ -478,18 +487,18 @@ export function ReaderShellRoute() {
 
       <header className="desktop-shell__header">
         <div className="desktop-shell__title-block">
-          <p className="desktop-shell__eyebrow">Stage 5 / Step 45</p>
-          <h1>The desktop shell now remembers reading theme and typography settings.</h1>
+          <p className="desktop-shell__eyebrow">Stage 5 / Step 46</p>
+          <h1>The desktop shell now supports anchored highlights and reader notes.</h1>
           <p className="desktop-shell__lead">
             Route state still owns the active source and article, the shell store still owns only
             local queue controls, folder expansion, the persisted reader content-mode preference,
             and the persisted reading presentation settings, while the mock repository remains a
-            shell-side snapshot source. Step 45 keeps the Step 37 query boundary, Step 38
+            shell-side snapshot source. Step 46 keeps the Step 37 query boundary, Step 38
             virtualization boundary, Step 39 reading-panel boundary, Step 40 content-mode boundary,
-            Step 42 attachment presentation boundary, Step 43 article-state command boundary, and
-            Step 44 keyboard workflow boundary intact, then adds shell-owned
-            daylight/midnight/high-contrast theme selection plus font, size, line-height, and margin
-            controls without pulling durable preferences into shared DTOs or SQLite yet.
+            Step 42 attachment presentation boundary, Step 43 article-state command boundary, Step
+            44 keyboard workflow boundary, and Step 45 reader-preference boundary intact, then adds
+            paragraph-scoped selection anchors plus shell-side highlight and note creation without
+            pulling durable annotation storage into shared DTOs or SQLite yet.
           </p>
         </div>
 
@@ -522,10 +531,10 @@ export function ReaderShellRoute() {
 
           <p className="desktop-summary__note">
             The queue still consumes one route-backed article query while source editing, OPML
-            portability, and tree expansion remain separate concerns. Step 45 keeps the existing
-            landmark shortcuts and pane-focused reading commands, then adds persisted theme and
-            typography controls so the shell can own reading comfort preferences before those
-            settings graduate into a durable domain boundary.
+            portability, and tree expansion remain separate concerns. Step 46 keeps the existing
+            landmark shortcuts and pane-focused reading commands, then adds shell-owned annotation
+            authoring so the reader can capture selection anchors before those writes graduate into
+            a durable domain boundary.
           </p>
 
           <div className="desktop-shortcuts">
@@ -654,10 +663,16 @@ export function ReaderShellRoute() {
 
           <ReaderPane
             activeDetail={activeDetail}
+            annotationErrorMessage={annotationErrorMessage}
             articleStateErrorMessage={articleStateErrorMessage}
             describedBy={READER_SHORTCUT_HINT_ID}
             headingId={READER_LANDMARK_IDS.readerHeading}
+            isCreatingAnnotation={createAnnotationMutation.isPending}
             isUpdatingArticleState={updateArticleStateMutation.isPending}
+            onCreateAnnotation={(input) => {
+              createAnnotationMutation.reset()
+              createAnnotationMutation.mutate(input)
+            }}
             onSetReaderContentMode={setReaderContentMode}
             onSetReaderFontFamily={setReaderFontFamily}
             onSetReaderFontScale={setReaderFontScale}

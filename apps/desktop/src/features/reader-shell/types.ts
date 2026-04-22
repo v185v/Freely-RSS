@@ -1,5 +1,6 @@
 import type { QueryDefinition } from "@freelyrss/shared-query"
 import type {
+  AnnotationDto,
   ArticleDetailDto,
   ArticleListItemDto,
   FeedDto,
@@ -15,6 +16,24 @@ export type ReaderStatusFilter = "all" | "unread" | "reading" | "readLater" | "s
 export type ReaderSortMode = "newest" | "oldest"
 
 export type ReaderContentMode = "extracted" | "raw"
+
+export type ReaderAnnotationKind = Extract<AnnotationDto["type"], "highlight" | "note">
+
+export type ReaderAnnotationAnchor = {
+  contentMode: Extract<ReaderContentMode, "extracted">
+  endOffset: number
+  paragraphIndex: number
+  startOffset: number
+}
+
+export type CreateReaderAnnotationInput = {
+  anchor: ReaderAnnotationAnchor
+  articleId: ArticleDetailDto["article"]["id"]
+  color?: AnnotationDto["color"]
+  note?: AnnotationDto["note"]
+  selectedText: AnnotationDto["selectedText"]
+  type: ReaderAnnotationKind
+}
 
 export type ReaderThemeTone = "daylight" | "high-contrast" | "midnight"
 
