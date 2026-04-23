@@ -1578,3 +1578,29 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `apps/desktop` still does not execute persisted rules; queue filters remain shell-local consumers of shared-query while rule hits now live in Rust.
 - `crates/rule-engine` now owns condition parsing and hit evaluation, but it still does not execute actions, write audit logs, or persist state changes.
 - `crates/core-domain` and SQLite remain the durable boundary for `Rule` storage, future action writes, and rule-hit audit records. Step 48 only proves that persisted rule conditions can be executed coherently against current domain models.
+
+## 2026-04-23 ASCII Addendum VIII
+
+### Step 49 Architecture Insights
+
+- Step 49 confirms that rule-action semantics belong in `crates/rule-engine` as a typed command-planning boundary before they become durable SQLite writes. The engine now interprets `Rule.actions`, but it still stops short of persistence.
+- The key architectural decision in this step is to keep `Rule.actions` stored as JSON in `crates/core-domain` while parsing and validating that JSON inside `crates/rule-engine`. That preserves one persisted rule shape while preventing future store code from scattering ad hoc JSON lookups across SQLite write paths.
+- `execute_rule` is the new orchestration boundary for this step. It validates the action payload, reuses the Step 48 condition-match path, and turns a matched rule into explicit commands for later consumers instead of mutating `UserState`, tags, folders, or cache files in place.
+- Command planning is intentionally state-aware and idempotent. The engine compares desired actions against default/current `UserState`, existing article tags, current feed-folder placement, and attachment cache availability so already-satisfied rules collapse to an empty plan rather than noisy duplicate writes.
+- Support for `{ "type": "noop" }` is an intentional compatibility boundary. Placeholder rules and older tests can remain valid while the action writer and audit trail are still being layered in.
+- No database schema changes were required for Step 49. The existing `Rule.actions` JSON column remains sufficient because this step only formalizes parsing, validation, and command planning against current domain entities.
+
+### Step 49 File Responsibilities
+
+- `crates/rule-engine/src/actions.rs`: owns Step 49 action JSON parsing and validation, typed rule-action definitions, explicit command structures, state-aware command planning, and unit tests for supported and invalid action payloads.
+- `crates/rule-engine/src/engine.rs`: remains the rule-match execution boundary and now also owns `execute_rule`, which combines enabled-rule gating, action-definition validation, condition matching, and command-plan generation without crossing into persistence.
+- `crates/rule-engine/src/error.rs`: now owns both query-definition and action-definition validation issue models so downstream callers can distinguish malformed conditions from malformed action payloads.
+- `crates/rule-engine/src/lib.rs`: extends the public rule-engine export surface with Step 49 action types, command-plan types, action-parser entry points, and the combined `execute_rule` helper.
+
+### Step 49 Boundary Notes
+
+- `packages/shared-query` remains the owner of query vocabulary and JS-side validation semantics; Step 49 does not move rule-action vocabulary into JS packages or DTO layers.
+- `packages/shared-types` remains DTO-only and still does not absorb persisted rule-action command types, Rust execution context, or audit payloads.
+- `apps/desktop` still does not execute persisted rules or consume rule-action command plans; desktop-shell boundaries remain unchanged in this step.
+- `crates/core-domain` still stores `Rule.actions` as opaque persisted JSON and continues to own durable entities plus SQLite schema; it does not parse or execute rule actions in Step 49.
+- SQLite and later automation/audit layers remain responsible for applying `RuleActionCommand`s and recording hit history. Step 49 only proves the command-planning contract that those later layers will consume.

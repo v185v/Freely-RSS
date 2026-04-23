@@ -6,7 +6,8 @@ use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 use crate::{
     QueryDefinition, QueryMatch, QueryNode, QueryOperator, QueryPredicateNode, QueryValue,
-    RuleEngineError, parse_query_definition,
+    RuleActionPlan, RuleEngineError, build_rule_action_plan, parse_query_definition,
+    parse_rule_actions,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -124,6 +125,27 @@ pub fn match_rule(rule: &Rule, context: &RuleMatchContext<'_>) -> Result<bool, R
     }
 
     match_rule_conditions(&rule.conditions, context)
+}
+
+pub fn execute_rule(
+    rule: &Rule,
+    context: &RuleMatchContext<'_>,
+) -> Result<Option<RuleActionPlan>, RuleEngineError> {
+    if !rule.enabled {
+        return Ok(None);
+    }
+
+    let action_definition = parse_rule_actions(&rule.actions)?;
+
+    if !match_rule_conditions(&rule.conditions, context)? {
+        return Ok(None);
+    }
+
+    Ok(Some(build_rule_action_plan(
+        &rule.id,
+        &action_definition,
+        context,
+    )))
 }
 
 pub fn match_rule_conditions(
@@ -352,14 +374,16 @@ fn match_node(node: &QueryNode, context: &RuleMatchContext<'_>) -> bool {
 #[cfg(test)]
 mod tests {
     use freelyrss_core_domain::{
-        Article, ArticleId, Attachment, AttachmentId, AttachmentType, Feed, FeedFormat,
-        FeedHealthStatus, FeedId, ImportanceLevel, IsoDateTime, JsonBlob, LanguageCode, ReadState,
-        Rule, RuleId, Tag, TagId, TagScope, UrlString, UserState,
+        Article, ArticleId, Attachment, AttachmentId, AttachmentType, CachePath, Feed, FeedFormat,
+        FeedHealthStatus, FeedId, FolderId, ImportanceLevel, IsoDateTime, JsonBlob, LanguageCode,
+        ReadState, Rule, RuleId, Tag, TagId, TagScope, UrlString, UserState,
     };
     use serde_json::json;
 
-    use super::{RuleMatchContext, match_rule, match_rule_conditions};
-    use crate::RuleEngineError;
+    use super::{RuleMatchContext, execute_rule, match_rule, match_rule_conditions};
+    use crate::{
+        RuleActionCommand, RuleAttachmentCacheTarget, RuleEngineError, RuleUserStateChanges,
+    };
 
     fn article() -> Article {
         Article {
@@ -469,18 +493,29 @@ mod tests {
             mime_type: Some("application/json".to_owned()),
             duration: None,
             size: Some(2_048),
-            local_cache_path: None,
+            local_cache_path: Some(
+                CachePath::try_from("cache/articles/rule.json".to_owned()).expect("cache path"),
+            ),
         }]
     }
 
     fn rule(id: &str, enabled: bool, conditions: serde_json::Value) -> Rule {
+        rule_with_actions(id, enabled, conditions, json!({ "type": "noop" }))
+    }
+
+    fn rule_with_actions(
+        id: &str,
+        enabled: bool,
+        conditions: serde_json::Value,
+        actions: serde_json::Value,
+    ) -> Rule {
         Rule {
             id: RuleId::try_from(id).expect("rule id"),
             name: id.to_owned(),
             enabled,
             priority: 0,
             conditions: JsonBlob::from(conditions),
-            actions: JsonBlob::from(json!({ "type": "noop" })),
+            actions: JsonBlob::from(actions),
             scope: "article".to_owned(),
         }
     }
@@ -615,6 +650,142 @@ mod tests {
                         .any(|issue| issue.code == "operator-not-allowed")
                 );
             }
+            other => panic!("expected invalid query definition error, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn executes_matching_rules_into_explicit_action_commands() {
+        let target_article = article();
+        let target_feed = feed();
+        let tags = article_tags();
+        let attachment_list = attachments();
+        let context = RuleMatchContext::new(&target_article)
+            .with_feed(&target_feed)
+            .with_article_tags(&tags)
+            .with_attachments(&attachment_list);
+
+        let rule = rule_with_actions(
+            "rule-actions",
+            true,
+            json!({
+              "version": 1,
+              "root": {
+                "kind": "predicate",
+                "field": "title",
+                "operator": "contains",
+                "value": "shared query boundary"
+              },
+              "sort": []
+            }),
+            json!({
+              "readState": "read",
+              "starred": true,
+              "readLater": true,
+              "importance": "high",
+              "tagNames": ["rust", "priority"],
+              "moveToFolderId": "folder-priority",
+              "clearCachedAttachments": true
+            }),
+        );
+
+        let plan = execute_rule(&rule, &context)
+            .expect("rule execution should succeed")
+            .expect("matching rule should produce a plan");
+
+        assert_eq!(
+            plan.commands,
+            vec![
+                RuleActionCommand::UpdateUserState {
+                    article_id: ArticleId::try_from("article-rule-target").expect("article id"),
+                    changes: RuleUserStateChanges {
+                        read_state: Some(ReadState::Read),
+                        starred: Some(true),
+                        read_later: Some(true),
+                        importance: Some(ImportanceLevel::High),
+                    },
+                },
+                RuleActionCommand::AddArticleTags {
+                    article_id: ArticleId::try_from("article-rule-target").expect("article id"),
+                    tag_names: vec!["priority".to_owned()],
+                },
+                RuleActionCommand::MoveFeedToFolder {
+                    feed_id: FeedId::try_from("feed-engineering").expect("feed id"),
+                    from_folder_id: None,
+                    to_folder_id: Some(
+                        FolderId::try_from("folder-priority").expect("target folder"),
+                    ),
+                },
+                RuleActionCommand::ClearAttachmentCaches {
+                    article_id: ArticleId::try_from("article-rule-target").expect("article id"),
+                    attachments: vec![RuleAttachmentCacheTarget {
+                        attachment_id: AttachmentId::try_from("attachment-rule-json")
+                            .expect("attachment id"),
+                        cache_path: CachePath::try_from("cache/articles/rule.json".to_owned())
+                            .expect("cache path"),
+                    }],
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn skips_noop_rule_commands_when_targets_already_match() {
+        let target_article = article();
+        let mut target_feed = feed();
+        target_feed.folder_id = Some(FolderId::try_from("folder-priority").expect("target folder"));
+        let target_state = UserState {
+            read_state: ReadState::Read,
+            starred: true,
+            read_later: true,
+            importance: ImportanceLevel::High,
+            ..user_state()
+        };
+        let mut tags = article_tags();
+        tags.push(Tag {
+            id: TagId::try_from("tag-priority").expect("tag id"),
+            name: "priority".to_owned(),
+            scope: TagScope::Article,
+            color: None,
+            created_at: IsoDateTime::try_from("2026-04-22T00:00:00Z".to_owned())
+                .expect("created at"),
+        });
+        let mut attachment_list = attachments();
+        attachment_list[0].local_cache_path = None;
+        let context = RuleMatchContext::new(&target_article)
+            .with_feed(&target_feed)
+            .with_user_state(&target_state)
+            .with_article_tags(&tags)
+            .with_attachments(&attachment_list);
+
+        let rule = rule_with_actions(
+            "rule-actions-noop",
+            true,
+            json!({
+              "version": 1,
+              "root": {
+                "kind": "predicate",
+                "field": "title",
+                "operator": "contains",
+                "value": "shared query boundary"
+              },
+              "sort": []
+            }),
+            json!({
+              "readState": "read",
+              "starred": true,
+              "readLater": true,
+              "importance": "high",
+              "tagNames": ["priority", "rust"],
+              "moveToFolderId": "folder-priority",
+              "clearCachedAttachments": true
+            }),
+        );
+
+        let plan = execute_rule(&rule, &context)
+            .expect("rule execution should succeed")
+            .expect("matching rule should still return a plan");
+
+        assert!(plan.is_empty());
     }
 }

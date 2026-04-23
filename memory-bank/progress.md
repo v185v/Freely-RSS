@@ -2,15 +2,15 @@
 
 ## 当前状态
 
-- 阶段：阶段 5 Step 48 已完成，`crates/rule-engine` 已能消费 `Rule.conditions` 中的统一查询 JSON，并对 `Article`、可选 `Feed`、可选 `UserState`、文章标签与附件快照执行命中判断，同时保持“`packages/shared-query` 继续定义查询契约、`crates/rule-engine` 只负责 Rust 侧解析/校验/命中、`crates/core-domain` 继续承载领域实体、SQLite 持久化与规则动作执行仍留待后续步骤”的边界；下一步进入阶段 5 Step 49 的规则动作执行。
+- 阶段：阶段 5 Step 49 已完成，`crates/rule-engine` 已能在命中规则后把 `Rule.actions` 解析为受控动作定义，并基于 `Article`、可选 `Feed`、可选 `UserState`、文章标签与附件快照生成显式命令计划，同时保持“`packages/shared-query` 继续定义查询契约、`crates/rule-engine` 负责 Rust 侧条件解析/校验/命中与动作命令规划、`crates/core-domain` 继续承载领域实体、SQLite 写入与审计落库仍留待后续步骤”的边界；下一步进入阶段 5 Step 50 的规则审计记录。
 - 最后更新：2026-04-23
-- 风险状态：已从“在 Step 47 中把统一查询表达式的解析与校验固化在 `packages/shared-query`，但仍未让任何 Rust 执行层消费这份契约”推进到“在 Step 48 中让 `crates/rule-engine` 负责 Rust 侧条件解析与命中判断，同时继续避免把动作副作用、审计写入或 SQLite 持久化混入查询解析边界”
+- 风险状态：已从“在 Step 48 中让 `crates/rule-engine` 负责 Rust 侧条件解析与命中判断，同时继续避免把动作副作用、审计写入或 SQLite 持久化混入查询解析边界”推进到“在 Step 49 中让 `crates/rule-engine` 负责动作 JSON 校验与命令规划，同时继续避免把 SQLite 写入和审计落库混入规则匹配执行”
 
 ### 2026-04-23 状态快照
 
-- 当前完成：阶段 5 Step 48 已完成，`crates/rule-engine` 已新增统一查询定义的路径化结构校验、字段语义校验，以及基于领域实体快照的规则命中判断；缺省 `UserState` 时，命中判断会按 `unread` / `normal` / `false` 基线继续执行，而不是因为上下文缺失直接中断。
+- 当前完成：阶段 5 Step 49 已完成，`crates/rule-engine` 已新增 `Rule.actions` 的路径化结构校验、受控动作定义，以及基于当前/缺省状态去噪后的显式命令计划；缺省 `UserState` 时，动作规划会继续沿用 `unread` / `normal` / `false` 基线来消除无效写入，而不是要求持久化层先补齐上下文。
 - 当前验证：`cargo test -p freelyrss-rule-engine`、`cargo clippy -p freelyrss-rule-engine --all-targets -- -D warnings`、`cargo fmt --all --check`、`corepack pnpm run verify`、`corepack pnpm run desktop:build` 与 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle` 全部通过。
-- 当前下一步：进入阶段 5 Step 49“实现规则动作执行”，在不破坏 Step 48 的查询契约 / Rust 命中边界前提下，把命中后的状态写入、标签变更、分组移动与后续审计仍收敛到明确的命令与持久化边界，而不是回流到查询解析器或桌面 shell。
+- 当前下一步：进入阶段 5 Step 50“建立规则审计记录”，在不破坏 Step 49 的动作命令边界前提下，把命中结果、计划命令与后续持久化事实记录到可追溯的审计结构中，而不是让 SQLite 写入层和规则引擎重复解释规则定义。
 
 ## 已确认决策
 
@@ -26,7 +26,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 5 Step 49 需要在不让 `crates/rule-engine` 同时承担查询解析、动作执行、状态写入与审计落库职责的前提下，把 `Rule.actions` 的副作用明确拆到后续命令与持久化边界中，而不是把动作逻辑直接硬编码进条件命中流程。
+- 当前无阻塞；下一步风险点是阶段 5 Step 50 需要在不让 `crates/rule-engine` 或 SQLite 写入层重复解释动作语义的前提下，把命中结果与命令计划收敛到统一的审计记录边界中，而不是把审计事实拆散到多处日志或持久化代码里。
 
 ## 本次执行记录
 
@@ -954,3 +954,31 @@
 - `packages/shared-query` still owns query vocabulary and cross-platform validation semantics; Step 48 only adds a Rust consumer for the persisted contract.
 - `crates/rule-engine` now owns condition parsing and hit evaluation over domain entities, but it still does not mutate `UserState`, tags, folders, or SQLite rows.
 - `crates/core-domain` and SQLite remain the durable boundary for action writes and audit persistence, while Step 49 should connect rule hits to explicit actions without collapsing evaluation and persistence into one module.
+
+## 2026-04-23 ASCII Addendum VIII
+
+### Stage 5 Step 49 Completed: rule action execution planning in Rust
+
+- Implemented a controlled `Rule.actions` contract in `crates/rule-engine` instead of leaving action payloads as opaque JSON until the SQLite layer.
+- Kept Step 49 inside the Rust rule-engine command-planning boundary. No SQLite schema, desktop-shell route contract, shared article DTO, or audit-persistence wiring changed in this step.
+- Added path-based validation for `Rule.actions`, including controlled support for `readState`, `starred`, `readLater`, `importance`, `tagNames`, `moveToFolderId`, `clearCachedAttachments`, plus explicit `{ "type": "noop" }` compatibility for placeholder rules.
+- Added explicit command planning after a rule match: the engine now emits user-state update commands, article-tag addition commands, feed-folder move commands, and attachment-cache cleanup commands instead of mutating domain rows directly.
+- Made Step 49 state-aware and idempotent at the command boundary. Planned commands are filtered against default/current `UserState`, existing article tags, current feed folder placement, and cached attachment paths so already-satisfied actions collapse to an empty plan instead of duplicate side effects.
+- Added Rust unit coverage for supported action parsing, invalid action payload reporting, matched-rule command planning, and no-op collapse when the snapshot already satisfies the requested actions.
+
+### Step 49 Verification
+
+- Passed `cargo test -p freelyrss-rule-engine`
+- Passed `cargo clippy -p freelyrss-rule-engine --all-targets -- -D warnings`
+- Passed `cargo fmt --all --check`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+
+### Next Step (ASCII update)
+
+- Next planned implementation step is `implementation-plan.md` Stage 5 Step 50: rule audit history.
+- Preserve the current boundary split:
+- `packages/shared-query` still owns query vocabulary and cross-platform validation semantics; Step 49 does not move action vocabulary into JS packages or shared DTOs.
+- `crates/rule-engine` now owns condition evaluation plus action-plan generation, but it still does not write SQLite rows or audit records.
+- `crates/core-domain` and SQLite remain the durable boundary for command application and audit persistence; Step 50 should record which rules matched and which commands were planned without forcing multiple layers to re-parse the same rule definitions.
