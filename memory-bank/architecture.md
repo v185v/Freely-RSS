@@ -1551,3 +1551,30 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `packages/ui` remains a primitive layer and does not absorb query grammar, parser messaging policy, or shell query composition rules.
 - `crates/rule-engine` is the next consumer boundary for the stricter query contract; Step 47 intentionally stops before moving rule evaluation or query execution into Rust.
 - `crates/core-domain` and SQLite remain the future durable boundary for persisted rules, smart folders, and saved query definitions. Step 47 only validates the shared contract and the shell-side consumption path that sits in front of those later storage-backed layers.
+
+## 2026-04-23 ASCII Addendum VII
+
+### Step 48 Architecture Insights
+
+- Step 48 confirms that persisted rule-condition semantics are a Rust consumer concern in `crates/rule-engine`, not a desktop-shell concern and not a `shared-types` concern. The same query JSON can now cross from JS validation into Rust execution without inventing a second rule grammar.
+- The key architectural decision in this step is to parse and validate `Rule.conditions` inside `crates/rule-engine` against the existing shared-query contract rather than embedding opaque JSON lookups inside action code. That keeps persisted rule payloads fail-fast and gives later smart-folder and SQLite execution one reusable Rust boundary.
+- `RuleMatchContext` is the execution boundary for this step. It gathers `Article`, optional `Feed`, optional `UserState`, article tags, and attachments into one evaluation snapshot so rule matching does not reach directly into SQLite, shell routes, or DTO adapters.
+- Default unread / normal / false fallbacks are deliberate. Missing `UserState` does not prevent evaluation; the engine applies the same baseline semantics that later durable storage can materialize explicitly.
+- Sort definitions are intentionally parsed but ignored during matching. Step 48 proves contract compatibility for persisted query definitions without prematurely coupling rule hits to ordering or action orchestration.
+- No database schema changes were required for Step 48. The existing `Rule.conditions` JSON column remains sufficient; this step only makes Rust-side parsing and hit evaluation executable against current domain entities.
+
+### Step 48 File Responsibilities
+
+- `crates/rule-engine/Cargo.toml`: declares the Step 48 dependency boundary on `freelyrss-core-domain`, `serde_json`, `thiserror`, and `time`, making the crate capable of consuming persisted rule JSON and domain entities without reaching into desktop packages.
+- `crates/rule-engine/src/lib.rs`: defines the public Step 48 export surface, re-exporting query-contract types, validation issues, matching entry points, and the rule-match context as the crate's stable API.
+- `crates/rule-engine/src/error.rs`: owns Step 48 error modeling for path-based query-definition issues and crate-level invalid-definition reporting.
+- `crates/rule-engine/src/query.rs`: owns Step 48 Rust-side query-definition parsing and validation, including structural JSON checks, field/operator enforcement, enum validation, and sort-shape validation for persisted rule payloads.
+- `crates/rule-engine/src/engine.rs`: owns Step 48 rule-hit evaluation against `Article`, `Feed`, `UserState`, `Tag`, and `Attachment` snapshots, plus unit tests for nested matches, default fallbacks, and invalid-condition failures.
+
+### Step 48 Boundary Notes
+
+- `packages/shared-query` remains the source of query vocabulary and JS-side parse and validation behavior; Step 48 mirrors that contract in Rust only so persisted rule JSON can execute outside the desktop shell.
+- `packages/shared-types` remains DTO-only and does not absorb Rust execution context, rule-match snapshots, or validation-error transport for this step.
+- `apps/desktop` still does not execute persisted rules; queue filters remain shell-local consumers of shared-query while rule hits now live in Rust.
+- `crates/rule-engine` now owns condition parsing and hit evaluation, but it still does not execute actions, write audit logs, or persist state changes.
+- `crates/core-domain` and SQLite remain the durable boundary for `Rule` storage, future action writes, and rule-hit audit records. Step 48 only proves that persisted rule conditions can be executed coherently against current domain models.

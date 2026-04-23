@@ -2,15 +2,15 @@
 
 ## 当前状态
 
-- 阶段：阶段 5 Step 45 已完成，桌面端 reader shell 已支持亮色、暗色、高对比度主题，以及字体、字号、行距、边距设置的本地持久化，并保持“route 继续拥有当前来源与文章、shell store 只持有阅读偏好、ThemeRoot 只消费主题 tone、reader pane 只消费已解析的 `ArticleDetailDto`”的边界；下一步进入阶段 5 Step 46 的高亮与批注。
-- 最后更新：2026-04-22
-- 风险状态：已从“在 Step 44 中保持键盘阅读流与文章状态写入继续停留在桌面 shell 边界，而不把焦点策略、快捷键命令或读写路径回流到 route schema、共享 DTO 或 SQLite 持久层”推进到“在 Step 45 中补齐阅读主题与排版设置时，继续让 shell store 负责本地偏好持久化、让 `ThemeRoot` 负责全局主题令牌、让 reader pane 负责设置 UI 与阅读排版，而不把阅读偏好提升为 `shared-types` DTO、route 参数或数据库 schema”
+- 阶段：阶段 5 Step 48 已完成，`crates/rule-engine` 已能消费 `Rule.conditions` 中的统一查询 JSON，并对 `Article`、可选 `Feed`、可选 `UserState`、文章标签与附件快照执行命中判断，同时保持“`packages/shared-query` 继续定义查询契约、`crates/rule-engine` 只负责 Rust 侧解析/校验/命中、`crates/core-domain` 继续承载领域实体、SQLite 持久化与规则动作执行仍留待后续步骤”的边界；下一步进入阶段 5 Step 49 的规则动作执行。
+- 最后更新：2026-04-23
+- 风险状态：已从“在 Step 47 中把统一查询表达式的解析与校验固化在 `packages/shared-query`，但仍未让任何 Rust 执行层消费这份契约”推进到“在 Step 48 中让 `crates/rule-engine` 负责 Rust 侧条件解析与命中判断，同时继续避免把动作副作用、审计写入或 SQLite 持久化混入查询解析边界”
 
-### 2026-04-22 状态快照
+### 2026-04-23 状态快照
 
-- 当前完成：阶段 5 Step 45 已完成，右栏阅读面板已支持 `Daylight / Midnight / High contrast` 三种主题，以及 `Editorial / Sans / Technical` 字体、`Compact / Comfortable / Large` 字号、`Tight / Relaxed / Airy` 行距、`Narrow / Balanced / Wide` 边距设置，并在重开应用后继续保留当前选择。
-- 当前验证：`corepack pnpm --filter @freelyrss/desktop test`、`corepack pnpm run desktop:build`、`corepack pnpm run verify` 与 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle` 全部通过。
-- 当前下一步：进入阶段 5 Step 46“实现高亮与批注”，在不破坏 Step 45 的 shell 偏好边界前提下，把文本选区、锚点与批注回显继续留在 reader interaction / `Annotation` 领域边界，而不是写回共享 DTO 或 route 参数。
+- 当前完成：阶段 5 Step 48 已完成，`crates/rule-engine` 已新增统一查询定义的路径化结构校验、字段语义校验，以及基于领域实体快照的规则命中判断；缺省 `UserState` 时，命中判断会按 `unread` / `normal` / `false` 基线继续执行，而不是因为上下文缺失直接中断。
+- 当前验证：`cargo test -p freelyrss-rule-engine`、`cargo clippy -p freelyrss-rule-engine --all-targets -- -D warnings`、`cargo fmt --all --check`、`corepack pnpm run verify`、`corepack pnpm run desktop:build` 与 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle` 全部通过。
+- 当前下一步：进入阶段 5 Step 49“实现规则动作执行”，在不破坏 Step 48 的查询契约 / Rust 命中边界前提下，把命中后的状态写入、标签变更、分组移动与后续审计仍收敛到明确的命令与持久化边界，而不是回流到查询解析器或桌面 shell。
 
 ## 已确认决策
 
@@ -26,7 +26,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 5 Step 46 需要在不破坏 Step 37 至 Step 45 已落地的 route / query / reader / shell store / theme-token 边界前提下，把文本选区、高亮锚点与批注回显继续留在阅读面板与后续 `core-domain/sqlite` 持久层之间，而不是把 DOM 选区语义或批注展示状态回流到共享 DTO、快捷键路由或主题基础设施。
+- 当前无阻塞；下一步风险点是阶段 5 Step 49 需要在不让 `crates/rule-engine` 同时承担查询解析、动作执行、状态写入与审计落库职责的前提下，把 `Rule.actions` 的副作用明确拆到后续命令与持久化边界中，而不是把动作逻辑直接硬编码进条件命中流程。
 
 ## 本次执行记录
 
@@ -926,3 +926,31 @@
 - `packages/shared-query` now owns text parsing, serialized-shape validation, and query-definition error modeling, but it still does not execute rules or persist saved queries.
 - desktop reader shell only consumes parser output and message state for queue filtering; it still does not own the query language or durable smart-folder and rule storage.
 - durable saved-query persistence and SQLite-backed execution remain later `core-domain/sqlite` work, while Step 48 should move into `crates/rule-engine` on top of the now-stricter shared query contract.
+
+## 2026-04-23 ASCII Addendum VII
+
+### Stage 5 Step 48 Completed: rule-engine hit evaluation in Rust
+
+- Implemented the first executable `crates/rule-engine` boundary instead of leaving the crate as a placeholder.
+- Kept Step 48 inside the Rust rule-evaluation boundary. No SQLite schema, desktop-shell route contract, shared article DTO, or rule-action persistence wiring changed in this step.
+- Added a path-aware query-definition parser inside `crates/rule-engine` so persisted `Rule.conditions` JSON is structurally and semantically validated before any article facts are evaluated.
+- Added a `RuleMatchContext` that evaluates unified query predicates against `Article`, optional `Feed`, optional `UserState`, article tags, and attachments, including default unread / normal / false fallbacks when user state is absent.
+- Limited Step 48 to hit evaluation only. Query sort definitions are parsed and validated for contract compatibility, but they do not influence rule matching yet because action execution and audit flow belong to Step 49.
+- Added Rust unit coverage for complex nested rule matches, default-state fallbacks when optional context is missing, and path-based validation failures for invalid persisted conditions.
+
+### Step 48 Verification
+
+- Passed `cargo test -p freelyrss-rule-engine`
+- Passed `cargo clippy -p freelyrss-rule-engine --all-targets -- -D warnings`
+- Passed `cargo fmt --all --check`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+
+### Next Step (ASCII update)
+
+- Next planned implementation step is `implementation-plan.md` Stage 5 Step 49: rule action execution.
+- Preserve the current boundary split:
+- `packages/shared-query` still owns query vocabulary and cross-platform validation semantics; Step 48 only adds a Rust consumer for the persisted contract.
+- `crates/rule-engine` now owns condition parsing and hit evaluation over domain entities, but it still does not mutate `UserState`, tags, folders, or SQLite rows.
+- `crates/core-domain` and SQLite remain the durable boundary for action writes and audit persistence, while Step 49 should connect rule hits to explicit actions without collapsing evaluation and persistence into one module.
