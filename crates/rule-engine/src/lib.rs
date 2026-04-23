@@ -1,6 +1,7 @@
 //! Rule evaluation engine for FreelyRSS.
 
 mod actions;
+mod audit;
 mod engine;
 mod error;
 mod query;
@@ -8,6 +9,10 @@ mod query;
 pub use actions::{
     RuleActionCommand, RuleActionDefinition, RuleActionPlan, RuleAttachmentCacheTarget,
     RuleFolderTarget, RuleUserStateChanges, build_rule_action_plan, parse_rule_actions,
+};
+pub use audit::{
+    RuleAuditAttachmentSnapshot, RuleAuditInputSnapshot, RuleAuditUserStateSnapshot,
+    RuleEvaluationAudit, evaluate_rule_with_audit,
 };
 pub use engine::{
     RuleMatchContext, execute_rule, match_query_definition, match_rule, match_rule_conditions,

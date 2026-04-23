@@ -3,8 +3,8 @@ use crate::model::{
     ArticleId, ArticleTag, Attachment, AttachmentId, AttachmentType, CachePath, DeviceId, Feed,
     FeedErrorKind, FeedFormat, FeedHealthStatus, FeedId, FeedTag, Folder, FolderId, FolderKind,
     HexColor, ImportanceLevel, IsoDateTime, JsonBlob, LanguageCode, ModelError, ReadState, Rule,
-    RuleId, SmartFolder, SmartFolderId, SyncEvent, SyncEventId, Tag, TagId, TagScope, UrlString,
-    UserState,
+    RuleAudit, RuleAuditId, RuleAuditMatchResult, RuleId, SmartFolder, SmartFolderId, SyncEvent,
+    SyncEventId, Tag, TagId, TagScope, UrlString, UserState,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -133,6 +133,18 @@ struct SmartFolderRecord {
     name: String,
     query_definition: String,
     sort_definition: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct RuleAuditRecord {
+    id: String,
+    rule_id: String,
+    article_id: String,
+    match_result: String,
+    input_snapshot: String,
+    planned_commands: String,
+    applied_effects: Option<String>,
+    created_at: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -523,6 +535,41 @@ impl From<SmartFolder> for SmartFolderRecord {
     }
 }
 
+impl TryFrom<RuleAuditRecord> for RuleAudit {
+    type Error = ModelError;
+
+    fn try_from(record: RuleAuditRecord) -> Result<Self, Self::Error> {
+        Ok(Self {
+            id: RuleAuditId::try_from(record.id)?,
+            rule_id: RuleId::try_from(record.rule_id)?,
+            article_id: ArticleId::try_from(record.article_id)?,
+            match_result: RuleAuditMatchResult::try_from(record.match_result)?,
+            input_snapshot: JsonBlob::parse("input_snapshot", &record.input_snapshot)?,
+            planned_commands: JsonBlob::parse("planned_commands", &record.planned_commands)?,
+            applied_effects: record
+                .applied_effects
+                .map(|value| JsonBlob::parse("applied_effects", &value))
+                .transpose()?,
+            created_at: IsoDateTime::try_from(record.created_at)?,
+        })
+    }
+}
+
+impl From<RuleAudit> for RuleAuditRecord {
+    fn from(value: RuleAudit) -> Self {
+        Self {
+            id: value.id.into(),
+            rule_id: value.rule_id.into(),
+            article_id: value.article_id.into(),
+            match_result: value.match_result.as_str().to_owned(),
+            input_snapshot: value.input_snapshot.to_compact_string(),
+            planned_commands: value.planned_commands.to_compact_string(),
+            applied_effects: value.applied_effects.map(|value| value.to_compact_string()),
+            created_at: value.created_at.into(),
+        }
+    }
+}
+
 impl TryFrom<AIArtifactRecord> for AIArtifact {
     type Error = ModelError;
 
@@ -786,6 +833,17 @@ mod tests {
             query_definition: "{\"op\":\"and\",\"children\":[]}".into(),
             sort_definition: Some("{\"field\":\"published_at\",\"direction\":\"desc\"}".into()),
         };
+        let rule_audit_record = RuleAuditRecord {
+            id: "rule-audit-1".into(),
+            rule_id: "rule-priority".into(),
+            article_id: "article-rust".into(),
+            match_result: "matched".into(),
+            input_snapshot: "{\"article\":{\"id\":\"article-rust\"}}".into(),
+            planned_commands: "[{\"type\":\"updateUserState\",\"articleId\":\"article-rust\"}]"
+                .into(),
+            applied_effects: Some("{\"writes\":[{\"entity\":\"UserState\"}]}".into()),
+            created_at: "2026-04-11T10:55:00Z".into(),
+        };
         let artifact_record = AIArtifactRecord {
             id: "artifact-summary".into(),
             article_id: "article-rust".into(),
@@ -827,6 +885,36 @@ mod tests {
         assert_optional_json_string_eq(
             roundtripped_smart_folder.sort_definition.as_deref(),
             smart_folder_record.sort_definition.as_deref(),
+        );
+
+        let roundtripped_rule_audit = RuleAuditRecord::from(
+            RuleAudit::try_from(rule_audit_record.clone()).expect("rule audit"),
+        );
+        assert_eq!(roundtripped_rule_audit.id, rule_audit_record.id);
+        assert_eq!(roundtripped_rule_audit.rule_id, rule_audit_record.rule_id);
+        assert_eq!(
+            roundtripped_rule_audit.article_id,
+            rule_audit_record.article_id
+        );
+        assert_eq!(
+            roundtripped_rule_audit.match_result,
+            rule_audit_record.match_result
+        );
+        assert_eq!(
+            roundtripped_rule_audit.created_at,
+            rule_audit_record.created_at
+        );
+        assert_json_string_eq(
+            &roundtripped_rule_audit.input_snapshot,
+            &rule_audit_record.input_snapshot,
+        );
+        assert_json_string_eq(
+            &roundtripped_rule_audit.planned_commands,
+            &rule_audit_record.planned_commands,
+        );
+        assert_optional_json_string_eq(
+            roundtripped_rule_audit.applied_effects.as_deref(),
+            rule_audit_record.applied_effects.as_deref(),
         );
 
         let roundtripped_artifact = AIArtifactRecord::from(

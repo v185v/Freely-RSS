@@ -6,8 +6,7 @@ use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 use crate::{
     QueryDefinition, QueryMatch, QueryNode, QueryOperator, QueryPredicateNode, QueryValue,
-    RuleActionPlan, RuleEngineError, build_rule_action_plan, parse_query_definition,
-    parse_rule_actions,
+    RuleActionPlan, RuleEngineError, evaluate_rule_with_audit, parse_query_definition,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -131,21 +130,8 @@ pub fn execute_rule(
     rule: &Rule,
     context: &RuleMatchContext<'_>,
 ) -> Result<Option<RuleActionPlan>, RuleEngineError> {
-    if !rule.enabled {
-        return Ok(None);
-    }
-
-    let action_definition = parse_rule_actions(&rule.actions)?;
-
-    if !match_rule_conditions(&rule.conditions, context)? {
-        return Ok(None);
-    }
-
-    Ok(Some(build_rule_action_plan(
-        &rule.id,
-        &action_definition,
-        context,
-    )))
+    Ok(evaluate_rule_with_audit(rule, context)?
+        .and_then(crate::RuleEvaluationAudit::into_action_plan))
 }
 
 pub fn match_rule_conditions(

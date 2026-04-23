@@ -2,15 +2,15 @@
 
 ## 当前状态
 
-- 阶段：阶段 5 Step 49 已完成，`crates/rule-engine` 已能在命中规则后把 `Rule.actions` 解析为受控动作定义，并基于 `Article`、可选 `Feed`、可选 `UserState`、文章标签与附件快照生成显式命令计划，同时保持“`packages/shared-query` 继续定义查询契约、`crates/rule-engine` 负责 Rust 侧条件解析/校验/命中与动作命令规划、`crates/core-domain` 继续承载领域实体、SQLite 写入与审计落库仍留待后续步骤”的边界；下一步进入阶段 5 Step 50 的规则审计记录。
+- 阶段：阶段 5 Step 50 已完成，`crates/rule-engine` 现已能把启用规则的评估结果收敛为可持久化的审计快照，`crates/core-domain` / SQLite 也已落地 `RuleAudit` 领域模型、`v7` 迁移、历史读写接口与后续 applied-effects 更新入口，同时保持“`packages/shared-query` 继续定义查询契约、`crates/rule-engine` 负责条件评估/动作规划/审计快照生成、`crates/core-domain` 与 SQLite 负责 durable audit storage、动作实际落库仍留待后续步骤”的边界；下一步进入阶段 5 Step 51 的智能文件夹。
 - 最后更新：2026-04-23
-- 风险状态：已从“在 Step 48 中让 `crates/rule-engine` 负责 Rust 侧条件解析与命中判断，同时继续避免把动作副作用、审计写入或 SQLite 持久化混入查询解析边界”推进到“在 Step 49 中让 `crates/rule-engine` 负责动作 JSON 校验与命令规划，同时继续避免把 SQLite 写入和审计落库混入规则匹配执行”
+- 风险状态：已从“在 Step 49 中让 `crates/rule-engine` 负责动作 JSON 校验与命令规划，同时继续避免把 SQLite 写入和审计落库混入规则匹配执行”推进到“在 Step 50 中让 `crates/rule-engine` 负责审计快照生成、让 `crates/core-domain` / SQLite 负责审计持久化，同时继续避免让存储层重复解释规则条件或动作语义”
 
 ### 2026-04-23 状态快照
 
-- 当前完成：阶段 5 Step 49 已完成，`crates/rule-engine` 已新增 `Rule.actions` 的路径化结构校验、受控动作定义，以及基于当前/缺省状态去噪后的显式命令计划；缺省 `UserState` 时，动作规划会继续沿用 `unread` / `normal` / `false` 基线来消除无效写入，而不是要求持久化层先补齐上下文。
-- 当前验证：`cargo test -p freelyrss-rule-engine`、`cargo clippy -p freelyrss-rule-engine --all-targets -- -D warnings`、`cargo fmt --all --check`、`corepack pnpm run verify`、`corepack pnpm run desktop:build` 与 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle` 全部通过。
-- 当前下一步：进入阶段 5 Step 50“建立规则审计记录”，在不破坏 Step 49 的动作命令边界前提下，把命中结果、计划命令与后续持久化事实记录到可追溯的审计结构中，而不是让 SQLite 写入层和规则引擎重复解释规则定义。
+- 当前完成：阶段 5 Step 50 已完成，`crates/rule-engine` 已新增 audit-ready 评估结果与输入快照序列化，`crates/core-domain` 也已把 `RuleAudit`、`RuleAuditMatchResult`、`RuleAuditId`、`RuleAuditStore` 与数据库 `v7` 审计表/索引纳入正式边界；当前规则评估可以同时输出动作命令计划和可追溯的 durable audit payload，而无需让 SQLite 层重复解析规则 JSON。
+- 当前验证：`cargo test -p freelyrss-rule-engine`、`cargo test -p freelyrss-core-domain`、`cargo clippy -p freelyrss-rule-engine -p freelyrss-core-domain --all-targets -- -D warnings`、`cargo fmt --all --check`、`corepack pnpm run verify`、`corepack pnpm run desktop:build` 与 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle` 全部通过。
+- 当前下一步：进入阶段 5 Step 51“实现智能文件夹”，在不破坏 Step 50 新增的审计与命令边界前提下，把共享查询表达式保存为 durable `SmartFolder` 定义，并让桌面左栏消费同一查询契约，而不是重新发明一套 shell-only 文件夹过滤语义。
 
 ## 已确认决策
 
@@ -26,7 +26,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 5 Step 50 需要在不让 `crates/rule-engine` 或 SQLite 写入层重复解释动作语义的前提下，把命中结果与命令计划收敛到统一的审计记录边界中，而不是把审计事实拆散到多处日志或持久化代码里。
+- 当前无阻塞；下一步风险点是阶段 5 Step 51 需要在不破坏 `packages/shared-query` 与 `crates/core-domain` 现有 durable query boundary 的前提下，把 `SmartFolder` 保存、读取与左栏消费接到同一表达式契约上，而不是让桌面壳层复制规则/搜索的查询语义。
 
 ## 本次执行记录
 
@@ -982,3 +982,32 @@
 - `packages/shared-query` still owns query vocabulary and cross-platform validation semantics; Step 49 does not move action vocabulary into JS packages or shared DTOs.
 - `crates/rule-engine` now owns condition evaluation plus action-plan generation, but it still does not write SQLite rows or audit records.
 - `crates/core-domain` and SQLite remain the durable boundary for command application and audit persistence; Step 50 should record which rules matched and which commands were planned without forcing multiple layers to re-parse the same rule definitions.
+
+## 2026-04-23 ASCII Addendum IX
+
+### Stage 5 Step 50 Completed: rule audit history across Rust and SQLite
+
+- Implemented a dedicated durable audit boundary instead of leaving rule history as an implicit future concern. `crates/rule-engine` now emits audit-ready evaluation results, while `crates/core-domain` and SQLite persist them through one explicit `RuleAudit` model.
+- Kept Step 50 split across the correct layers. `crates/rule-engine` serializes rule inputs and planned commands once, but it still does not write SQLite rows; `crates/core-domain` and SQLite store and read the resulting audit payloads without re-parsing `Rule.conditions` or `Rule.actions`.
+- Added schema `v7` with a `RuleAudit` table plus rule/history lookup indexes so rule-history reads are now durable and migration-tested rather than remaining a comment in the architecture docs.
+- Added a dedicated `RuleAuditStore` instead of extending `FeedStore` with unrelated automation concerns. Audit-history insert/list/update flows now have their own persistence boundary and tests.
+- Preserved `execute_rule()` as the action-planning convenience API. A new audit path sits beside it, so existing consumers still receive `RuleActionPlan` while later automation writers can persist the richer audit payload.
+- Added coverage for matched and non-matched audit generation, record translation, migration upgrade to `v7`, history listing by rule, and later applied-effects updates on an existing audit row.
+
+### Step 50 Verification
+
+- Passed `cargo test -p freelyrss-rule-engine`
+- Passed `cargo test -p freelyrss-core-domain`
+- Passed `cargo clippy -p freelyrss-rule-engine -p freelyrss-core-domain --all-targets -- -D warnings`
+- Passed `cargo fmt --all --check`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+
+### Next Step (ASCII update)
+
+- Next planned implementation step is `implementation-plan.md` Stage 5 Step 51: smart folders.
+- Preserve the current boundary split:
+- `packages/shared-query` still owns query vocabulary and validation semantics; Step 50 does not move saved-query meaning into desktop-shell state.
+- `crates/rule-engine` now owns evaluation snapshots plus planned-command serialization, but it still does not write SQLite rows or apply commands.
+- `crates/core-domain` and SQLite now own durable rule-audit storage; Step 51 should extend the same durable query contract to `SmartFolder` reads and writes without inventing a new shell-only filter model.

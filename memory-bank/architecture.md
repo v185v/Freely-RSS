@@ -651,7 +651,28 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `id` 为主键。
 - `query_definition` 与 `Rule.conditions` 使用同一表达式模型。
 
-### 12.12 AIArtifact
+### 12.12 RuleAudit
+
+- `id`
+- `rule_id`
+- `article_id`
+- `match_result`
+- `input_snapshot`
+- `planned_commands`
+- `applied_effects`
+- `created_at`
+
+约束建议：
+
+- `id` 为主键。
+- `rule_id` 外键引用 `Rule.id`。
+- `article_id` 外键引用 `Article.id`。
+- `match_result` 采用受控枚举值，明确区分 `matched` 与 `not-matched`。
+- `input_snapshot` 保存规则评估时的文章 / 来源 / 用户状态 / 标签 / 附件快照，避免后续 UI 或持久化层重新拼装审计上下文。
+- `planned_commands` 保存规则引擎已经生成的显式命令计划，而不是要求 SQLite 写入层重新解释 `Rule.actions`。
+- `applied_effects` 允许后续动作写入层把真实落库事实回填到同一审计记录中，而不是在别处另建一套历史模型。
+
+### 12.13 AIArtifact
 
 - `id`
 - `article_id`
@@ -667,7 +688,7 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `article_id` 外键引用 `Article.id`。
 - 当前阶段保留表结构，但首发版本不启用相关流程。
 
-### 12.13 SyncEvent
+### 12.14 SyncEvent
 
 - `id`
 - `entity_type`
@@ -731,12 +752,14 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `Article` 是正文、搜索、状态、批注、附件的中心实体。
 - `UserState` 与 `Article` 保持一对一。
 - `Annotation`、`Attachment`、`AIArtifact` 与 `Article` 保持一对多。
+- `RuleAudit` 同时与 `Rule`、`Article` 保持一对多，是规则命中历史、计划命令与后续 applied effects 的统一审计载体。
 - `SyncEvent` 是同步日志，不是业务读取主表。
 - 阶段 3 应优先为 `feed_url`、`feed_id + source_guid`、`published_at`、`fetched_at`、状态字段和关联表外键补齐索引。
 - 阶段 3 Step 20 已通过数据库 `v3` 迁移落地唯一索引与查询索引基线：`Feed.feed_url`、`Tag.scope + name`、`Article.feed_id + source_guid`、`Article.published_at` / `Article.fetched_at`、`Feed.health_status`、`UserState` 状态字段、`FeedTag` / `ArticleTag` 反向关联、`Attachment.article_id`、`Annotation.article_id`、`AIArtifact.article_id` 以及 `SyncEvent` 的实体/设备查询路径都已拥有显式索引入口。
 - 阶段 3 Step 21 已通过数据库 `v4` 迁移补齐全文搜索基线：`ArticleSearchSource` 负责搜索文档投影，`ArticleSearch` 负责 FTS5 索引，`Article` / `Feed` / `ArticleTag` / `Tag` 的变更通过数据库触发器同步更新全文索引。
 - 阶段 4 Step 32 已通过数据库 `v6` 迁移补齐源健康诊断基线：`Feed.last_error_kind` / `last_error_message` / `last_error_at` / `consecutive_failures` 正式进入 schema，并为“按错误类型回看失败源”和“按连续失败数筛查异常源”提供独立索引入口。
-- 当前约束策略是“基础语义进表定义、唯一性与查询优化走独立迁移、全文搜索走独立索引迁移、健康诊断走独立演进迁移”：主键、外键、受控枚举、布尔位和区间约束保留在 `v2` 建表迁移中，唯一索引与查询索引收敛到 `v3`，FTS5 结构、投影视图与同步触发器收敛到 `v4`，文章去重辅助索引收敛到 `v5`，健康诊断字段与索引收敛到 `v6`，避免后续 SQLite 演进为了补运维与可观测性能力而回退到整表重建。
+- 阶段 5 Step 50 已通过数据库 `v7` 迁移补齐规则审计基线：`RuleAudit.rule_id + match_result + created_at` 与 `RuleAudit.article_id + created_at` 已拥有独立索引入口，用于按规则回看命中历史和按文章回看自动化轨迹。
+- 当前约束策略是“基础语义进表定义、唯一性与查询优化走独立迁移、全文搜索走独立索引迁移、健康诊断走独立演进迁移、规则审计走独立附加迁移”：主键、外键、受控枚举、布尔位和区间约束保留在 `v2` 建表迁移中，唯一索引与查询索引收敛到 `v3`，FTS5 结构、投影视图与同步触发器收敛到 `v4`，文章去重辅助索引收敛到 `v5`，健康诊断字段与索引收敛到 `v6`，规则审计表与历史查询索引收敛到 `v7`，避免后续 SQLite 演进为了补运维与可观测性能力而回退到整表重建。
 
 ## 13. 当前工程骨架与模块职责
 
@@ -875,20 +898,22 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `crates/core-domain/src/lib.rs`：核心领域 crate 的根入口，当前同时导出 `model` 与 `sqlite` 模块，使桌面宿主与后续其他 Rust 模块都能沿同一入口消费领域语义、数据库 bootstrap 与迁移能力。
 - `crates/core-domain/src/model/mod.rs`：领域模型聚合入口，负责把实体、值对象、枚举与错误模型收敛为单一共享导出面，避免桌面宿主或后续抓取引擎深链到具体子文件。
 - `crates/core-domain/src/model/error.rs`：领域模型错误边界文件，负责把空值、非法枚举、非法布尔位、非法 JSON 与阅读进度越界收敛为结构化错误，供领域构造与存储翻译层共用。
-- `crates/core-domain/src/model/ids.rs`：typed id 值对象文件，负责为 `FeedId`、`ArticleId`、`TagId`、`DeviceId` 等核心标识建立强类型边界，避免共享 Rust 代码继续以裸 `String` 传递跨实体 id。
+- `crates/core-domain/src/model/ids.rs`：typed id 值对象文件，负责为 `FeedId`、`ArticleId`、`TagId`、`DeviceId`、`RuleAuditId` 等核心标识建立强类型边界，避免共享 Rust 代码继续以裸 `String` 传递跨实体 id。
 - `crates/core-domain/src/model/primitives.rs`：基础值对象文件，负责定义 `IsoDateTime`、`UrlString`、`LanguageCode`、`HexColor`、`CachePath` 与 `JsonBlob`，把 schema 中频繁重复出现的文本/JSON 语义从业务实体里抽离出来。
-- `crates/core-domain/src/model/enums.rs`：受控枚举文件，负责承接 `FeedFormat`、`FeedHealthStatus`、`TagScope`、`ReadState`、`ImportanceLevel` 等 schema 受控值，保持领域语义与 SQLite `CHECK` 约束使用同一套词汇。
+- `crates/core-domain/src/model/enums.rs`：受控枚举文件，负责承接 `FeedFormat`、`FeedHealthStatus`、`TagScope`、`ReadState`、`ImportanceLevel`、`RuleAuditMatchResult` 等 schema 受控值，保持领域语义与 SQLite `CHECK` 约束使用同一套词汇。
 - `crates/core-domain/src/model/organization.rs`：组织类实体文件，负责定义 `Folder`、`Tag`、`FeedTag` 与 `ArticleTag`，收敛订阅树与标签归属的领域表示。
 - `crates/core-domain/src/model/feed.rs`：Feed 实体文件，负责表达订阅源的领域状态与抓取元数据，而不包含任何 SQLite 迁移或查询执行逻辑。
 - `crates/core-domain/src/model/article.rs`：文章域实体文件，负责定义 `Article`、`Attachment`、`UserState` 与 `Annotation`，并把 `reading_progress` 合法区间校验前移到领域层。
-- `crates/core-domain/src/model/automation.rs`：自动化相关实体文件，负责定义 `Rule`、`SmartFolder`、`AIArtifact` 与 `SyncEvent`，把规则、智能文件夹、AI 产物与同步事件统一纳入领域命名体系。
-- `crates/core-domain/src/sqlite/mod.rs`：SQLite 迁移编排入口，负责准备连接 pragma、校验迁移集、计算待执行迁移、串行提交事务并返回迁移报告；当前还内含迁移级验收测试，直接校验空库初始化、回滚恢复、业务表字段序列、索引存在性、FTS 结构存在性以及数据库级约束和搜索索引同步行为。
+- `crates/core-domain/src/model/automation.rs`：自动化相关实体文件，负责定义 `Rule`、`RuleAudit`、`SmartFolder`、`AIArtifact` 与 `SyncEvent`，把规则、规则审计、智能文件夹、AI 产物与同步事件统一纳入领域命名体系。
+- `crates/core-domain/src/sqlite/mod.rs`：SQLite 迁移编排入口，负责准备连接 pragma、校验迁移集、计算待执行迁移、串行提交事务并返回迁移报告；当前还内含迁移级验收测试，直接校验空库初始化、回滚恢复、业务表字段序列、索引存在性、FTS 结构存在性、规则审计升级路径以及数据库级约束和搜索索引同步行为。
 - `crates/core-domain/src/sqlite/records.rs`：SQLite 记录翻译文件，负责把数据库记录与 `core-domain/model` 之间的表示差异显式收敛起来，包括 `0/1` 布尔位、JSON 文本列、字符串枚举和值对象转换；同时承担 Step 24 的往返转换与非法值拒绝测试，证明“存储表示”和“领域表示”已经被正式解耦。
-- `crates/core-domain/src/sqlite/migrations.rs`：嵌入式迁移注册表与迁移历史校验文件，负责把版本号/迁移名绑定到外部 `.sql` 资产、维护 `schema_migrations` 系统表并拒绝不连续或被篡改的迁移历史；当前已把本地 schema 基线推进到 `v4`。
+- `crates/core-domain/src/sqlite/rule_audit_store.rs`：规则审计持久化文件，负责插入、按规则列出和回填 `RuleAudit.applied_effects`，把规则历史读写与现有 `FeedStore` 的抓取/文章持久化职责明确分离。
+- `crates/core-domain/src/sqlite/migrations.rs`：嵌入式迁移注册表与迁移历史校验文件，负责把版本号/迁移名绑定到外部 `.sql` 资产、维护 `schema_migrations` 系统表并拒绝不连续或被篡改的迁移历史；当前已把本地 schema 基线推进到 `v7`。
 - `crates/core-domain/src/sqlite/migrations/001_bootstrap_metadata.sql`：数据库 `v1` bootstrap 迁移文件，负责创建 `app_metadata` 系统表并写入 `schema.bootstrap=ready` 元数据，是空库初始化的最小持久化入口。
 - `crates/core-domain/src/sqlite/migrations/002_core_business_tables.sql`：数据库 `v2` 业务 schema 迁移文件，负责一次性落地 `Folder`、`Tag`、`Feed`、`Article`、`FeedTag`、`ArticleTag`、`Attachment`、`UserState`、`Annotation`、`Rule`、`SmartFolder`、`AIArtifact` 与 `SyncEvent` 13 张核心业务表，并固定基础主键、外键、枚举/布尔约束与默认值边界。
 - `crates/core-domain/src/sqlite/migrations/003_core_business_indexes.sql`：数据库 `v3` 索引与唯一性迁移文件，负责为 `Feed`、`Tag`、`Article`、`UserState`、关联表、附件/批注表与同步表补齐唯一索引和常用查询索引，把 Step 20 的数据库级优化与约束收敛为独立可审阅资产。
 - `crates/core-domain/src/sqlite/migrations/004_article_search_fts.sql`：数据库 `v4` 全文搜索迁移文件，负责创建 `ArticleSearchSource` 搜索投影视图、`ArticleSearch` FTS5 虚拟表，并把文章、来源标题与文章标签的变更同步规则收敛为数据库触发器，避免搜索索引维护逻辑回流到宿主层。
+- `crates/core-domain/src/sqlite/migrations/007_rule_audit_history.sql`：数据库 `v7` 规则审计迁移文件，负责创建 `RuleAudit` 表、固定 `match_result` / JSON 审计载荷列约束，并为按规则和按文章回看自动化历史补齐查询索引入口。
 - `crates/core-domain/src/sqlite/backup.rs`：数据库快照备份与恢复辅助文件，负责在升级前通过 `VACUUM INTO` 生成备份，并提供从快照恢复主数据库与清理 sidecar 文件的入口。
 - `crates/core-domain/src/sqlite/error.rs`：SQLite 迁移错误模型文件，负责把 IO、SQLite、迁移序列不一致与路径错误收敛为结构化错误边界。
 - `apps/desktop/src-tauri/Cargo.toml`：桌面宿主 crate 清单；从阶段 3 Step 18 起显式依赖 `freelyrss-core-domain`，并在阶段 3 Step 22 补齐 `tempfile` 测试依赖，让“启动时先收敛本地 schema”与“宿主本地路径契约可自动化验收”同时成为宿主构建边界的一部分。
@@ -1604,3 +1629,36 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `apps/desktop` still does not execute persisted rules or consume rule-action command plans; desktop-shell boundaries remain unchanged in this step.
 - `crates/core-domain` still stores `Rule.actions` as opaque persisted JSON and continues to own durable entities plus SQLite schema; it does not parse or execute rule actions in Step 49.
 - SQLite and later automation/audit layers remain responsible for applying `RuleActionCommand`s and recording hit history. Step 49 only proves the command-planning contract that those later layers will consume.
+
+## 2026-04-23 ASCII Addendum IX
+
+### Step 50 Architecture Insights
+
+- Step 50 confirms that rule-audit history is a two-layer boundary: `crates/rule-engine` owns evaluation snapshots plus planned-command serialization, while `crates/core-domain` and SQLite own durable storage and later applied-effects updates.
+- The key architectural decision in this step is to serialize rule input context and planned commands exactly once, inside `crates/rule-engine`, and then persist those payloads as opaque JSON through `RuleAudit`. That prevents SQLite writers and later UI readers from re-parsing `Rule.conditions` or `Rule.actions`.
+- `evaluate_rule_with_audit` is the new audit orchestration boundary. It records both matched and not-matched enabled evaluations, preserves the current `execute_rule()` convenience API, and gives later automation writers one canonical audit payload to persist beside command application.
+- The new `RuleAudit` table is intentionally append-first with nullable `applied_effects`. Step 50 stores evaluation input, match result, command plan, and timestamp now, while later write paths can enrich the same row with durable applied facts instead of creating a second audit model.
+- `RuleAuditStore` is also a deliberate separation. Feed/article persistence remains in `FeedStore`; automation history now has its own store so future action-application code can evolve without inflating fetch persistence with unrelated audit concerns.
+- Database schema changes were required for Step 50. Schema `v7` adds `RuleAudit`, plus indexes for `rule_id + match_result + created_at` and `article_id + created_at`, so rule-history lookup becomes a first-class durable path instead of a planned future concern.
+
+### Step 50 File Responsibilities
+
+- `crates/rule-engine/src/audit.rs`: owns Step 50 audit-ready rule evaluation, input snapshot capture, planned-command JSON serialization, and conversion into durable `RuleAudit` entities.
+- `crates/rule-engine/src/engine.rs`: keeps match evaluation and `execute_rule()` as the stable rule-engine convenience surface while delegating richer audit payload creation to `audit.rs`.
+- `crates/rule-engine/src/lib.rs`: extends the public export surface with Step 50 audit types and helpers without removing the existing command-plan API.
+- `crates/core-domain/src/model/ids.rs`: adds `RuleAuditId` so audit rows do not fall back to untyped string identifiers.
+- `crates/core-domain/src/model/enums.rs`: adds `RuleAuditMatchResult` so durable audit rows and SQLite `CHECK` constraints share one controlled vocabulary.
+- `crates/core-domain/src/model/automation.rs`: extends the automation domain with the durable `RuleAudit` entity and its persisted JSON payload fields.
+- `crates/core-domain/src/sqlite/migrations.rs`: advances the embedded migration registry to schema `v7` and validates the new audit migration in the same ordered chain as prior schema steps.
+- `crates/core-domain/src/sqlite/migrations/007_rule_audit_history.sql`: owns the Step 50 SQLite audit schema and history lookup indexes.
+- `crates/core-domain/src/sqlite/records.rs`: translates `RuleAudit` rows to and from typed domain entities, including JSON payloads and the controlled match-result enum.
+- `crates/core-domain/src/sqlite/rule_audit_store.rs`: owns Step 50 audit persistence APIs for insert, list-by-rule, and applied-effects updates.
+- `crates/core-domain/src/sqlite/mod.rs`: protects Step 50 with migration-level schema and index assertions for `RuleAudit`, plus upgrade coverage from schema `v6` to `v7`.
+
+### Step 50 Boundary Notes
+
+- `packages/shared-query` still owns query vocabulary and validation semantics; Step 50 does not move saved-query meaning or rule grammar into SQLite stores.
+- `packages/shared-types` remains DTO-only and still does not absorb `RuleAudit` transport contracts, audit snapshot payloads, or planned-command serialization.
+- `apps/desktop` still does not read or render persisted rule history; Step 50 only establishes the Rust and SQLite boundary that later UI work will consume.
+- `crates/rule-engine` now owns audit snapshot generation in addition to matching and command planning, but it still does not write SQLite rows or apply commands.
+- `crates/core-domain` and SQLite now own durable audit history plus future applied-effects updates, but they still do not parse or execute `Rule.conditions` / `Rule.actions` themselves.

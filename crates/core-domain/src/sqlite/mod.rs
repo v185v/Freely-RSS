@@ -4,6 +4,7 @@ mod backup;
 mod error;
 mod migrations;
 mod records;
+mod rule_audit_store;
 mod store;
 
 use std::{
@@ -17,6 +18,7 @@ use rusqlite::{Connection, TransactionBehavior};
 pub use backup::restore_database_from_backup;
 pub use error::{MigrationError, StoreError};
 pub use migrations::{EmbeddedMigration, embedded_migrations, latest_schema_version};
+pub use rule_audit_store::RuleAuditStore;
 pub use store::{FeedGraphPersistReport, FeedStore};
 
 use self::{
@@ -173,7 +175,7 @@ mod tests {
             .expect("database initialization should succeed");
 
         assert_eq!(report.current_version, latest_schema_version());
-        assert_eq!(report.applied_versions, vec![1, 2, 3, 4, 5, 6]);
+        assert_eq!(report.applied_versions, vec![1, 2, 3, 4, 5, 6, 7]);
         assert!(database_path.exists());
 
         let connection = Connection::open(&database_path).expect("open database");
@@ -192,7 +194,7 @@ mod tests {
             )
             .expect("bootstrap metadata should be present");
 
-        assert_eq!(recorded_version, 6);
+        assert_eq!(recorded_version, 7);
         assert_eq!(bootstrap_value, "ready");
     }
 
@@ -312,6 +314,19 @@ mod tests {
             (
                 "SmartFolder",
                 vec!["id", "name", "query_definition", "sort_definition"],
+            ),
+            (
+                "RuleAudit",
+                vec![
+                    "id",
+                    "rule_id",
+                    "article_id",
+                    "match_result",
+                    "input_snapshot",
+                    "planned_commands",
+                    "applied_effects",
+                    "created_at",
+                ],
             ),
             (
                 "AIArtifact",
@@ -522,6 +537,20 @@ mod tests {
             IndexExpectation {
                 table: "AIArtifact",
                 name: "idx_ai_artifact_article_id_created_at",
+                unique: false,
+                partial: false,
+                columns: &["article_id", "created_at"],
+            },
+            IndexExpectation {
+                table: "RuleAudit",
+                name: "idx_rule_audit_rule_id_match_result_created_at",
+                unique: false,
+                partial: false,
+                columns: &["rule_id", "match_result", "created_at"],
+            },
+            IndexExpectation {
+                table: "RuleAudit",
+                name: "idx_rule_audit_article_id_created_at",
                 unique: false,
                 partial: false,
                 columns: &["article_id", "created_at"],
@@ -747,7 +776,7 @@ mod tests {
             &mut connection,
             &database_path,
             &DatabaseInitializationOptions::new().with_backup_dir(&backup_dir),
-            embedded_migrations(),
+            &embedded_migrations()[..6],
         )
         .expect("apply v6 migration");
 
@@ -789,6 +818,60 @@ mod tests {
             feed_indexes
                 .iter()
                 .any(|index| index.name == "idx_feed_consecutive_failures_last_checked_at")
+        );
+    }
+
+    #[test]
+    fn applies_rule_audit_history_when_upgrading_from_v6_to_v7() {
+        let temp_dir = tempdir().expect("tempdir");
+        let database_path = temp_dir.path().join("freelyrss.sqlite3");
+        let backup_dir = temp_dir.path().join("backups");
+        let mut connection = Connection::open(&database_path).expect("open database");
+
+        prepare_connection(&connection).expect("prepare connection");
+        apply_migration_set(
+            &mut connection,
+            &database_path,
+            &DatabaseInitializationOptions::default(),
+            &embedded_migrations()[..6],
+        )
+        .expect("apply v1-v6 migrations");
+
+        let report = apply_migration_set(
+            &mut connection,
+            &database_path,
+            &DatabaseInitializationOptions::new().with_backup_dir(&backup_dir),
+            embedded_migrations(),
+        )
+        .expect("apply v7 migration");
+
+        assert_eq!(report.current_version, 7);
+        assert_eq!(report.applied_versions, vec![7]);
+        assert!(report.backup_path.is_some());
+        assert_eq!(
+            table_columns(&connection, "RuleAudit"),
+            vec![
+                "id",
+                "rule_id",
+                "article_id",
+                "match_result",
+                "input_snapshot",
+                "planned_commands",
+                "applied_effects",
+                "created_at",
+            ]
+        );
+
+        let rule_audit_indexes = table_indexes(&connection, "RuleAudit");
+        assert!(
+            rule_audit_indexes
+                .iter()
+                .any(|index| index.name == "idx_rule_audit_rule_id_match_result_created_at")
+        );
+        assert!(
+            rule_audit_indexes
+                .iter()
+                .any(|index| index.name == "idx_rule_audit_article_id_created_at")
         );
     }
 

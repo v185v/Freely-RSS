@@ -110,3 +110,8 @@ string_enum!(AIArtifactKind => [
     Translation = "translation",
     QuestionAnswer = "question-answer",
 ]);
+
+string_enum!(RuleAuditMatchResult => [
+    Matched = "matched",
+    NotMatched = "not-matched",
+]);

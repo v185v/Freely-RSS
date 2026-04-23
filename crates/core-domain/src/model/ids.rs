@@ -75,6 +75,7 @@ id_type!(ArticleId);
 id_type!(AttachmentId);
 id_type!(AnnotationId);
 id_type!(RuleId);
+id_type!(RuleAuditId);
 id_type!(SmartFolderId);
 id_type!(AIArtifactId);
 id_type!(SyncEventId);

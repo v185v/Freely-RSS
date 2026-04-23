@@ -1,6 +1,6 @@
 use super::{
-    AIArtifactId, AIArtifactKind, ArticleId, DeviceId, IsoDateTime, JsonBlob, RuleId,
-    SmartFolderId, SyncEventId,
+    AIArtifactId, AIArtifactKind, ArticleId, DeviceId, IsoDateTime, JsonBlob, RuleAuditId,
+    RuleAuditMatchResult, RuleId, SmartFolderId, SyncEventId,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -20,6 +20,18 @@ pub struct SmartFolder {
     pub name: String,
     pub query_definition: JsonBlob,
     pub sort_definition: Option<JsonBlob>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RuleAudit {
+    pub id: RuleAuditId,
+    pub rule_id: RuleId,
+    pub article_id: ArticleId,
+    pub match_result: RuleAuditMatchResult,
+    pub input_snapshot: JsonBlob,
+    pub planned_commands: JsonBlob,
+    pub applied_effects: Option<JsonBlob>,
+    pub created_at: IsoDateTime,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
