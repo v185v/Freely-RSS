@@ -2,12 +2,14 @@ import {
   type QueryBuilderClause,
   type QueryDefinition,
   type QueryField,
+  type QueryJsonValue,
   type QueryNode,
   type QuerySort,
   QueryTextParseError,
   assertValidQueryDefinition,
   buildQueryDefinition,
   normalizeQueryDefinition,
+  parseQueryDefinitionJson,
   parseTextQuery,
   predicate,
   serializeQueryDefinition,
@@ -61,6 +63,9 @@ function buildSourceClauses(
   sourceId: string,
 ): {
   clauses: QueryBuilderClause[]
+  definitionOverride?: QueryDefinition
+  queryMessage?: string | null
+  queryMessageTone?: "error" | "note" | null
   sourceSummary: string
 } {
   switch (sourceId) {
@@ -92,6 +97,30 @@ function buildSourceClauses(
       const folder = data.folders.find((entry) => entry.id === sourceId)
 
       if (!folder) {
+        const smartFolder = data.smartFolders.find((entry) => entry.id === sourceId)
+
+        if (smartFolder) {
+          try {
+            return {
+              clauses: [],
+              definitionOverride: parseQueryDefinitionJson(
+                smartFolder.queryDefinition as QueryJsonValue,
+              ),
+              sourceSummary: `Route scope "${smartFolder.name}" reuses its saved shared query definition.`,
+            }
+          } catch (error) {
+            return {
+              clauses: [predicate("feedId", EMPTY_SOURCE_SENTINEL)],
+              queryMessage:
+                error instanceof Error
+                  ? `Smart folder query could not be parsed: ${error.message}`
+                  : "Smart folder query could not be parsed.",
+              queryMessageTone: "error",
+              sourceSummary: `Route scope "${smartFolder.name}" has an invalid saved query definition.`,
+            }
+          }
+        }
+
         return {
           clauses: [predicate("readState", "read", "neq")],
           sourceSummary: "Unknown route source fell back to the unread desk scope.",
@@ -206,6 +235,37 @@ function buildSort(filters: ReaderViewFilters): QuerySort[] {
       nulls: "last",
     },
   ]
+}
+
+function mergeQueryRoots(children: QueryNode[], sort: QuerySort[]): QueryDefinition {
+  if (children.length === 0) {
+    return buildQueryDefinition({
+      clauses: [predicate("readState", "read", "neq")],
+      sort,
+    })
+  }
+
+  if (children.length === 1) {
+    return assertValidQueryDefinition(
+      normalizeQueryDefinition({
+        version: 1,
+        root: children[0],
+        sort,
+      }),
+    )
+  }
+
+  return assertValidQueryDefinition(
+    normalizeQueryDefinition({
+      version: 1,
+      root: {
+        kind: "group",
+        match: "all",
+        children,
+      },
+      sort,
+    }),
+  )
 }
 
 function getAnyTextValue(context: ArticleQueryContext) {
@@ -449,24 +509,26 @@ export function buildReaderArticleQuery(
   const source = buildSourceClauses(data, sourceId)
   const statusClauses = buildStatusClauses(filters)
   const parsedSearchText = parseSearchTextFilter(filters.searchText)
-  const baseDefinition = buildQueryDefinition({
-    clauses: [...source.clauses, ...statusClauses],
-    sort: buildSort(filters),
-  })
-  const definition =
-    parsedSearchText.root === null
-      ? baseDefinition
-      : assertValidQueryDefinition(
-          normalizeQueryDefinition({
-            version: 1,
-            root: {
-              kind: "group",
-              match: "all",
-              children: [baseDefinition.root, parsedSearchText.root],
-            },
-            sort: baseDefinition.sort,
-          }),
-        )
+  const sort = buildSort(filters)
+  const sourceRoot =
+    source.definitionOverride?.root ??
+    buildQueryDefinition({
+      clauses: source.clauses,
+      sort,
+    }).root
+  const statusRoot =
+    statusClauses.length === 0
+      ? null
+      : buildQueryDefinition({
+          clauses: statusClauses,
+          sort,
+        }).root
+  const definition = mergeQueryRoots(
+    [sourceRoot, statusRoot, parsedSearchText.root].filter(
+      (node): node is QueryNode => node !== null,
+    ),
+    sort,
+  )
   const visibleArticles = executeReaderArticleQuery(data, definition)
   const sortSummary = filters.sortMode === "newest" ? "newest first" : "oldest first"
   const shellFilterCount = statusClauses.length + parsedSearchText.clauseCount
@@ -477,8 +539,8 @@ export function buildReaderArticleQuery(
     summary: {
       clauseCount,
       jsonPreview: JSON.stringify(serializeQueryDefinition(definition), null, 2),
-      queryMessage: parsedSearchText.message,
-      queryMessageTone: parsedSearchText.messageTone,
+      queryMessage: source.queryMessage ?? parsedSearchText.message,
+      queryMessageTone: source.queryMessageTone ?? parsedSearchText.messageTone,
       sourceSummary: source.sourceSummary,
       summary: `${source.sourceSummary} Shell filters contribute ${shellFilterCount} clause(s); sort is ${sortSummary}.`,
     },

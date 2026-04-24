@@ -1011,3 +1011,30 @@
 - `packages/shared-query` still owns query vocabulary and validation semantics; Step 50 does not move saved-query meaning into desktop-shell state.
 - `crates/rule-engine` now owns evaluation snapshots plus planned-command serialization, but it still does not write SQLite rows or apply commands.
 - `crates/core-domain` and SQLite now own durable rule-audit storage; Step 51 should extend the same durable query contract to `SmartFolder` reads and writes without inventing a new shell-only filter model.
+
+## 2026-04-24 ASCII Addendum X
+
+### Stage 5 Step 51 Completed: smart folders across desktop shell and SQLite
+
+- Implemented Stage 5 Step 51 as one shared-query-driven feature instead of a shell-local shortcut list. `SmartFolder` now behaves as a durable saved-query boundary in `crates/core-domain` and as a first-class navigation source in the desktop shell.
+- Kept the Step 51 boundary split explicit. `packages/shared-query` still owns query grammar, validation, normalization, and serialization; `crates/core-domain` stores `SmartFolder.query_definition` / `sort_definition` durably; `apps/desktop` consumes those saved definitions instead of inventing a second smart-folder filter DSL.
+- Added a dedicated `SmartFolderStore` in `crates/core-domain` so saved-query persistence does not leak into `FeedStore` or `RuleAuditStore`. Smart-folder insert/update and listing now have their own SQLite boundary and unit coverage.
+- Extended the desktop mock reader shell to expose a `Smart folders` section beside quick views and the regular subscription tree, proving that left-pane navigation can consume durable saved-query definitions without flattening folder/feed semantics.
+- Updated desktop article-query composition so selecting a smart folder parses its persisted `queryDefinition` through `parseQueryDefinitionJson`, then combines that saved root with shell-owned status filters and queue text filters through the same normalized query contract.
+- Extended shared DTOs with smart-folder counts (`unreadCount`, `articleCount`) so the desktop shell can render lightweight saved-query summaries without coupling itself to a shell-only counting model.
+- Added desktop test coverage for smart-folder rendering and route-backed query execution, plus Rust unit coverage for smart-folder save/list persistence.
+
+### Step 51 Verification
+
+- Passed `corepack pnpm --filter @freelyrss/desktop test -- --run reader-shell.test.tsx`
+- Passed `cargo test -p freelyrss-core-domain smart_folder_store`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run verify`
+
+### Next Step (ASCII update)
+
+- Next planned implementation step is `implementation-plan.md` Stage 6 Step 52: full-text search and filtered search.
+- Preserve the current boundary split:
+- `packages/shared-query` continues to own the unified query contract that now drives rules, shell filters, and smart folders.
+- `crates/core-domain` and SQLite now own durable smart-folder persistence, but they still do not execute search ranking or search-hit highlighting semantics.
+- `apps/desktop` now consumes saved-query smart folders as navigation sources; Step 52 should extend article retrieval with real full-text search while reusing the same query contract rather than adding a separate search-only filter language.

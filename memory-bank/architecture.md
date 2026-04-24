@@ -1662,3 +1662,35 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `apps/desktop` still does not read or render persisted rule history; Step 50 only establishes the Rust and SQLite boundary that later UI work will consume.
 - `crates/rule-engine` now owns audit snapshot generation in addition to matching and command planning, but it still does not write SQLite rows or apply commands.
 - `crates/core-domain` and SQLite now own durable audit history plus future applied-effects updates, but they still do not parse or execute `Rule.conditions` / `Rule.actions` themselves.
+
+## 2026-04-24 ASCII Addendum X
+
+### Step 51 Architecture Insights
+
+- Step 51 confirms that `SmartFolder` is not a cosmetic left-pane grouping; it is the durable “saved query” boundary for FreelyRSS. The same query-definition contract now spans ad-hoc queue filters, persisted rule conditions, and persisted smart-folder scopes.
+- The key architectural decision in this step is to keep smart-folder semantics inside the shared-query contract instead of encoding them into desktop-only route handlers. The desktop shell parses persisted `queryDefinition` JSON through `parseQueryDefinitionJson` and then composes it with shell-local filters, so saved scopes and ad-hoc filters remain one language.
+- `SmartFolderStore` is intentionally separate from `FeedStore` and `RuleAuditStore`. Subscription persistence, automation audit history, and durable saved-query definitions are three different responsibilities and now have three different store boundaries.
+- The left pane now contains three clearly different navigation classes: quick views, smart folders, and the subscription tree. Quick views remain shell-authored route presets, smart folders are durable saved queries, and the subscription tree remains the structural feed/folder hierarchy. Keeping those classes distinct prevents future sync, export, and UI editing flows from collapsing unlike concepts into one DTO shape.
+- `SmartFolderDto` now carries lightweight counts (`unreadCount`, `articleCount`) for shell rendering, but the underlying durable meaning still lives in `queryDefinition` and optional `sortDefinition`. The counts are presentation summaries, not the source of truth.
+- Step 51 did not require a new schema migration because the `SmartFolder` table already existed. This is an important signal that Stage 2 fixed the durable schema slot correctly, and Stage 5 can now attach real consumers to that slot without reworking SQLite shape.
+
+### Step 51 File Responsibilities
+
+- `packages/shared-types/src/automation.ts`: extends `SmartFolderDto` with `unreadCount` and `articleCount`, so smart-folder summaries can cross the shell boundary without inventing a desktop-only view model.
+- `apps/desktop/src/features/reader-shell/types.ts`: adds `smartFolders` to `ReaderShellData`, making saved-query folders a first-class input to reader-shell composition rather than an inferred side list.
+- `apps/desktop/src/features/reader-shell/selectors.ts`: teaches active-source resolution how to map a smart-folder id into the same `SourceRow` abstraction used by quick views, folders, and feeds.
+- `apps/desktop/src/features/reader-shell/components/source-pane.tsx`: renders the new `Smart folders` section in the left pane, keeping quick views, smart folders, and the subscription tree visually and structurally distinct.
+- `apps/desktop/src/features/reader-shell/article-query.ts`: parses persisted smart-folder query JSON through the shared-query contract and merges saved scopes with shell-local status/search filters before article execution.
+- `apps/desktop/src/features/reader-shell/mock-data.ts`: seeds representative smart folders, computes lightweight counts, and proves that desktop-shell navigation can consume saved-query definitions before the real backend wiring lands.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`: passes smart-folder rows into `SourcePane`, preserving the route-backed navigation flow while extending the left pane with durable saved queries.
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`: verifies that smart folders render in the left pane and that selecting one drives the queue through the persisted query-definition contract.
+- `crates/core-domain/src/sqlite/smart_folder_store.rs`: introduces the dedicated SQLite persistence API for saving and listing smart folders, including unit coverage for round-tripping persisted saved-query definitions.
+- `crates/core-domain/src/sqlite/mod.rs`: exports `SmartFolderStore`, making smart-folder persistence a public storage boundary alongside feed persistence and rule-audit persistence.
+
+### Step 51 Boundary Notes
+
+- `packages/shared-query` remains the only owner of query grammar, JSON parsing, normalization, and validation semantics; Step 51 adds another consumer, not another query language.
+- `packages/shared-types` still transports DTOs only; it does not become the place where smart-folder query semantics are interpreted.
+- `apps/desktop` now consumes smart folders as route-backed saved scopes, but it still uses mock data and does not yet edit or persist smart folders through real backend commands.
+- `crates/core-domain` and SQLite now expose an explicit durable smart-folder store, but they still persist `query_definition` / `sort_definition` as validated JSON blobs rather than executing those queries themselves.
+- The existing database schema already included the full Step 51 durable shape: `SmartFolder(id, name, query_definition, sort_definition)`. This step validates that the original schema choice was sufficient and that future sync/edit flows can build on the same table without another structural rewrite.

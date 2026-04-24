@@ -6,6 +6,7 @@ import type {
   FeedDto,
   FeedSummaryDto,
   FolderDto,
+  SmartFolderDto,
   SubscriptionTreeNodeDto,
 } from "@freelyrss/shared-types"
 
@@ -103,6 +104,7 @@ export interface ReaderShellData {
   folders: FolderDto[]
   navigationEntries: NavigationEntry[]
   quickViewSection: SourceSection
+  smartFolders: SmartFolderDto[]
   subscriptionTree: SubscriptionTreeNodeDto[]
   stats: {
     feedCount: number

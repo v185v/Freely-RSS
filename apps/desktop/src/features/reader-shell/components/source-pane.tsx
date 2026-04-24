@@ -44,6 +44,11 @@ type SourcePaneProps = {
     rows: SourceRow[]
     title: string
   }
+  smartFolderSection: {
+    description: string
+    rows: SourceRow[]
+    title: string
+  }
   subscriptionRows: SubscriptionTreeRow[]
 }
 
@@ -73,6 +78,7 @@ export function SourcePane({
   paneId,
   paneRef,
   quickViewSection,
+  smartFolderSection,
   subscriptionRows,
 }: SourcePaneProps) {
   const importTextareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -102,6 +108,25 @@ export function SourcePane({
         <div className="desktop-pane__scroll">
           <ListSection description={quickViewSection.description} title={quickViewSection.title}>
             {quickViewSection.rows.map((row) => (
+              <ListRow
+                active={row.id === activeSourceId}
+                aria-current={row.id === activeSourceId ? "page" : undefined}
+                className="desktop-source-row"
+                eyebrow={row.eyebrow}
+                key={row.id}
+                meta={row.meta}
+                onClick={() => onSelectSource(row.id)}
+                summary={row.description}
+                title={row.title}
+              />
+            ))}
+          </ListSection>
+
+          <ListSection
+            description={smartFolderSection.description}
+            title={smartFolderSection.title}
+          >
+            {smartFolderSection.rows.map((row) => (
               <ListRow
                 active={row.id === activeSourceId}
                 aria-current={row.id === activeSourceId ? "page" : undefined}

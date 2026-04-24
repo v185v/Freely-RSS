@@ -95,10 +95,31 @@ function buildFolderSourceRow(data: ReaderShellData, folderId: FolderId): Source
   }
 }
 
+function buildSmartFolderSourceRow(data: ReaderShellData, smartFolderId: string): SourceRow {
+  const smartFolder = data.smartFolders.find((entry) => entry.id === smartFolderId)
+
+  if (!smartFolder) {
+    throw new Error(`Unknown smart folder: ${smartFolderId}`)
+  }
+
+  return {
+    id: smartFolder.id,
+    kind: "view",
+    title: smartFolder.name,
+    description: "Saved query backed by the shared query-definition contract.",
+    eyebrow: "smart folder",
+    meta: `${smartFolder.unreadCount}/${smartFolder.articleCount} unread`,
+  }
+}
+
 export function getActiveSource(data: ReaderShellData, sourceId: string) {
   const quickView = data.quickViewSection.rows.find((row) => row.id === sourceId)
   if (quickView) {
     return quickView
+  }
+
+  if (data.smartFolders.some((entry) => entry.id === sourceId)) {
+    return buildSmartFolderSourceRow(data, sourceId)
   }
 
   if (data.folders.some((entry) => entry.id === sourceId)) {

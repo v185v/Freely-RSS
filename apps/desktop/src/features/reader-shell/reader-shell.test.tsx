@@ -216,6 +216,51 @@ describe("reader shell navigation", () => {
     ).toBeNull()
   })
 
+  test("renders smart folders beside quick views and applies saved query definitions", async () => {
+    window.scrollTo = () => {}
+    const user = userEvent.setup()
+
+    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+
+    const sourcePane = await screen.findByRole("region", { name: "Sources" })
+    const smartFolderSection = within(sourcePane)
+      .getByRole("heading", {
+        name: "Smart folders",
+      })
+      .closest("section")
+
+    expect(smartFolderSection).not.toBeNull()
+
+    const smartFolderScope = within(smartFolderSection as HTMLElement)
+
+    expect(smartFolderScope.getByText("Last 7 days unread")).toBeTruthy()
+
+    await user.click(
+      smartFolderScope.getByRole("button", {
+        name: /Last 7 days unread/i,
+      }),
+    )
+
+    await waitFor(() => {
+      expect(window.location.search).toContain("sourceId=smart-folder-last-7-days-unread")
+    })
+
+    const queuePane = screen.getByRole("region", { name: "Article queue" })
+    const queueScope = within(queuePane)
+
+    expect(queueScope.getByText("Last 7 days unread")).toBeTruthy()
+    expect(
+      queueScope.getByText(
+        /Route scope "Last 7 days unread" reuses its saved shared query definition\./i,
+        {
+          selector: "p",
+        },
+      ),
+    ).toBeTruthy()
+    expect(queueScope.getByText(/"field": "publishedAt"/i)).toBeTruthy()
+    expect(queueScope.getByText(/"value": "2026-04-11T00:00:00Z"/i)).toBeTruthy()
+  })
+
   test("combines route scope, shell filters, and sort mode into one article query flow", async () => {
     window.scrollTo = () => {}
     const user = userEvent.setup()

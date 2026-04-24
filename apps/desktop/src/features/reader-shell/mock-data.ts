@@ -1,3 +1,9 @@
+import {
+  buildQueryDefinition,
+  normalizeQueryDefinition,
+  predicate,
+  serializeQueryDefinition,
+} from "@freelyrss/shared-query"
 import type {
   AnnotationDto,
   ArticleDetailDto,
@@ -5,6 +11,7 @@ import type {
   FeedDto,
   FeedSummaryDto,
   FolderDto,
+  SmartFolderDto,
   SubscriptionTreeNodeDto,
   TagDto,
   UserStateDto,
@@ -946,6 +953,67 @@ function buildQuickViewSection(state: MockReaderState) {
   }
 }
 
+function buildSmartFolders(state: MockReaderState): SmartFolderDto[] {
+  const smartFolders: Array<Omit<SmartFolderDto, "articleCount" | "unreadCount">> = [
+    {
+      id: "smart-folder-recent-unread",
+      name: "Recent unread",
+      queryDefinition: serializeQueryDefinition(
+        normalizeQueryDefinition(
+          buildQueryDefinition({
+            clauses: [predicate("readState", "read", "neq"), predicate("feedId", "feed-freelyrss")],
+            sort: [{ field: "publishedAt", direction: "desc", nulls: "last" }],
+          }),
+        ),
+      ),
+      sortDefinition: null,
+    },
+    {
+      id: "smart-folder-last-7-days-unread",
+      name: "Last 7 days unread",
+      queryDefinition: serializeQueryDefinition({
+        version: 1,
+        root: {
+          kind: "group",
+          match: "all",
+          children: [
+            { kind: "predicate", field: "readState", operator: "neq", value: "read" },
+            {
+              kind: "predicate",
+              field: "publishedAt",
+              operator: "gte",
+              value: "2026-04-11T00:00:00Z",
+            },
+          ],
+        },
+        sort: [{ field: "publishedAt", direction: "desc", nulls: "last" }],
+      }),
+      sortDefinition: null,
+    },
+  ]
+
+  return smartFolders.map((folder) => {
+    const matchingArticles = state.articles.filter((article) => {
+      if (folder.id === "smart-folder-recent-unread") {
+        return article.feedId === "feed-freelyrss" && article.state.readState !== "read"
+      }
+
+      return (
+        article.state.readState !== "read" &&
+        article.publishedAt !== null &&
+        Date.parse(article.publishedAt) >= Date.parse("2026-04-11T00:00:00Z")
+      )
+    })
+
+    return {
+      ...folder,
+      articleCount: matchingArticles.length,
+      unreadCount: matchingArticles.filter((article) => article.state.readState === "unread")
+        .length,
+    }
+  })
+}
+
 function buildFeedSummaries(state: MockReaderState): FeedSummaryDto[] {
   return state.feedDetails
     .slice()
@@ -1253,6 +1321,7 @@ ${bodyLines.join("\n")}
 function buildReaderShellSnapshot(state: MockReaderState): ReaderShellData {
   const feeds = buildFeedSummaries(state)
   const quickViewSection = buildQuickViewSection(state)
+  const smartFolders = buildSmartFolders(state)
   const subscriptionTree = buildSubscriptionTree(state, feeds)
 
   return {
@@ -1265,12 +1334,13 @@ function buildReaderShellSnapshot(state: MockReaderState): ReaderShellData {
     folders: cloneValue(state.folders),
     navigationEntries: navigationEntries.map((entry) => ({ ...entry })),
     quickViewSection,
+    smartFolders,
     subscriptionTree,
     stats: {
       feedCount: feeds.length,
       readingCount: state.articles.filter((article) => article.state.readState === "reading")
         .length,
-      sourceCount: quickViewSection.rows.length + subscriptionTree.length,
+      sourceCount: quickViewSection.rows.length + smartFolders.length + subscriptionTree.length,
     },
   }
 }

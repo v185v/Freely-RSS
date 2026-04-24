@@ -5,6 +5,7 @@ mod error;
 mod migrations;
 mod records;
 mod rule_audit_store;
+mod smart_folder_store;
 mod store;
 
 use std::{
@@ -19,6 +20,7 @@ pub use backup::restore_database_from_backup;
 pub use error::{MigrationError, StoreError};
 pub use migrations::{EmbeddedMigration, embedded_migrations, latest_schema_version};
 pub use rule_audit_store::RuleAuditStore;
+pub use smart_folder_store::SmartFolderStore;
 pub use store::{FeedGraphPersistReport, FeedStore};
 
 use self::{

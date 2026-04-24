@@ -17,6 +17,8 @@ export interface SmartFolderDto {
   name: string
   queryDefinition: JsonValue
   sortDefinition: Nullable<JsonValue>
+  unreadCount: number
+  articleCount: number
 }
 
 export interface AIArtifactDto {
