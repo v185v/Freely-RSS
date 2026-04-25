@@ -23,6 +23,7 @@ import { NavigationStrip } from "./components/navigation-strip"
 import { QueuePane } from "./components/queue-pane"
 import { ReaderPane } from "./components/reader-pane"
 import { SourcePane } from "./components/source-pane"
+import { fetchDurableQueueArticles } from "./desktop-bridge"
 import {
   type MockOpmlExportResult,
   type MockOpmlImportResult,
@@ -35,10 +36,15 @@ import {
   updateMockArticleState,
   updateMockFeed,
 } from "./mock-data"
-import { buildSubscriptionTreeRows, findSourceRow, resolveSelectedArticleId } from "./selectors"
+import {
+  buildSubscriptionTreeRows,
+  findSourceRow,
+  resolveFeedIdsForSource,
+  resolveSelectedArticleId,
+} from "./selectors"
 import { useReaderViewStore } from "./state"
 import { DEFAULT_SOURCE_ID } from "./types"
-import type { ReaderRouteSearch } from "./types"
+import type { ReaderRouteSearch, ReaderShellData } from "./types"
 
 export function validateReaderSearch(search: Record<string, unknown>): ReaderRouteSearch {
   return {
@@ -185,7 +191,9 @@ export function ReaderShellRoute() {
     }
 
     const currentIndex = activeArticleId
-      ? visibleArticles.findIndex((article) => article.id === activeArticleId)
+      ? visibleArticles.findIndex(
+          (article: ReaderShellData["articles"][number]) => article.id === activeArticleId,
+        )
       : -1
     const fallbackIndex = offset > 0 ? 0 : visibleArticles.length - 1
     const nextIndex =
@@ -336,15 +344,49 @@ export function ReaderShellRoute() {
   const activeSource = shellData ? findSourceRow(shellData, routeState.sourceId) : null
   const articleQuery =
     shellData && activeSource ? buildReaderArticleQuery(shellData, activeSource.id, filters) : null
-  const visibleArticles = articleQuery?.visibleArticles ?? []
+  const subscriptionRows = shellData
+    ? buildSubscriptionTreeRows(shellData, collapsedFolderIds, routeState.sourceId)
+    : []
+  const [durableVisibleArticles, setDurableVisibleArticles] = useState<
+    ReaderShellData["articles"] | null
+  >(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadDurableQueue() {
+      if (!shellData || !activeSource) {
+        if (!cancelled) {
+          setDurableVisibleArticles(null)
+        }
+        return
+      }
+
+      const durable = await fetchDurableQueueArticles(shellData, {
+        feedIds: resolveFeedIdsForSource(shellData, activeSource.id),
+        searchText: deferredSearchText,
+        sortMode,
+        statusFilter,
+      })
+
+      if (!cancelled) {
+        setDurableVisibleArticles(durable?.items ?? null)
+      }
+    }
+
+    void loadDurableQueue()
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeSource, deferredSearchText, shellData, sortMode, statusFilter])
+
+  const visibleArticles = durableVisibleArticles ?? articleQuery?.visibleArticles ?? []
   const activeArticleId = shellData
     ? resolveSelectedArticleId(visibleArticles, routeState.articleId)
     : null
   const activeDetail =
     shellData && activeArticleId ? (shellData.articleDetails[activeArticleId] ?? null) : null
-  const subscriptionRows = shellData
-    ? buildSubscriptionTreeRows(shellData, collapsedFolderIds, routeState.sourceId)
-    : []
   const activeFeed =
     shellData && routeState.sourceId in shellData.feedDetails
       ? (shellData.feedDetails[routeState.sourceId] ?? null)

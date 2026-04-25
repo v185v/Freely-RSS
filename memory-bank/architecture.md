@@ -1694,3 +1694,159 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `apps/desktop` now consumes smart folders as route-backed saved scopes, but it still uses mock data and does not yet edit or persist smart folders through real backend commands.
 - `crates/core-domain` and SQLite now expose an explicit durable smart-folder store, but they still persist `query_definition` / `sort_definition` as validated JSON blobs rather than executing those queries themselves.
 - The existing database schema already included the full Step 51 durable shape: `SmartFolder(id, name, query_definition, sort_definition)`. This step validates that the original schema choice was sufficient and that future sync/edit flows can build on the same table without another structural rewrite.
+
+## 2026-04-24 ASCII Addendum XI
+
+### Step 52 Architecture Insights
+
+- Step 52 starts from the correct durable boundary: full-text search is now executable inside `crates/core-domain` / SQLite rather than being modeled as another desktop-shell-only filter pass.
+- The key architectural decision in this increment is to reuse the existing `ArticleSearch` FTS5 table and its trigger-maintained `ArticleSearchSource` view. Search indexing remains a schema-level concern, while query execution now lives in a dedicated store instead of being spread across tests or ad hoc SQL strings.
+- `ArticleSearchStore` is intentionally separate from `FeedStore`, `SmartFolderStore`, and `RuleAuditStore`. Feed ingestion, saved-query persistence, audit history, and search retrieval are four different storage responsibilities and now have four different store boundaries.
+- The new search API exposes two read shapes because they serve different future consumers: `search_article_ids` is the narrow contract for queue retrieval and filtered article selection, while `search_with_snippets` is the presentation-oriented contract for UI preview text and hit highlighting.
+- Feed scoping sits at the search-store boundary on purpose. Folder scopes and feed scopes should narrow the same FTS result set rather than forcing desktop code to intersect two unrelated result lists after the fact.
+- This increment does not yet replace the desktop shell's mock article filtering. That is deliberate: Step 52 first establishes a tested durable search executor, then later wiring can attach article retrieval and UI state to the same boundary without bypassing SQLite.
+- No schema migration was needed in this increment because schema `v4` already created `ArticleSearch` and kept it synchronized with `Article`, `Feed`, and `ArticleTag` changes. The new work validates that the existing schema slot was strong enough to support executable search retrieval later in Stage 6.
+
+### Step 52 File Responsibilities
+
+- `crates/core-domain/src/sqlite/article_search_store.rs`: introduces the dedicated SQLite FTS retrieval API, including ranked article-id lookup, snippet generation, feed-scope filtering, and unit tests for the Step 52 search boundary.
+- `crates/core-domain/src/sqlite/mod.rs`: exports `ArticleSearchStore` and `ArticleSearchHit`, making full-text retrieval a public SQLite boundary alongside feed persistence, smart-folder persistence, and rule-audit history.
+- `crates/core-domain/src/sqlite/migrations/004_article_search_fts.sql`: remains the durable schema source for `ArticleSearchSource` and `ArticleSearch`; this file's responsibility is now clearly the index/update pipeline that powers the new executable store.
+- `crates/core-domain/src/sqlite/store.rs`: still owns feed/article ingest and dedup persistence only; Step 52 intentionally does not fold FTS lookup into this file so write-side and read-side responsibilities stay separated.
+- `memory-bank/progress.md`: records that Stage 6 Step 52 has started from the durable SQLite boundary and captures the validated commands for the next developer.
+- `memory-bank/architecture.md`: now documents the new search-store boundary and clarifies how each touched file contributes to the durable search pipeline.
+
+### Step 52 Boundary Notes
+
+- `packages/shared-query` remains the source of truth for unified filter semantics; Step 52 adds durable full-text execution, not a second filtering language.
+- `packages/shared-types` remains DTO-only and still does not define storage-layer search plans or SQLite snippet contracts.
+- `apps/desktop` still composes queue filters in memory for the mock shell, but future integration should call into the new durable search boundary instead of creating another shell-only search executor.
+- `crates/core-domain` and SQLite now own executable FTS lookup and snippet generation; later Stage 6 work should build article-list retrieval on top of this store rather than issuing raw `ArticleSearch MATCH` queries from unrelated modules.
+- The current durable search pipeline is now split cleanly by file: `004_article_search_fts.sql` maintains index content, `article_search_store.rs` executes indexed lookups, `mod.rs` exposes the boundary, and `store.rs` remains focused on feed/article writes.
+
+## 2026-04-24 ASCII Addendum XII
+
+### Step 52 Architecture Insights (continued)
+
+- The Step 52 search boundary is now split into two durable read levels: narrow FTS primitives (`search_article_ids`, `search_with_snippets`) and a broader queue-oriented retrieval API (`list_articles`). This keeps later UI consumers from rebuilding article hydration logic outside SQLite.
+- The key architectural decision in this increment is to combine FTS, feed scoping, reader-state filtering, and published-date sorting in one SQLite retrieval path. That prevents the desktop shell from having to intersect search ids, source scopes, and state filters in memory once durable data loading replaces mocks.
+- `ArticleSearchReadFilter` and `ArticleSearchSort` deliberately mirror reader-shell intent without importing UI code into Rust. They are storage-bound enums describing durable retrieval semantics, not component props.
+- `list_articles()` joins `Feed` and `UserState` because queue rendering needs durable display titles and state fallbacks at read time. This is still a search-store concern, not a DTO package concern and not a feed-write concern.
+- Attachment counts are computed inside the retrieval query so later queue rendering can consume one storage response instead of issuing N follow-up attachment lookups.
+- The search boundary still does not absorb smart-folder query parsing or shared-query grammar. That contract remains outside this file; `ArticleSearchStore` is the durable executor that later article-query orchestration should call after query semantics are resolved.
+
+### Step 52 File Responsibilities (continued)
+
+- `crates/core-domain/src/sqlite/article_search_store.rs`: now owns three distinct SQLite retrieval responsibilities for Stage 6 Step 52: ranked FTS ids, snippet previews, and queue-oriented article listing with feed/state joins.
+- `crates/core-domain/src/sqlite/mod.rs`: continues to expose the public search-store boundary; no other SQLite module needs to know the details of FTS joins or queue-oriented search filtering.
+- `crates/core-domain/src/sqlite/store.rs`: still remains write-oriented feed/article persistence code and intentionally does not absorb article-list search reads.
+- `memory-bank/progress.md`: records that Step 52 has advanced from raw FTS primitives to durable queue-oriented article retrieval.
+- `memory-bank/architecture.md`: now distinguishes the narrow and broad read contracts inside the SQLite search boundary so the next developer knows where desktop integration should attach.
+
+### Step 52 Boundary Notes (continued)
+
+- `packages/shared-query` still owns query meaning; this increment only broadens the durable retrieval layer that later query orchestration can target.
+- `apps/desktop` still should not grow a second in-memory search executor. The intended next move is to translate shell query intent into this durable search boundary.
+- `crates/core-domain/src/sqlite/article_search_store.rs` is now the single place for Stage 6 search retrieval semantics; future queue loading should build on it instead of issuing bespoke `Article`, `Feed`, and `UserState` joins elsewhere.
+
+## 2026-04-24 ASCII Addendum XIII
+
+### Step 52 Architecture Insights (desktop planning split)
+
+- The desktop reader-shell search path is now explicitly split into planning and execution. This is an important architectural correction because durable SQLite execution should consume an already-planned query contract instead of duplicating route and filter interpretation inside multiple callers.
+- `planReaderArticleQuery()` now owns route-scope resolution, smart-folder query parsing, shell filter merging, sort planning, parse-error reporting, and summary text generation. That makes it the desktop-side orchestration boundary for Step 52.
+- `executeReaderArticleQuery()` remains as the temporary in-memory fallback executor for mock data. Keeping it exported but separate makes it clear that memory execution is an implementation detail, not the source of query meaning.
+- `ReaderArticleQuery.executionMode` is a small but important contract addition. It lets the UI and later tests distinguish whether queue results came from mock in-memory evaluation or from a durable SQLite-backed executor without inferring that from environment or hidden state.
+- This increment intentionally does not add Tauri command wiring yet. The architecture now has the correct seam: desktop planning on one side, SQLite retrieval on the other side, and a future bridge can connect them without reworking summary generation or queue semantics.
+
+### Step 52 File Responsibilities (desktop planning split)
+
+- `apps/desktop/src/features/reader-shell/article-query.ts`: now owns two separate responsibilities: query planning (`planReaderArticleQuery`) and the temporary mock-only execution path (`executeReaderArticleQuery`).
+- `apps/desktop/src/features/reader-shell/types.ts`: now records execution provenance through `ReaderArticleQuery.executionMode`, giving later durable integration a stable UI-visible contract.
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`: continues to validate current reader-shell behavior against the preserved in-memory path after the planning/execution split.
+- `memory-bank/progress.md`: records that Step 52 desktop work has been refactored to support durable execution wiring next.
+- `memory-bank/architecture.md`: documents the new seam between desktop query planning and future durable SQLite execution.
+
+### Step 52 Boundary Notes (desktop planning split)
+
+- `packages/shared-query` still defines query semantics; desktop planning composes those semantics, but execution can now vary by boundary.
+- `apps/desktop` currently contains both planning and fallback execution only because the shell still runs on mock data. The intended architecture is for durable execution to move behind a bridge while planning remains in the shell.
+- `crates/core-domain` remains the durable executor for search/list retrieval; this increment makes it possible to attach that executor without cloning query-planning logic into the Rust bridge layer.
+
+## 2026-04-24 ASCII Addendum XIV
+
+### Step 52 Architecture Insights (bridge scaffold)
+
+- The desktop side now has an explicit durable retrieval bridge module: `desktop-bridge.ts`. This is the correct architectural place for Tauri invocation concerns, keeping runtime detection and command transport out of route composition and query planning code.
+- The key architectural decision in this increment is to land the bridge seam without cutting over the queue UI prematurely. That keeps Step 52 moving while protecting the already-verified shell behavior and avoiding accidental spillover into Step 53 presentation work.
+- `desktop-bridge.ts` is intentionally transport-focused. It does not own query meaning, source-scope planning, or fallback memory execution; it only describes the future durable queue contract and how to call it when the Tauri runtime is available.
+- The reverted route cutover was useful architectural feedback: queue execution cannot switch boundaries safely until source-scope mapping and backend command semantics are in place together. The bridge and the route seam now exist separately so the next increment can integrate them in one controlled change.
+- Adding `@tauri-apps/api` at this stage is still Step 52 work because it enables the durable retrieval bridge only; it does not change article rendering, search-hit markup, or user-facing highlight behavior.
+
+### Step 52 File Responsibilities (bridge scaffold)
+
+- `apps/desktop/src/features/reader-shell/desktop-bridge.ts`: owns the frontend transport contract for future durable queue loading and handles Tauri-runtime availability checks.
+- `apps/desktop/package.json`: now declares the Tauri API dependency required for Step 52 queue-bridge work.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`: intentionally remains on the in-memory execution path in this increment; its responsibility is unchanged until the backend queue command is ready.
+- `memory-bank/progress.md`: records that the Step 52 bridge scaffold exists, while route cutover is still pending.
+- `memory-bank/architecture.md`: documents the new transport seam and the deliberate decision not to switch UI execution boundaries yet.
+
+### Step 52 Boundary Notes (bridge scaffold)
+
+- Still not Step 53: no snippet rendering, no search-hit highlight presentation, and no UI markup for matched terms were added in this increment.
+- `apps/desktop/src/features/reader-shell/article-query.ts` remains the planning-plus-memory-execution boundary today.
+- `apps/desktop/src/features/reader-shell/desktop-bridge.ts` is now the future durable transport boundary.
+- The next Step 52 change must add the backend command before the route consumes this bridge for real queue retrieval.
+
+## 2026-04-24 ASCII Addendum XV
+
+### Step 52 Architecture Insights (Tauri backend command)
+
+- The desktop durable retrieval path is now complete on the backend side: shell query intent can cross the Tauri boundary and reach SQLite-backed article retrieval without leaking SQL or storage concerns into the React route layer.
+- `reader_queue.rs` is intentionally a transport-and-mapping module. It translates desktop queue request semantics into `ArticleSearchStore` calls and then maps durable rows into the queue DTO shape expected by the current shell.
+- The key architectural decision in this increment is to return only queue rows, not snippet/highlight payloads. That keeps the command strictly inside Step 52 and prevents accidental blending of retrieval work with Step 53 presentation concerns.
+- The command currently computes only lightweight queue-facing derivations such as estimated reading minutes and default state fallbacks. Richer article-detail hydration remains outside this boundary.
+- `storage.rs` still owns directory layout and database initialization, while `reader_queue.rs` now owns Step 52 queue retrieval transport. This keeps lifecycle/bootstrap concerns separated from query-serving concerns inside the Tauri backend.
+- Exporting `ArticleSearchReadFilter` and `ArticleSearchSort` from `crates/core-domain/src/sqlite/mod.rs` is part of the durable boundary cleanup: Tauri command code now depends on stable storage enums instead of duplicating retrieval semantics locally.
+
+### Step 52 File Responsibilities (Tauri backend command)
+
+- `apps/desktop/src-tauri/src/reader_queue.rs`: owns the Step 52 Tauri queue command, request/response DTOs, durable retrieval mapping, and backend unit coverage.
+- `apps/desktop/src-tauri/src/lib.rs`: registers the new queue command in the desktop app runtime.
+- `apps/desktop/src-tauri/src/storage.rs`: continues to own storage initialization and now uses a schema-version-aware assertion in tests.
+- `apps/desktop/src-tauri/Cargo.toml`: declares the backend command dependencies required by the new queue module.
+- `crates/core-domain/src/sqlite/mod.rs`: now exports the durable search filter/sort enums that the Tauri queue command consumes.
+- `apps/desktop/src/features/reader-shell/desktop-bridge.ts`: now has a real backend command target available, even though the route has not switched over yet.
+
+### Step 52 Boundary Notes (Tauri backend command)
+
+- Still not Step 53: no snippet rendering, no highlighted terms, and no search-hit presentation model cross the Tauri boundary yet.
+- The frontend bridge and backend command now both exist; only the route cutover remains before the queue can execute durably in the desktop shell.
+- Because current validation is green with the route still on memory execution, the next Step 52 cutover should be small and test-focused rather than combining transport, backend mapping, and UI behavior changes all at once.
+
+## 2026-04-24 ASCII Addendum XVI
+
+### Step 52 Architecture Insights (queue cutover complete)
+
+- Step 52 is now structurally complete. The query-planning boundary, frontend transport boundary, Tauri backend command boundary, and SQLite execution boundary are all connected end-to-end for queue retrieval.
+- The cutover strategy is intentionally hybrid: the route prefers durable retrieval when available but keeps the in-memory executor as a safe fallback. This is a practical architecture for the current repository state because tests still run outside the Tauri runtime.
+- `resolveFeedIdsForSource()` centralizes source-scope-to-feed-scope mapping. That keeps folder/feed scope logic inside selector utilities rather than scattering it across route effects and backend commands.
+- The route-level durable loading effect is deliberately transport-oriented. It does not re-plan query semantics; it only takes already-planned shell state (`searchText`, `sortMode`, `statusFilter`, current source scope) and asks the bridge for rows.
+- The UI still does not know anything about FTS snippets or match highlighting. This cleanly separates Step 52 retrieval completion from the future Step 53 presentation work.
+- The resulting end-to-end Step 52 pipeline is now: query intent in `article-query.ts` and shell state → feed-scope resolution in `selectors.ts` → durable transport in `desktop-bridge.ts` → Tauri backend mapping in `reader_queue.rs` → SQLite execution in `ArticleSearchStore`.
+
+### Step 52 File Responsibilities (queue cutover complete)
+
+- `apps/desktop/src/features/reader-shell/selectors.ts`: now owns reusable feed-scope resolution for source ids via `resolveFeedIdsForSource()`.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`: now chooses between durable queue rows and fallback memory rows, while preserving route selection and current shell behavior.
+- `apps/desktop/src/features/reader-shell/desktop-bridge.ts`: now actively participates in runtime queue retrieval instead of existing only as a scaffold.
+- `apps/desktop/src-tauri/src/reader_queue.rs`: continues to own the backend queue command used by the bridge.
+- `crates/core-domain/src/sqlite/article_search_store.rs`: remains the durable executor for Step 52 article-list retrieval.
+- `memory-bank/progress.md`: records that Step 52 is now complete and that Step 53 is the next milestone.
+- `memory-bank/architecture.md`: now captures the final Step 52 end-to-end boundary split and the explicit non-overlap with Step 53 highlighting work.
+
+### Step 52 Boundary Notes (queue cutover complete)
+
+- Step 52 is complete, but Step 53 has not started in code: there is still no snippet rendering, no `<mark>` UI treatment, and no hit-highlighting view model in the desktop queue.
+- The durable retrieval path is now live for the desktop runtime, while tests remain stable through the fallback path.
+- Future Step 53 work should build on the now-complete Step 52 pipeline rather than revisiting queue retrieval wiring.

@@ -846,6 +846,8 @@ name = "freelyrss-desktop"
 version = "0.0.1"
 dependencies = [
  "freelyrss-core-domain",
+ "rusqlite",
+ "serde",
  "tauri",
  "tauri-build",
  "tempfile",

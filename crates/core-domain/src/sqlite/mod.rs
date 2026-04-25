@@ -1,5 +1,6 @@
 //! SQLite bootstrap and migration support for the FreelyRSS local database.
 
+mod article_search_store;
 mod backup;
 mod error;
 mod migrations;
@@ -16,6 +17,10 @@ use std::{
 
 use rusqlite::{Connection, TransactionBehavior};
 
+pub use article_search_store::{
+    ArticleSearchHit, ArticleSearchListItem, ArticleSearchReadFilter, ArticleSearchSort,
+    ArticleSearchStore,
+};
 pub use backup::restore_database_from_backup;
 pub use error::{MigrationError, StoreError};
 pub use migrations::{EmbeddedMigration, embedded_migrations, latest_schema_version};

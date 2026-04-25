@@ -11,6 +11,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.8.0",
     "@freelyrss/shared-query": "workspace:*",
     "@freelyrss/shared-types": "workspace:*",
     "@freelyrss/ui": "workspace:*",

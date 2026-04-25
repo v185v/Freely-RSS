@@ -135,6 +135,7 @@ export interface ReaderArticleQuerySummary {
 
 export interface ReaderArticleQuery {
   definition: QueryDefinition
+  executionMode: "durable" | "memory"
   summary: ReaderArticleQuerySummary
   visibleArticles: ArticleListItemDto[]
 }

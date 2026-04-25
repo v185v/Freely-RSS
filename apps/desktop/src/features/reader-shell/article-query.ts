@@ -480,7 +480,7 @@ function compareContexts(left: ArticleQueryContext, right: ArticleQueryContext, 
   return compareScalar(leftValue, rightValue) * direction
 }
 
-function executeReaderArticleQuery(data: ReaderShellData, definition: QueryDefinition) {
+export function executeReaderArticleQuery(data: ReaderShellData, definition: QueryDefinition) {
   return data.articles
     .map<ArticleQueryContext>((article) => ({
       article,
@@ -501,11 +501,11 @@ function executeReaderArticleQuery(data: ReaderShellData, definition: QueryDefin
     .map((context) => context.article)
 }
 
-export function buildReaderArticleQuery(
+export function planReaderArticleQuery(
   data: ReaderShellData,
   sourceId: string,
   filters: ReaderViewFilters,
-): ReaderArticleQuery {
+) {
   const source = buildSourceClauses(data, sourceId)
   const statusClauses = buildStatusClauses(filters)
   const parsedSearchText = parseSearchTextFilter(filters.searchText)
@@ -529,7 +529,6 @@ export function buildReaderArticleQuery(
     ),
     sort,
   )
-  const visibleArticles = executeReaderArticleQuery(data, definition)
   const sortSummary = filters.sortMode === "newest" ? "newest first" : "oldest first"
   const shellFilterCount = statusClauses.length + parsedSearchText.clauseCount
   const clauseCount = source.clauses.length + shellFilterCount
@@ -544,6 +543,21 @@ export function buildReaderArticleQuery(
       sourceSummary: source.sourceSummary,
       summary: `${source.sourceSummary} Shell filters contribute ${shellFilterCount} clause(s); sort is ${sortSummary}.`,
     },
+  }
+}
+
+export function buildReaderArticleQuery(
+  data: ReaderShellData,
+  sourceId: string,
+  filters: ReaderViewFilters,
+): ReaderArticleQuery {
+  const { definition, summary } = planReaderArticleQuery(data, sourceId, filters)
+  const visibleArticles = executeReaderArticleQuery(data, definition)
+
+  return {
+    definition,
+    executionMode: "memory",
+    summary,
     visibleArticles,
   }
 }

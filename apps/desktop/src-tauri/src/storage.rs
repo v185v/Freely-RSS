@@ -207,7 +207,10 @@ mod tests {
 
         assert_eq!(report.database_path, storage_paths.database.database_path);
         assert_eq!(report.current_version, latest_schema_version());
-        assert_eq!(report.applied_versions, vec![1, 2, 3, 4]);
+        assert_eq!(
+            report.applied_versions,
+            (1..=latest_schema_version()).collect::<Vec<_>>()
+        );
 
         for directory in storage_paths.managed_directories() {
             assert!(

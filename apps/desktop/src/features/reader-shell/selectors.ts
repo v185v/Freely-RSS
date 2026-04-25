@@ -34,6 +34,18 @@ function getFeedIdsForFolder(data: ReaderShellData, folderId: FolderId): FeedId[
   ]
 }
 
+export function resolveFeedIdsForSource(data: ReaderShellData, sourceId: string): FeedId[] {
+  if (data.feeds.some((entry) => entry.id === sourceId)) {
+    return [sourceId]
+  }
+
+  if (data.folders.some((entry) => entry.id === sourceId)) {
+    return getFeedIdsForFolder(data, sourceId)
+  }
+
+  return []
+}
+
 function getAncestorFolderIds(data: ReaderShellData, sourceId: string): FolderId[] {
   const folder = data.folders.find((entry) => entry.id === sourceId)
   if (folder) {
