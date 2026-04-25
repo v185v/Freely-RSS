@@ -12,6 +12,7 @@ import {
 import type { ArticleDetailDto } from "@freelyrss/shared-types"
 import { Button, SplitPane, Surface } from "@freelyrss/ui"
 
+import { findTextHighlightRanges } from "../search-highlighting"
 import { formatReaderProgress } from "../selectors"
 import type {
   CreateReaderAnnotationInput,
@@ -64,6 +65,7 @@ type ReaderPaneProps = {
   readerFontScale: ReaderFontScale
   readerLineHeight: ReaderLineHeight
   readerMarginMode: ReaderMarginMode
+  searchHighlightTerms: string[]
   themeTone: ReaderThemeTone
 }
 
@@ -371,48 +373,162 @@ function collectParagraphAnnotations(
     )
 }
 
-function renderAnnotatedParagraph(
+function normalizeParagraphAnnotationRanges(
   paragraphText: string,
-  paragraphIndex: number,
   annotations: ArticleDetailDto["annotations"],
+  paragraphIndex: number,
 ) {
-  const paragraphAnnotations = collectParagraphAnnotations(annotations, paragraphIndex)
-
-  if (paragraphAnnotations.length === 0) {
-    return paragraphText
-  }
-
-  const fragments: ReactNode[] = []
+  const ranges: Array<{
+    anchor: ReaderAnnotationAnchor
+    annotation: ArticleDetailDto["annotations"][number]
+  }> = []
   let cursor = 0
 
-  for (const { annotation, anchor } of paragraphAnnotations) {
-    const startOffset = Math.max(0, Math.min(paragraphText.length, anchor.startOffset))
-    const endOffset = Math.max(startOffset, Math.min(paragraphText.length, anchor.endOffset))
+  for (const entry of collectParagraphAnnotations(annotations, paragraphIndex)) {
+    const startOffset = Math.max(0, Math.min(paragraphText.length, entry.anchor.startOffset))
+    const endOffset = Math.max(startOffset, Math.min(paragraphText.length, entry.anchor.endOffset))
 
     if (endOffset <= startOffset || startOffset < cursor) {
       continue
     }
 
-    if (startOffset > cursor) {
-      fragments.push(paragraphText.slice(cursor, startOffset))
-    }
-
-    fragments.push(
-      <mark
-        className={`desktop-reader__annotation desktop-reader__annotation--${annotation.type}`}
-        data-annotation-id={annotation.id}
-        data-annotation-type={annotation.type}
-        key={annotation.id}
-        style={buildAnnotationStyle(annotation)}
-      >
-        {paragraphText.slice(startOffset, endOffset)}
-      </mark>,
-    )
+    ranges.push({
+      annotation: entry.annotation,
+      anchor: {
+        ...entry.anchor,
+        startOffset,
+        endOffset,
+      },
+    })
     cursor = endOffset
   }
 
-  if (cursor < paragraphText.length) {
-    fragments.push(paragraphText.slice(cursor))
+  return ranges
+}
+
+function renderSearchHighlightedText(text: string, searchHighlightTerms: string[]) {
+  const searchRanges = findTextHighlightRanges(text, searchHighlightTerms)
+
+  if (searchRanges.length === 0) {
+    return text
+  }
+
+  const fragments: ReactNode[] = []
+  let cursor = 0
+
+  for (const range of searchRanges) {
+    if (range.end <= range.start || range.start < cursor) {
+      continue
+    }
+
+    if (range.start > cursor) {
+      fragments.push(text.slice(cursor, range.start))
+    }
+
+    fragments.push(
+      <span className="desktop-reader__search-hit" data-search-hit="true" key={range.start}>
+        {text.slice(range.start, range.end)}
+      </span>,
+    )
+    cursor = range.end
+  }
+
+  if (cursor < text.length) {
+    fragments.push(text.slice(cursor))
+  }
+
+  return fragments
+}
+
+function renderAnnotatedParagraph(
+  paragraphText: string,
+  paragraphIndex: number,
+  annotations: ArticleDetailDto["annotations"],
+  searchHighlightTerms: string[],
+) {
+  const paragraphAnnotations = normalizeParagraphAnnotationRanges(
+    paragraphText,
+    annotations,
+    paragraphIndex,
+  )
+  const searchRanges = findTextHighlightRanges(paragraphText, searchHighlightTerms)
+
+  if (paragraphAnnotations.length === 0 && searchRanges.length === 0) {
+    return paragraphText
+  }
+
+  const boundaries = new Set<number>([0, paragraphText.length])
+
+  for (const { anchor } of paragraphAnnotations) {
+    boundaries.add(anchor.startOffset)
+    boundaries.add(anchor.endOffset)
+  }
+
+  for (const range of searchRanges) {
+    boundaries.add(range.start)
+    boundaries.add(range.end)
+  }
+
+  const orderedBoundaries = Array.from(boundaries).sort((left, right) => left - right)
+  const fragments: ReactNode[] = []
+
+  for (let index = 0; index < orderedBoundaries.length - 1; index += 1) {
+    const startOffset = orderedBoundaries[index] ?? 0
+    const endOffset = orderedBoundaries[index + 1] ?? 0
+
+    if (endOffset <= startOffset) {
+      continue
+    }
+
+    const segmentText = paragraphText.slice(startOffset, endOffset)
+
+    if (segmentText.length === 0) {
+      continue
+    }
+
+    const activeAnnotation =
+      paragraphAnnotations.find(
+        ({ anchor }) => startOffset >= anchor.startOffset && endOffset <= anchor.endOffset,
+      ) ?? null
+    const hasSearchHit = searchRanges.some(
+      (range) => startOffset >= range.start && endOffset <= range.end,
+    )
+
+    if (!activeAnnotation && !hasSearchHit) {
+      fragments.push(segmentText)
+      continue
+    }
+
+    let content: ReactNode = segmentText
+
+    if (hasSearchHit) {
+      content = (
+        <span
+          className="desktop-reader__search-hit"
+          data-search-hit="true"
+          key={`search-${paragraphIndex}-${startOffset}-${endOffset}`}
+        >
+          {content}
+        </span>
+      )
+    }
+
+    if (activeAnnotation) {
+      fragments.push(
+        <mark
+          className={`desktop-reader__annotation desktop-reader__annotation--${activeAnnotation.annotation.type}`}
+          data-annotation-id={activeAnnotation.annotation.id}
+          data-annotation-type={activeAnnotation.annotation.type}
+          key={`${activeAnnotation.annotation.id}-${startOffset}-${endOffset}`}
+          style={buildAnnotationStyle(activeAnnotation.annotation)}
+        >
+          {content}
+        </mark>,
+      )
+      continue
+    }
+
+    fragments.push(content)
   }
 
   return fragments
@@ -441,6 +557,7 @@ export function ReaderPane({
   readerFontScale,
   readerLineHeight,
   readerMarginMode,
+  searchHighlightTerms,
   themeTone,
 }: ReaderPaneProps) {
   const [annotationNoteDraft, setAnnotationNoteDraft] = useState("")
@@ -1079,12 +1196,15 @@ export function ReaderPane({
                             paragraph,
                             paragraphIndex,
                             activeDetail.annotations,
+                            searchHighlightTerms,
                           )}
                         </p>
                       ))}
                     </div>
                   ) : readerContentMode === "raw" && activeReaderContent ? (
-                    <pre className="desktop-reader__raw-content">{activeReaderContent}</pre>
+                    <pre className="desktop-reader__raw-content">
+                      {renderSearchHighlightedText(activeReaderContent, searchHighlightTerms)}
+                    </pre>
                   ) : (
                     <div className="desktop-empty-state desktop-empty-state--compact">
                       <p className="desktop-empty-state__eyebrow">Body unavailable</p>

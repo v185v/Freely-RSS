@@ -33,6 +33,7 @@ pub struct ArticleSearchListItem {
     pub importance: ImportanceLevel,
     pub read_later: bool,
     pub read_state: ReadState,
+    pub search_snippet: Option<String>,
     pub starred: bool,
 }
 
@@ -97,7 +98,7 @@ impl<'conn> ArticleSearchStore<'conn> {
         let mut sql = String::from(
             "SELECT
                 article_id,
-                snippet(ArticleSearch, 3, '<mark>', '</mark>', ' ... ', 18) AS snippet
+                snippet(ArticleSearch, -1, '<mark>', '</mark>', ' ... ', 18) AS snippet
             FROM ArticleSearch
             WHERE ArticleSearch MATCH ?1",
         );
@@ -162,6 +163,7 @@ impl<'conn> ArticleSearchStore<'conn> {
                 COALESCE(user_state.starred, 0) AS starred,
                 COALESCE(user_state.importance, 'normal') AS importance,
                 COALESCE(user_state.read_later, 0) AS read_later,
+                %SEARCH_SNIPPET%,
                 (
                     SELECT COUNT(*)
                     FROM Attachment attachment
@@ -178,6 +180,15 @@ impl<'conn> ArticleSearchStore<'conn> {
             INNER JOIN ArticleSearch ON ArticleSearch.rowid = article.rowid",
             );
         }
+
+        sql = sql.replace(
+            "%SEARCH_SNIPPET%",
+            if trimmed_query.is_some() {
+                "snippet(ArticleSearch, -1, '<mark>', '</mark>', ' ... ', 18) AS search_snippet"
+            } else {
+                "NULL AS search_snippet"
+            },
+        );
 
         sql.push_str("\nWHERE 1 = 1");
 
@@ -269,7 +280,8 @@ impl<'conn> ArticleSearchStore<'conn> {
                 ImportanceLevel::try_from(row.get::<_, String>(16)?)
                     .map_err(to_from_sql_conversion_failure)?,
                 row.get::<_, i64>(17)? != 0,
-                row.get::<_, i64>(18)?,
+                row.get::<_, Option<String>>(18)?,
+                row.get::<_, i64>(19)?,
             ))
         })?;
 
@@ -282,6 +294,7 @@ impl<'conn> ArticleSearchStore<'conn> {
                     starred,
                     importance,
                     read_later,
+                    search_snippet,
                     attachment_count,
                 ) = row?;
 
@@ -293,6 +306,7 @@ impl<'conn> ArticleSearchStore<'conn> {
                     importance,
                     read_later,
                     read_state,
+                    search_snippet,
                     starred,
                 })
             })
@@ -487,7 +501,7 @@ mod tests {
         let mut store = ArticleSearchStore::new(&mut connection);
         let reading_items = store
             .list_articles(
-                Some("ranking"),
+                Some("quality"),
                 &[],
                 ArticleSearchReadFilter::Reading,
                 ArticleSearchSort::Newest,
@@ -500,6 +514,10 @@ mod tests {
         assert!(reading_items[0].starred);
         assert!(reading_items[0].read_later);
         assert_eq!(reading_items[0].importance, ImportanceLevel::High);
+        assert_eq!(
+            reading_items[0].search_snippet.as_deref(),
+            Some("Ranking and snippet <mark>quality</mark> both matter.")
+        );
 
         let unread_items = store
             .list_articles(
@@ -513,6 +531,7 @@ mod tests {
         assert_eq!(unread_items.len(), 1);
         assert_eq!(unread_items[0].article.id.as_str(), "article-unread");
         assert_eq!(unread_items[0].read_state, ReadState::Unread);
+        assert!(unread_items[0].search_snippet.is_some());
     }
 
     fn insert_feed(connection: &Connection, id: &str, title: &str, feed_url: &str) {

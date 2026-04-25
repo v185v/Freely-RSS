@@ -36,7 +36,7 @@ export type ListRowProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   active?: boolean
   eyebrow?: string
   meta?: string
-  summary?: string
+  summary?: ReactNode
   title: string
 }
 

@@ -10,6 +10,7 @@ import {
   QUEUE_ARTICLE_ROW_ESTIMATE,
   observeQueueViewportRect,
 } from "../queue-virtualization"
+import { renderMarkedText } from "../search-highlighting"
 import { formatArticleMeta } from "../selectors"
 import { READER_STATUS_FILTER_OPTIONS } from "../types"
 import type {
@@ -36,6 +37,18 @@ type QueuePaneProps = {
   sortMode: ReaderSortMode
   statusFilter: ReaderStatusFilter
   visibleArticles: ArticleListItemDto[]
+}
+
+function renderArticleSummary(article: ArticleListItemDto) {
+  if (article.searchSnippet) {
+    return (
+      <span className="desktop-queue__search-snippet">
+        {renderMarkedText(article.searchSnippet, "desktop-queue__search-mark")}
+      </span>
+    )
+  }
+
+  return article.summary ?? "No summary yet."
 }
 
 export function QueuePane({
@@ -218,7 +231,7 @@ export function QueuePane({
                         eyebrow={article.feedTitle}
                         meta={formatArticleMeta(article)}
                         onClick={() => onSelectArticle(article.id)}
-                        summary={article.summary ?? "No summary yet."}
+                        summary={renderArticleSummary(article)}
                         title={article.title}
                       />
                     </div>

@@ -21,6 +21,7 @@ import type {
   FolderId,
 } from "@freelyrss/shared-types"
 
+import { buildArticleSearchSnippet, extractSearchHighlightTerms } from "./search-highlighting"
 import type { ReaderArticleQuery, ReaderShellData, ReaderViewFilters } from "./types"
 
 type ArticleQueryContext = {
@@ -509,6 +510,7 @@ export function planReaderArticleQuery(
   const source = buildSourceClauses(data, sourceId)
   const statusClauses = buildStatusClauses(filters)
   const parsedSearchText = parseSearchTextFilter(filters.searchText)
+  const searchHighlightTerms = extractSearchHighlightTerms(parsedSearchText.root)
   const sort = buildSort(filters)
   const sourceRoot =
     source.definitionOverride?.root ??
@@ -535,6 +537,7 @@ export function planReaderArticleQuery(
 
   return {
     definition,
+    searchHighlightTerms,
     summary: {
       clauseCount,
       jsonPreview: JSON.stringify(serializeQueryDefinition(definition), null, 2),
@@ -551,12 +554,24 @@ export function buildReaderArticleQuery(
   sourceId: string,
   filters: ReaderViewFilters,
 ): ReaderArticleQuery {
-  const { definition, summary } = planReaderArticleQuery(data, sourceId, filters)
-  const visibleArticles = executeReaderArticleQuery(data, definition)
+  const { definition, searchHighlightTerms, summary } = planReaderArticleQuery(
+    data,
+    sourceId,
+    filters,
+  )
+  const visibleArticles = executeReaderArticleQuery(data, definition).map((article) => ({
+    ...article,
+    searchSnippet: buildArticleSearchSnippet(
+      article,
+      data.articleDetails[article.id] ?? null,
+      searchHighlightTerms,
+    ),
+  }))
 
   return {
     definition,
     executionMode: "memory",
+    searchHighlightTerms,
     summary,
     visibleArticles,
   }

@@ -70,6 +70,7 @@ export interface ArticleListItemDto {
   title: string
   author: Nullable<string>
   summary: Nullable<string>
+  searchSnippet: Nullable<string>
   publishedAt: Nullable<ISODateTimeString>
   thumbnail: Nullable<UrlString>
   estimatedReadingMinutes: Nullable<number>

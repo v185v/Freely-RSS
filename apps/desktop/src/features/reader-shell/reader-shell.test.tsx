@@ -415,6 +415,37 @@ describe("reader shell navigation", () => {
     ).toBeTruthy()
   })
 
+  test("renders search hit snippets in the queue and highlights body-only matches in the reader", async () => {
+    window.scrollTo = () => {}
+
+    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+
+    const queuePane = await screen.findByRole("region", { name: "Article queue" })
+    const readerPane = screen.getByRole("region", { name: "Reading panel" })
+    const queueScope = within(queuePane)
+    const readerScope = within(readerPane)
+    const getQueueRows = () => Array.from(queuePane.querySelectorAll(".desktop-article-row"))
+
+    fireEvent.change(queueScope.getByLabelText("Article view filter"), {
+      target: { value: "caching" },
+    })
+
+    await waitFor(() => {
+      expect(getQueueRows()).toHaveLength(1)
+      expect(window.location.search).toContain("articleId=article-source-context")
+    })
+
+    const searchSnippetMark = queuePane.querySelector(".desktop-queue__search-mark")
+    expect(searchSnippetMark?.textContent).toBe("caching")
+    expect(queueScope.getByText(/search text, fetching,/i)).toBeTruthy()
+
+    await waitFor(() => {
+      expect(
+        readerScope.getByText("caching", { selector: ".desktop-reader__search-hit" }),
+      ).toBeTruthy()
+    })
+  })
+
   test("renders a stable reading panel base view and swaps article content without stale detail", async () => {
     window.scrollTo = () => {}
     const user = userEvent.setup()

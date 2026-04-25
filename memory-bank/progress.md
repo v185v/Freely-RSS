@@ -1200,3 +1200,36 @@
 - `apps/desktop/src/features/reader-shell/desktop-bridge.ts` owns frontend transport to durable queue loading.
 - `apps/desktop/src-tauri/src/reader_queue.rs` owns backend queue retrieval mapping to SQLite.
 - `crates/core-domain/src/sqlite/article_search_store.rs` owns the durable FTS/list execution boundary.
+
+## 2026-04-25 ASCII Addendum XVII
+
+### Stage 6 Step 53 Completed: queue snippets and reader-side search-hit highlighting
+
+- Completed `implementation-plan.md` Stage 6 Step 53 without reopening the Step 52 transport boundary. Search-hit presentation now sits on top of the existing hybrid queue pipeline instead of changing how queue rows are loaded.
+- Added a desktop-local search presentation helper in `apps/desktop/src/features/reader-shell/search-highlighting.tsx`. This module extracts positive content-search terms from the shared-query text AST, builds mock-memory snippets for browser/test execution, exposes plain-text highlight ranges for the reader, and renders marked queue snippet text without unsafe HTML injection.
+- Kept query meaning and presentation meaning separate. `apps/desktop/src/features/reader-shell/article-query.ts` still owns route-aware query planning plus fallback memory execution, but it now also derives `searchHighlightTerms` from the parsed shell search text and decorates memory queue rows with `searchSnippet` values.
+- Extended the shared queue DTO shape with nullable `searchSnippet` support in `packages/shared-types/src/article.ts`, then widened `packages/ui/src/components/list.tsx` so queue summaries can render rich React content. This keeps snippet display inside the existing queue-row component path instead of forcing a shell-only row fork.
+- Upgraded the durable search boundary in `crates/core-domain/src/sqlite/article_search_store.rs` so `list_articles()` now returns best-column FTS snippets alongside article rows. This keeps snippet generation inside SQLite when durable retrieval is available.
+- Updated `apps/desktop/src-tauri/src/reader_queue.rs` so the existing `load_reader_queue_articles` command forwards durable `search_snippet` values through the same queue DTO contract already used by the desktop shell.
+- Updated `apps/desktop/src/features/reader-shell/components/queue-pane.tsx` to prefer `searchSnippet` over the plain summary when present, and updated `apps/desktop/src/features/reader-shell/components/reader-pane.tsx` to highlight active body matches while preserving existing annotation replay and selection behavior.
+- Added browser-side regression coverage proving that a word found only in article body text produces both a queue snippet and a reader highlight, and added Rust-side coverage for durable snippet generation and Tauri DTO propagation.
+
+### Step 53 Verification
+
+- Passed `corepack pnpm --filter @freelyrss/desktop test -- --run reader-shell.test.tsx`
+- Passed `cargo test -p freelyrss-core-domain article_search_store`
+- Passed `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml`
+- Passed `corepack pnpm run format`
+- Passed `cargo fmt --all`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+
+### Next Step (ASCII update)
+
+- The next implementation step in `implementation-plan.md` is Stage 7 Step 54: cache policy configuration.
+- Preserve the current boundary split:
+- `packages/shared-query` still owns search/filter semantics; Step 53 only consumes the parsed query to derive presentation-safe highlight terms.
+- `crates/core-domain/src/sqlite/article_search_store.rs` now owns durable snippet generation in addition to ranked search/list retrieval.
+- `apps/desktop/src/features/reader-shell/search-highlighting.tsx` owns browser/mock fallback snippet building and reader highlight range derivation, not durable queue loading.
+- `apps/desktop/src/features/reader-shell/components/queue-pane.tsx` and `components/reader-pane.tsx` now own Step 53 presentation only; they still do not define search semantics or storage behavior.

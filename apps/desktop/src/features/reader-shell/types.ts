@@ -136,6 +136,7 @@ export interface ReaderArticleQuerySummary {
 export interface ReaderArticleQuery {
   definition: QueryDefinition
   executionMode: "durable" | "memory"
+  searchHighlightTerms: string[]
   summary: ReaderArticleQuerySummary
   visibleArticles: ArticleListItemDto[]
 }

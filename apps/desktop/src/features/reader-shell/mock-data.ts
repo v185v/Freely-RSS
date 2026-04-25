@@ -224,6 +224,7 @@ const articles: ArticleListItemDto[] = [
     author: "FreelyRSS",
     summary:
       "Step 15 moved the app from a package demo to a reader-shaped shell with separated source, queue, and reading contexts.",
+    searchSnippet: null,
     publishedAt: "2026-04-08T08:40:00Z",
     thumbnail: null,
     estimatedReadingMinutes: 6,
@@ -248,6 +249,7 @@ const articles: ArticleListItemDto[] = [
     author: "Systems Desk",
     summary:
       "Selection and context can live in the shell without turning the shell into the execution layer.",
+    searchSnippet: null,
     publishedAt: "2026-04-08T06:15:00Z",
     thumbnail: null,
     estimatedReadingMinutes: 8,
@@ -272,6 +274,7 @@ const articles: ArticleListItemDto[] = [
     author: "Query Notes",
     summary:
       "This placeholder article keeps Step 16 focused on state boundaries before real search and persistence arrive.",
+    searchSnippet: null,
     publishedAt: "2026-04-07T22:10:00Z",
     thumbnail: null,
     estimatedReadingMinutes: 9,
@@ -296,6 +299,7 @@ const articles: ArticleListItemDto[] = [
     author: "Night Audio",
     summary:
       "A JSON Feed episode with a podcast enclosure and companion artwork keeps attachment presentation visible in the reader.",
+    searchSnippet: null,
     publishedAt: "2026-04-06T23:20:00Z",
     thumbnail: "https://audio.example/episodes/42/cover.jpg",
     estimatedReadingMinutes: 18,
@@ -320,6 +324,7 @@ const articles: ArticleListItemDto[] = [
     author: "FreelyRSS",
     summary:
       "Responsive layout rules are part of the shell contract, not a cosmetic afterthought for the future reader.",
+    searchSnippet: null,
     publishedAt: "2026-04-07T18:00:00Z",
     thumbnail: null,
     estimatedReadingMinutes: 5,
@@ -1141,6 +1146,7 @@ function createDenseQueueFixtures(feed: FeedDto) {
       title,
       author: "Queue Systems Desk",
       summary: `Virtualization sample ${paddedIndex} keeps the middle pane focused on a render window instead of mounting the full queue.`,
+      searchSnippet: null,
       publishedAt,
       thumbnail: null,
       estimatedReadingMinutes: 4 + (index % 5),

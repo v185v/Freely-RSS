@@ -494,6 +494,17 @@ body {
   -webkit-box-orient: vertical;
 }
 
+.desktop-queue__search-snippet {
+  color: var(--fr-text-muted);
+}
+
+.desktop-queue__search-mark {
+  padding: 0 0.14em;
+  border-radius: 0.24em;
+  background: rgba(244, 184, 96, 0.22);
+  color: var(--fr-text);
+}
+
 .desktop-queue__virtual-summary {
   color: var(--fr-text-faint);
   font-size: 0.76rem;
@@ -907,6 +918,13 @@ body {
   border-radius: 0.32em;
   background: var(--reader-annotation-accent-soft, rgba(127, 226, 192, 0.16));
   color: inherit;
+}
+
+.desktop-reader__search-hit {
+  border-radius: 0.2em;
+  background: rgba(248, 255, 115, 0.22);
+  color: inherit;
+  box-shadow: 0 0 0 1px rgba(248, 255, 115, 0.16);
 }
 
 .desktop-reader__annotation--note {

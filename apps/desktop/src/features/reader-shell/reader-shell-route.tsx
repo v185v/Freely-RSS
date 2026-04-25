@@ -746,6 +746,7 @@ export function ReaderShellRoute() {
             readerFontScale={readerFontScale}
             readerLineHeight={readerLineHeight}
             readerMarginMode={readerMarginMode}
+            searchHighlightTerms={resolvedArticleQuery.searchHighlightTerms}
             themeTone={themeTone}
           />
         </SplitLayout>

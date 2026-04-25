@@ -1850,3 +1850,38 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - Step 52 is complete, but Step 53 has not started in code: there is still no snippet rendering, no `<mark>` UI treatment, and no hit-highlighting view model in the desktop queue.
 - The durable retrieval path is now live for the desktop runtime, while tests remain stable through the fallback path.
 - Future Step 53 work should build on the now-complete Step 52 pipeline rather than revisiting queue retrieval wiring.
+
+## 2026-04-25 ASCII Addendum XVII
+
+### Step 53 Architecture Insights
+
+- Step 53 lands in the correct layer: search-hit highlighting is now a presentation concern built on top of the already-finished Step 52 retrieval path, not a rewrite of queue execution.
+- The key architectural decision in this increment is to split durable snippet generation from browser/mock fallback snippet generation. SQLite remains the source of truth for real FTS snippets, while the desktop shell gets a local fallback only so tests and mock mode can still exercise the UI.
+- `searchSnippet` is now part of the queue DTO contract. This is a useful boundary correction because the queue needs search-hit preview text as queue data, not as an ad hoc string assembled inside React components.
+- `ReaderArticleQuery.searchHighlightTerms` is intentionally desktop-local. It is derived from parsed shell search text for UI highlighting, but it is not a storage-layer search plan and it is not written back into shared-query or SQLite.
+- Reader-side highlighting remains separate from annotation anchoring. Search hits are transient view decoration, while annotations are durable article-local marks; Step 53 preserves that distinction by layering search highlight spans over existing annotation replay instead of merging the concepts into one annotation model.
+- No database schema migration was required for this step. The existing `ArticleSearch` FTS5 table already carried the indexed text needed for durable snippet generation, so Step 53 only broadens read contracts and UI presentation.
+
+### Step 53 File Responsibilities
+
+- `apps/desktop/src/features/reader-shell/search-highlighting.tsx`: owns desktop-local search presentation helpers, including positive content-term extraction from shared-query ASTs, fallback snippet building for mock execution, plain-text highlight range calculation, and safe queue-snippet mark rendering.
+- `apps/desktop/src/features/reader-shell/article-query.ts`: still owns reader-shell query planning and fallback memory execution, and now also decorates memory queue rows with nullable `searchSnippet` data plus `searchHighlightTerms` for the reader surface.
+- `apps/desktop/src/features/reader-shell/types.ts`: records the new `ReaderArticleQuery.searchHighlightTerms` contract so route logic and reader presentation can share one search-highlight source.
+- `apps/desktop/src/features/reader-shell/components/queue-pane.tsx`: owns queue-side snippet presentation and prefers `searchSnippet` over plain summary text when a search hit is available.
+- `apps/desktop/src/features/reader-shell/components/reader-pane.tsx`: owns reader-side transient hit highlighting while preserving existing content-mode switching, annotation replay, and selection capture behavior.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`: continues to own route composition and now passes planned search-highlight terms into the reader pane without changing queue-loading boundaries.
+- `apps/desktop/src/features/reader-shell/mock-data.ts`: now initializes `ArticleListItemDto.searchSnippet` as nullable shell data so fallback execution can decorate rows without violating the shared DTO shape.
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`: validates the user-visible Step 53 behavior that a body-only search term produces both a queue snippet and a reader highlight.
+- `apps/desktop/src/styles.css`: contains the shell-local snippet and search-hit presentation rules for the queue and reader surfaces, keeping this UI treatment out of shared primitives.
+- `apps/desktop/src-tauri/src/reader_queue.rs`: continues to own the desktop queue command boundary and now forwards durable `search_snippet` data from SQLite into the queue DTO returned to React.
+- `crates/core-domain/src/sqlite/article_search_store.rs`: now owns four durable read responsibilities for search: ranked ids, snippet previews, queue-oriented article listing, and queue-row snippet generation through the same SQLite boundary.
+- `packages/shared-types/src/article.ts`: defines the shared queue/article DTO contract and now explicitly includes nullable `searchSnippet` data for queue presentation consumers.
+- `packages/ui/src/components/list.tsx`: keeps the generic list-row primitive reusable while now allowing rich summary content, so queue snippets do not require a second shell-only row component.
+
+### Step 53 Boundary Notes
+
+- `packages/shared-query` still owns search syntax and validation semantics; Step 53 only reads the parsed query and does not create a second highlighting grammar.
+- `crates/core-domain` and SQLite now own durable snippet generation when the desktop runtime is available. React does not issue raw FTS snippet SQL and does not guess durable ranking behavior.
+- `apps/desktop/src/features/reader-shell/search-highlighting.tsx` is deliberately not a second executor. Its job is limited to mock-mode fallback snippet construction and reader-side presentation, not queue filtering or durable retrieval.
+- `packages/shared-types` remains DTO-only; it now carries snippet data, but it still does not define storage plans, query parsers, or UI algorithms.
+- Step 53 still does not solve durable reader-detail loading. Queue rows can now show real snippets, but article detail hydration remains on the existing shell/mock path until a later milestone extends the desktop bridge beyond queue retrieval.

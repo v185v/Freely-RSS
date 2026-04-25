@@ -42,6 +42,7 @@ pub struct ReaderQueueArticleDto {
     pub title: String,
     pub author: Option<String>,
     pub summary: Option<String>,
+    pub search_snippet: Option<String>,
     pub published_at: Option<String>,
     pub thumbnail: Option<String>,
     pub estimated_reading_minutes: Option<i64>,
@@ -106,6 +107,7 @@ fn load_reader_queue_articles_at(
                 title: item.article.title,
                 author: item.article.author,
                 summary: item.article.summary,
+                search_snippet: item.search_snippet,
                 published_at: item.article.published_at.map(Into::into),
                 thumbnail: item.article.thumbnail.map(Into::into),
                 estimated_reading_minutes,
@@ -204,7 +206,7 @@ mod tests {
                     "feed-search",
                     "SQLite queue boundary",
                     "Search summary",
-                    "Queue retrieval remains inside step 52.",
+                    "Queue retrieval remains inside step 52 and keeps retrieval context visible.",
                     "2026-04-24T12:00:00Z",
                     540_i64
                 ],
@@ -233,7 +235,7 @@ mod tests {
             database_path,
             LoadReaderQueueRequest {
                 feed_ids: vec!["feed-search".into()],
-                search_text: "queue".into(),
+                search_text: "retrieval".into(),
                 sort_mode: ReaderSortMode::Newest,
                 status_filter: ReaderStatusFilter::Reading,
             },
@@ -245,5 +247,9 @@ mod tests {
         assert_eq!(items[0].feed_title, "Search Lab");
         assert_eq!(items[0].state.read_state, "reading");
         assert_eq!(items[0].estimated_reading_minutes, Some(3));
+        assert_eq!(
+            items[0].search_snippet.as_deref(),
+            Some("Queue <mark>retrieval</mark> remains inside step 52 and keeps <mark>retrieval</mark> context visible.")
+        );
     }
 }
