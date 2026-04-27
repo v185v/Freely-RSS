@@ -17,10 +17,16 @@ import type {
   UserStateDto,
 } from "@freelyrss/shared-types"
 
+import {
+  type ReaderCacheInventoryEntry,
+  planReaderCacheCleanup,
+  summarizeReaderCache,
+} from "./cache-maintenance"
 import type {
   CreateReaderAnnotationInput,
   OpmlExportReport,
   OpmlImportReport,
+  ReaderCacheCleanupReport,
   ReaderCacheSettings,
   ReaderShellData,
   SourceRow,
@@ -32,6 +38,59 @@ const initialCacheSettings: ReaderCacheSettings = {
   maxBytes: 2_147_483_648,
   defaultPolicy: "content",
 }
+
+const initialCacheEntries: ReaderCacheInventoryEntry[] = [
+  {
+    id: "cache-content-layout-shell",
+    articleId: "article-layout-shell",
+    attachmentId: null,
+    bytes: 188_743_680,
+    feedId: "feed-freelyrss",
+    kind: "content",
+    lastAccessedAt: "2026-04-18T09:05:00Z",
+    path: "cache/content/article-layout-shell.json",
+  },
+  {
+    id: "cache-content-source-context",
+    articleId: "article-source-context",
+    attachmentId: null,
+    bytes: 314_572_800,
+    feedId: "feed-rust-systems",
+    kind: "content",
+    lastAccessedAt: "2026-04-15T08:10:00Z",
+    path: "cache/content/article-source-context.json",
+  },
+  {
+    id: "cache-content-window-behavior",
+    articleId: "article-window-behavior",
+    attachmentId: null,
+    bytes: 134_217_728,
+    feedId: "feed-freelyrss",
+    kind: "content",
+    lastAccessedAt: "2026-04-17T04:25:00Z",
+    path: "cache/content/article-window-behavior.json",
+  },
+  {
+    id: "cache-content-midnight-dispatch",
+    articleId: "article-midnight-dispatch",
+    attachmentId: null,
+    bytes: 146_800_640,
+    feedId: "feed-night-audio",
+    kind: "content",
+    lastAccessedAt: "2026-04-18T02:00:00Z",
+    path: "cache/content/article-midnight-dispatch.json",
+  },
+  {
+    id: "cache-attachment-midnight-dispatch-audio",
+    articleId: "article-midnight-dispatch",
+    attachmentId: "attachment-midnight-dispatch-audio",
+    bytes: 100_663_296,
+    feedId: "feed-night-audio",
+    kind: "attachment",
+    lastAccessedAt: "2026-04-18T02:05:00Z",
+    path: "cache/media/night-audio/dispatch-42.mp3",
+  },
+]
 
 const folders: FolderDto[] = [
   {
@@ -633,10 +692,12 @@ const DEFAULT_ANNOTATION_COLORS: Record<CreateReaderAnnotationInput["type"], str
 type MockReaderState = {
   articleDetails: Record<string, ArticleDetailDto>
   articles: ArticleListItemDto[]
+  cacheEntries: ReaderCacheInventoryEntry[]
   cacheSettings: ReaderCacheSettings
   feedDetails: FeedDto[]
   feedTagIdsByFeedId: Record<string, string[]>
   folders: FolderDto[]
+  latestCacheCleanup: ReaderCacheCleanupReport | null
 }
 
 export type MockOpmlImportResult = {
@@ -1095,10 +1156,12 @@ function createEmptyMockReaderState(): MockReaderState {
   return {
     articleDetails: {},
     articles: [],
+    cacheEntries: [],
     cacheSettings: cloneValue(initialCacheSettings),
     feedDetails: [],
     feedTagIdsByFeedId: {},
     folders: [],
+    latestCacheCleanup: null,
   }
 }
 
@@ -1338,6 +1401,21 @@ ${bodyLines.join("\n")}
   }
 }
 
+function buildCacheStatus(state: MockReaderState) {
+  const summary = summarizeReaderCache({
+    articleDetails: state.articleDetails,
+    articles: state.articles,
+    cacheSettings: state.cacheSettings,
+    entries: state.cacheEntries,
+    feedDetails: state.feedDetails,
+  })
+
+  return {
+    ...summary,
+    latestCleanup: cloneValue(state.latestCacheCleanup),
+  }
+}
+
 function buildReaderShellSnapshot(state: MockReaderState): ReaderShellData {
   const feeds = buildFeedSummaries(state)
   const quickViewSection = buildQuickViewSection(state)
@@ -1347,6 +1425,7 @@ function buildReaderShellSnapshot(state: MockReaderState): ReaderShellData {
   return {
     articleDetails: cloneValue(state.articleDetails),
     articles: cloneValue(state.articles),
+    cacheStatus: buildCacheStatus(state),
     cacheSettings: cloneValue(state.cacheSettings),
     feedDetails: Object.fromEntries(
       state.feedDetails.map((feed) => [feed.id, cloneValue(feed)]),
@@ -1370,10 +1449,12 @@ function createInitialMockReaderState(): MockReaderState {
   return {
     articleDetails: cloneValue(articleDetails),
     articles: cloneValue(articles),
+    cacheEntries: cloneValue(initialCacheEntries),
     cacheSettings: cloneValue(initialCacheSettings),
     feedDetails: cloneValue(feedDetails),
     feedTagIdsByFeedId: cloneValue(feedTagIdsByFeedId),
     folders: cloneValue(folders),
+    latestCacheCleanup: null,
   }
 }
 
@@ -1484,6 +1565,24 @@ function replaceArticleAnnotations(
   }
 }
 
+function clearAttachmentCachePaths(attachmentIds: Set<string>) {
+  if (attachmentIds.size === 0) {
+    return
+  }
+
+  mockReaderState.articleDetails = Object.fromEntries(
+    Object.entries(mockReaderState.articleDetails).map(([articleId, detail]) => [
+      articleId,
+      {
+        ...detail,
+        attachments: detail.attachments.map((attachment) =>
+          attachmentIds.has(attachment.id) ? { ...attachment, localCachePath: null } : attachment,
+        ),
+      },
+    ]),
+  )
+}
+
 function syncFeedPresentation(nextFeed: FeedDto) {
   const displayTitle = getFeedDisplayTitle(nextFeed)
 
@@ -1566,6 +1665,30 @@ export async function updateMockCacheSettings(
   settings: ReaderCacheSettings,
 ): Promise<ReaderShellData> {
   mockReaderState.cacheSettings = cloneValue(settings)
+
+  return buildReaderShellSnapshot(mockReaderState)
+}
+
+export async function runMockCacheCleanup(): Promise<ReaderShellData> {
+  const cleanupPlan = planReaderCacheCleanup({
+    articleDetails: mockReaderState.articleDetails,
+    articles: mockReaderState.articles,
+    cacheSettings: mockReaderState.cacheSettings,
+    entries: mockReaderState.cacheEntries,
+    feedDetails: mockReaderState.feedDetails,
+  })
+  const evictedEntryIds = new Set(cleanupPlan.evictedEntries.map((entry) => entry.id))
+  const evictedAttachmentIds = new Set(
+    cleanupPlan.evictedEntries
+      .map((entry) => entry.attachmentId)
+      .filter((attachmentId): attachmentId is string => attachmentId !== null),
+  )
+
+  mockReaderState.cacheEntries = mockReaderState.cacheEntries.filter(
+    (entry) => !evictedEntryIds.has(entry.id),
+  )
+  clearAttachmentCachePaths(evictedAttachmentIds)
+  mockReaderState.latestCacheCleanup = cloneValue(cleanupPlan.report)
 
   return buildReaderShellSnapshot(mockReaderState)
 }

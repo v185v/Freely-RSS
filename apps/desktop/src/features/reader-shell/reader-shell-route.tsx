@@ -33,6 +33,7 @@ import {
   importMockOpml,
   readerShellQueryKey,
   refreshMockFeed,
+  runMockCacheCleanup,
   updateMockArticleState,
   updateMockCacheSettings,
   updateMockFeed,
@@ -125,6 +126,12 @@ export function ReaderShellRoute() {
   })
   const saveCacheSettingsMutation = useMutation({
     mutationFn: updateMockCacheSettings,
+    onSuccess: (nextShellData) => {
+      queryClient.setQueryData(readerShellQueryKey, nextShellData)
+    },
+  })
+  const runCacheCleanupMutation = useMutation({
+    mutationFn: runMockCacheCleanup,
     onSuccess: (nextShellData) => {
       queryClient.setQueryData(readerShellQueryKey, nextShellData)
     },
@@ -408,6 +415,8 @@ export function ReaderShellRoute() {
     saveCacheSettingsMutation.error instanceof Error
       ? saveCacheSettingsMutation.error.message
       : null
+  const cacheCleanupErrorMessage =
+    runCacheCleanupMutation.error instanceof Error ? runCacheCleanupMutation.error.message : null
   const articleStateErrorMessage =
     updateArticleStateMutation.error instanceof Error
       ? updateArticleStateMutation.error.message
@@ -433,8 +442,8 @@ export function ReaderShellRoute() {
     return (
       <main className="desktop-shell">
         <div className="desktop-loading">
-          <p className="desktop-shell__eyebrow">Stage 7 / Step 54</p>
-          <h1>Loading cache policy controls for the desktop reader shell.</h1>
+          <p className="desktop-shell__eyebrow">Stage 7 / Step 55</p>
+          <h1>Loading cache cleanup controls for the desktop reader shell.</h1>
         </div>
       </main>
     )
@@ -540,15 +549,15 @@ export function ReaderShellRoute() {
 
       <header className="desktop-shell__header">
         <div className="desktop-shell__title-block">
-          <p className="desktop-shell__eyebrow">Stage 7 / Step 54</p>
-          <h1>The desktop shell now configures global and per-feed cache policies.</h1>
+          <p className="desktop-shell__eyebrow">Stage 7 / Step 55</p>
+          <h1>The desktop shell now plans and applies cache cleanup.</h1>
           <p className="desktop-shell__lead">
             Route state still owns the active source and article, the shell store still owns only
             local queue controls and presentation preferences, and the mock repository remains the
-            shell-side snapshot source. Step 54 keeps the existing reader, search, and annotation
-            boundaries intact while adding one desktop-wide cache budget plus one per-feed cache
-            policy path, so later eviction and offline-download work can consume explicit settings
-            instead of inferring them from ad hoc UI state.
+            shell-side snapshot source. Step 55 consumes the cache budget and per-feed policy inputs
+            from Step 54, then applies two explicit cleanup rules: source-policy mismatch entries
+            are reclaimed first, and remaining pressure falls back to least-recently-used cleanup
+            across non-protected articles only.
           </p>
         </div>
 
@@ -581,9 +590,9 @@ export function ReaderShellRoute() {
 
           <p className="desktop-summary__note">
             The queue still consumes one route-backed article query while cache configuration,
-            source editing, OPML portability, and tree expansion remain separate concerns. Step 54
-            adds explicit cache defaults and feed-specific policy controls without pushing storage
-            eviction logic into the React route layer.
+            source editing, OPML portability, and tree expansion remain separate concerns. Step 55
+            keeps cleanup planning outside the React route layer and lets the shell trigger one
+            stable cache-maintenance path instead of embedding eviction rules into view code.
           </p>
 
           <div className="desktop-shortcuts">
@@ -636,6 +645,8 @@ export function ReaderShellRoute() {
           <SourcePane
             activeSourceId={routeState.sourceId}
             activeFeed={activeFeed}
+            cacheCleanupErrorMessage={cacheCleanupErrorMessage}
+            cacheStatus={resolvedShellData.cacheStatus}
             canCollapseFolders={subscriptionRows.some(
               (row) => row.kind === "folder" && !row.isCollapsed,
             )}
@@ -656,6 +667,7 @@ export function ReaderShellRoute() {
             isExportingOpml={exportOpmlMutation.isPending}
             isImportingOpml={importOpmlMutation.isPending}
             isRefreshingFeed={refreshFeedMutation.isPending}
+            isRunningCacheCleanup={runCacheCleanupMutation.isPending}
             isSavingCacheSettings={saveCacheSettingsMutation.isPending}
             isSavingFeed={saveFeedMutation.isPending}
             onCollapseAllFolders={() => setCollapsedFolderIds(collapsibleFolderIds)}
@@ -675,15 +687,27 @@ export function ReaderShellRoute() {
               setOpmlExportResult(null)
               importOpmlMutation.reset()
               refreshFeedMutation.reset()
+              runCacheCleanupMutation.reset()
               saveCacheSettingsMutation.reset()
               saveFeedMutation.reset()
               refreshFeedMutation.mutate(feedId)
+            }}
+            onRunCacheCleanup={() => {
+              exportOpmlMutation.reset()
+              setOpmlExportResult(null)
+              importOpmlMutation.reset()
+              refreshFeedMutation.reset()
+              saveFeedMutation.reset()
+              saveCacheSettingsMutation.reset()
+              runCacheCleanupMutation.reset()
+              runCacheCleanupMutation.mutate()
             }}
             onSaveCacheSettings={(settings) => {
               exportOpmlMutation.reset()
               setOpmlExportResult(null)
               importOpmlMutation.reset()
               refreshFeedMutation.reset()
+              runCacheCleanupMutation.reset()
               saveFeedMutation.reset()
               saveCacheSettingsMutation.reset()
               saveCacheSettingsMutation.mutate(settings)
@@ -694,6 +718,7 @@ export function ReaderShellRoute() {
               setOpmlExportResult(null)
               importOpmlMutation.reset()
               refreshFeedMutation.reset()
+              runCacheCleanupMutation.reset()
               saveCacheSettingsMutation.reset()
               saveFeedMutation.reset()
               saveFeedMutation.mutate(input)

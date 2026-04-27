@@ -2,15 +2,15 @@
 
 ## 当前状态
 
-- 阶段：阶段 5 Step 50 已完成，`crates/rule-engine` 现已能把启用规则的评估结果收敛为可持久化的审计快照，`crates/core-domain` / SQLite 也已落地 `RuleAudit` 领域模型、`v7` 迁移、历史读写接口与后续 applied-effects 更新入口，同时保持“`packages/shared-query` 继续定义查询契约、`crates/rule-engine` 负责条件评估/动作规划/审计快照生成、`crates/core-domain` 与 SQLite 负责 durable audit storage、动作实际落库仍留待后续步骤”的边界；下一步进入阶段 5 Step 51 的智能文件夹。
-- 最后更新：2026-04-23
-- 风险状态：已从“在 Step 49 中让 `crates/rule-engine` 负责动作 JSON 校验与命令规划，同时继续避免把 SQLite 写入和审计落库混入规则匹配执行”推进到“在 Step 50 中让 `crates/rule-engine` 负责审计快照生成、让 `crates/core-domain` / SQLite 负责审计持久化，同时继续避免让存储层重复解释规则条件或动作语义”
+- 阶段：阶段 7 Step 55 已完成，桌面端现已在 Step 54 的“全局缓存预算 + per-feed durable cache policy”输入之上，新增一个独立的缓存清理规划层：先回收违背源级策略的缓存条目，再对未受保护的文章缓存执行 LRU 淘汰，同时继续保持“React route 只负责触发、mock repository 负责应用结果、缓存规划逻辑集中在独立模块中”的边界；下一步进入阶段 7 Step 56 的 Markdown 导出。
+- 最后更新：2026-04-27
+- 风险状态：已从“Step 54 仅固化缓存配置输入，还没有任何淘汰执行层”推进到“Step 55 已建立可验证的缓存回收边界，但后续 Step 56 仍需在不把导出格式拼装塞回 reader route 的前提下，为单篇与批量文章建立独立导出管线”
 
-### 2026-04-23 状态快照
+### 2026-04-27 状态快照
 
-- 当前完成：阶段 5 Step 50 已完成，`crates/rule-engine` 已新增 audit-ready 评估结果与输入快照序列化，`crates/core-domain` 也已把 `RuleAudit`、`RuleAuditMatchResult`、`RuleAuditId`、`RuleAuditStore` 与数据库 `v7` 审计表/索引纳入正式边界；当前规则评估可以同时输出动作命令计划和可追溯的 durable audit payload，而无需让 SQLite 层重复解析规则 JSON。
-- 当前验证：`cargo test -p freelyrss-rule-engine`、`cargo test -p freelyrss-core-domain`、`cargo clippy -p freelyrss-rule-engine -p freelyrss-core-domain --all-targets -- -D warnings`、`cargo fmt --all --check`、`corepack pnpm run verify`、`corepack pnpm run desktop:build` 与 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle` 全部通过。
-- 当前下一步：进入阶段 5 Step 51“实现智能文件夹”，在不破坏 Step 50 新增的审计与命令边界前提下，把共享查询表达式保存为 durable `SmartFolder` 定义，并让桌面左栏消费同一查询契约，而不是重新发明一套 shell-only 文件夹过滤语义。
+- 当前完成：阶段 7 Step 55 已完成，`apps/desktop` 现已拥有一个纯规划的 `cache-maintenance.ts` 清理层、一个会把结果应用到 mock shell snapshot 的 repository 路径，以及一个独立的左栏缓存维护卡片；当前清理逻辑会优先处理 policy mismatch，再对非星标 / 非稍后读 / 无 note 的缓存文章执行 LRU 淘汰，同时保留受保护文章的本地附件路径。
+- 当前验证：`corepack pnpm --filter @freelyrss/desktop test`、`corepack pnpm run desktop:build`、`corepack pnpm run verify` 与 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle` 全部通过。
+- 当前下一步：进入阶段 7 Step 56“实现 Markdown 导出”，在不破坏当前 reader detail、annotation 和 cache cleanup 边界的前提下，把文章正文、元数据与批注映射到一个可复用的导出契约，而不是在 UI 组件里临时拼接 Markdown 文本。
 
 ## 已确认决策
 
@@ -26,7 +26,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 5 Step 51 需要在不破坏 `packages/shared-query` 与 `crates/core-domain` 现有 durable query boundary 的前提下，把 `SmartFolder` 保存、读取与左栏消费接到同一表达式契约上，而不是让桌面壳层复制规则/搜索的查询语义。
+- 当前无阻塞；下一步风险点是阶段 7 Step 56 需要在不破坏 `apps/desktop/src/features/reader-shell/components/reader-pane.tsx` 的阅读呈现职责前提下，把 Markdown 导出格式化、批量导出和后续 HTML/PDF 扩展收敛到一个独立导出边界，而不是继续堆进 reader route 或卡片组件。
 
 ## 本次执行记录
 
@@ -1268,3 +1268,32 @@
 - `crates/core-domain/src/sqlite/store.rs` writes `cache_policy` on feed creation but intentionally does not overwrite user-managed feed policy during ordinary ingest updates.
 - `apps/desktop/src/features/reader-shell` now edits both global defaults and per-feed policy, but it still does not implement eviction or attachment/content download behavior itself.
 - Step 55 should consume these settings as inputs to eviction logic rather than redefining cache policy state in a second place.
+
+## 2026-04-27 ASCII Addendum XIX
+
+### Stage 7 Step 55 Completed: cache cleanup planning and protected LRU eviction
+
+- Completed `implementation-plan.md` Stage 7 Step 55 by adding an explicit cleanup-planning layer on top of the cache settings introduced in Step 54.
+- Added `apps/desktop/src/features/reader-shell/cache-maintenance.ts` as a pure planning boundary. It now summarizes cache pressure, identifies policy-mismatch entries, and plans cleanup in two phases: reclaim policy-violating cache first, then apply LRU eviction across non-protected articles.
+- Kept cleanup execution out of the React route. `apps/desktop/src/features/reader-shell/mock-data.ts` now owns the application of a cleanup plan to shell state, while `reader-shell-route.tsx` only triggers the mutation and renders the resulting snapshot.
+- Added desktop-local cache status contracts to `types.ts`, making cache pressure, cleanup candidates, and latest cleanup results explicit shell data instead of ad hoc component state.
+- Added `components/cache-maintenance-card.tsx` to surface budget status, protected cache, ordered cleanup candidates, and the latest cleanup result inside the left pane without mixing cleanup rules into source editing or feed metadata forms.
+- Seeded the mock shell with cache inventory data and verified the intended protection rule: starred articles, read-later articles, and articles with note annotations are excluded from LRU cleanup pressure unless a per-feed policy mismatch forces reclamation first.
+- Added a focused unit test for the pure cleanup planner plus an integration test for the desktop shell flow that lowers the cache budget, runs cleanup, and confirms protected podcast media stays cached.
+
+### Step 55 Verification
+
+- Passed `corepack pnpm --filter @freelyrss/desktop test`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+
+### Next Step (ASCII update)
+
+- The next implementation step in `implementation-plan.md` is Stage 7 Step 56: Markdown export.
+- Preserve the current boundary split:
+- `apps/desktop/src/features/reader-shell/cache-maintenance.ts` now owns cleanup planning only; it does not mutate shell state, fetch durable storage, or render UI.
+- `apps/desktop/src/features/reader-shell/mock-data.ts` owns the mock cache inventory and applies planned cleanup results to the shell snapshot.
+- `apps/desktop/src/features/reader-shell/components/cache-maintenance-card.tsx` owns cache-maintenance presentation only; it does not define cleanup rules.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx` remains a mutation trigger and composition boundary, not a cleanup executor.
+- Stage 7 Step 56 should build an export boundary that consumes article detail, annotations, and cache-neutral reader data rather than embedding Markdown serialization inside reader components.

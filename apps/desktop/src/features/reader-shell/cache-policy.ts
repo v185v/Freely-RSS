@@ -36,7 +36,7 @@ export function megabytesToBytes(megabytes: number) {
   return Math.round(megabytes * 1024 * 1024)
 }
 
-export function formatCacheLimit(bytes: number) {
+export function formatCacheBytes(bytes: number) {
   const megabytes = bytesToMegabytes(bytes)
 
   if (megabytes % 1024 === 0) {
@@ -49,3 +49,5 @@ export function formatCacheLimit(bytes: number) {
 
   return `${megabytes} MB`
 }
+
+export const formatCacheLimit = formatCacheBytes

@@ -7,9 +7,11 @@ import type {
   OpmlExportReport,
   OpmlImportReport,
   ReaderCacheSettings,
+  ReaderCacheStatus,
   SourceRow,
   SubscriptionTreeRow,
 } from "../types"
+import { CacheMaintenanceCard } from "./cache-maintenance-card"
 import { CacheSettingsCard } from "./cache-settings-card"
 import { FeedEditorCard } from "./feed-editor-card"
 import { OpmlExportCard } from "./opml-export-card"
@@ -18,6 +20,8 @@ import { OpmlImportCard } from "./opml-import-card"
 type SourcePaneProps = {
   activeSourceId: string
   activeFeed: FeedDto | null
+  cacheCleanupErrorMessage: string | null
+  cacheStatus: ReaderCacheStatus
   canCollapseFolders: boolean
   cacheSettings: ReaderCacheSettings
   cacheSettingsErrorMessage: string | null
@@ -32,12 +36,14 @@ type SourcePaneProps = {
   isExportingOpml: boolean
   isImportingOpml: boolean
   isRefreshingFeed: boolean
+  isRunningCacheCleanup: boolean
   isSavingCacheSettings: boolean
   isSavingFeed: boolean
   onCollapseAllFolders: () => void
   onExportOpml: () => void
   onImportOpml: (opmlText: string) => void
   onRefreshFeed: (feedId: FeedDto["id"]) => void
+  onRunCacheCleanup: () => void
   onSaveCacheSettings: (settings: ReaderCacheSettings) => void
   onSelectSource: (sourceId: string) => void
   onSaveFeed: (input: {
@@ -67,6 +73,8 @@ type SourcePaneProps = {
 export function SourcePane({
   activeSourceId,
   activeFeed,
+  cacheCleanupErrorMessage,
+  cacheStatus,
   canCollapseFolders,
   cacheSettings,
   cacheSettingsErrorMessage,
@@ -81,12 +89,14 @@ export function SourcePane({
   isExportingOpml,
   isImportingOpml,
   isRefreshingFeed,
+  isRunningCacheCleanup,
   isSavingCacheSettings,
   isSavingFeed,
   onCollapseAllFolders,
   onExportOpml,
   onImportOpml,
   onRefreshFeed,
+  onRunCacheCleanup,
   onSaveCacheSettings,
   onSelectSource,
   onSaveFeed,
@@ -226,6 +236,13 @@ export function SourcePane({
             isSaving={isSavingCacheSettings}
             onSaveSettings={onSaveCacheSettings}
             settings={cacheSettings}
+          />
+
+          <CacheMaintenanceCard
+            errorMessage={cacheCleanupErrorMessage}
+            isRunning={isRunningCacheCleanup}
+            onRunCleanup={onRunCacheCleanup}
+            status={cacheStatus}
           />
 
           <OpmlImportCard

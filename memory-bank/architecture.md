@@ -1937,3 +1937,38 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `apps/desktop` currently exposes both configuration surfaces, but it still does not perform eviction, attachment prefetch, or cache cleanup. Future Step 55 logic should consume the existing contracts rather than introducing new state.
 - `crates/feed-engine` and `crates/core-domain/src/sqlite/store.rs` together preserve a useful ownership rule: creation can seed a default cache policy, but ordinary ingest must not rewrite a policy the user already chose.
 - `crates/rule-engine` is not a cache-policy owner in this step; its touched files only keep tests and audit fixtures aligned with the expanded `Feed` entity.
+
+## 2026-04-27 ASCII Addendum XIX
+
+### Step 55 Architecture Insights
+
+- Step 55 keeps eviction logic in the correct local layer: cache cleanup is now a shell-visible behavior, but its planning rules still live outside React components and outside route composition.
+- The key architectural decision in this increment is to separate cleanup planning from cleanup application. `cache-maintenance.ts` computes pressure, candidate ordering, and eviction reports; `mock-data.ts` applies those results to the current shell snapshot.
+- Per-feed cache policy is now a hard cleanup boundary, not just descriptive metadata. If cached content contradicts a feed's durable `cachePolicy`, that cache is reclaimed before ordinary LRU pressure is considered.
+- LRU protection is intentionally narrower than cache policy. Starred articles, read-later articles, and note-bearing articles are protected from budget-driven cleanup, but they are not allowed to override an explicit source-level policy mismatch.
+- `ReaderShellData.cacheStatus` is desktop-local on purpose. It exposes cleanup state to the shell without promoting mock inventory details into shared DTO packages or Rust persistence before a durable cache engine exists.
+- No database schema migration was required for this step. Step 55 consumes the existing Step 54 inputs and the already-present attachment cache path field instead of adding new SQLite tables prematurely.
+
+### Step 55 File Responsibilities
+
+- `apps/desktop/src/features/reader-shell/cache-maintenance.ts`: owns pure cache-pressure summarization, policy-mismatch detection, protected-article checks, ordered cleanup candidate planning, and cleanup report generation.
+- `apps/desktop/src/features/reader-shell/mock-data.ts`: now owns mock cache inventory state, applies planned evictions to the shell snapshot, clears attachment `localCachePath` values when attachment cache entries are reclaimed, and preserves the latest cleanup report.
+- `apps/desktop/src/features/reader-shell/types.ts`: defines the desktop-local cache status, cleanup candidate, and cleanup report contracts shared by route composition, mock state, and cache-maintenance presentation.
+- `apps/desktop/src/features/reader-shell/components/cache-maintenance-card.tsx`: renders budget status, protected-cache facts, ordered cleanup candidates, and the latest cleanup outcome in the left pane.
+- `apps/desktop/src/features/reader-shell/components/source-pane.tsx`: composes the new cache-maintenance surface beside cache settings, feed editing, and OPML tools without merging their state models.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`: owns mutation wiring for cache cleanup and keeps cleanup triggering separate from cleanup planning and mock-state application.
+- `apps/desktop/src/features/reader-shell/cache-policy.ts`: now also provides shared byte-formatting helpers consumed by both cache settings and cache-maintenance presentation.
+- `apps/desktop/src/features/reader-shell/cache-maintenance.test.ts`: validates policy-mismatch precedence and protected LRU behavior at the pure-planner boundary.
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`: validates the user-visible Step 55 flow that lowering the cache budget, running cleanup, and re-reading shell data preserves protected podcast media while reclaiming unprotected cache.
+- `apps/desktop/src/styles.css`: contains the cache-maintenance card layout and candidate-list presentation rules, keeping this UI treatment local to the desktop shell.
+- `memory-bank/progress.md`: records the completed Step 55 milestone, verification commands, and the new next-step handoff toward Markdown export.
+- `memory-bank/architecture.md`: records the new cleanup-planning boundary, the explicit policy-vs-LRU precedence rule, and the file-level responsibility split for this increment.
+
+### Step 55 Boundary Notes
+
+- `packages/shared-config` continues to own the desktop-wide byte budget and default cache policy contract; Step 55 consumes those settings but does not redefine them.
+- `packages/shared-types` and `crates/core-domain` still own durable per-feed cache policy metadata. Step 55 reads that boundary through the desktop shell; it does not move cleanup policy into a separate ad hoc enum set.
+- `apps/desktop/src/features/reader-shell/cache-maintenance.ts` is not a downloader, prefetch scheduler, or durable storage engine. It only plans cleanup against the current cache inventory snapshot.
+- `apps/desktop/src/features/reader-shell/mock-data.ts` is still a mock repository, not the future production cache backend. This step proves cleanup semantics and UI boundaries before durable cache execution arrives.
+- `crates/core-domain`, SQLite, and `apps/desktop/src-tauri/src/storage.rs` remain unchanged in this increment. Durable cache reclamation in the real desktop runtime is still a later step.
+- Step 55 intentionally stops before Step 56 export work: no Markdown generation, batch export pipeline, or HTML/PDF serialization logic was added here.

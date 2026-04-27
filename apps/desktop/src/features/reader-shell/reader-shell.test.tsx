@@ -1269,6 +1269,71 @@ describe("reader shell navigation", () => {
     expect(importedFeed?.cachePolicy).toBe("metadata-only")
   })
 
+  test("runs cache cleanup with LRU protection and keeps protected article media cached", async () => {
+    window.scrollTo = () => {}
+    const user = userEvent.setup()
+
+    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+
+    const sourcePane = await screen.findByRole("region", { name: "Sources" })
+    const cacheSettingsSection = within(sourcePane)
+      .getByRole("heading", {
+        name: "Cache settings",
+      })
+      .closest("section")
+    const cleanupSection = within(sourcePane)
+      .getByRole("heading", {
+        name: "Cache cleanup",
+      })
+      .closest("section")
+
+    expect(cacheSettingsSection).not.toBeNull()
+    expect(cleanupSection).not.toBeNull()
+
+    const cacheSettingsScope = within(cacheSettingsSection as HTMLElement)
+    const cleanupScope = within(cleanupSection as HTMLElement)
+
+    await user.clear(cacheSettingsScope.getByLabelText("Global cache limit (MB)"))
+    await user.type(cacheSettingsScope.getByLabelText("Global cache limit (MB)"), "512")
+    await user.click(cacheSettingsScope.getByRole("button", { name: "Save cache settings" }))
+
+    await waitFor(() => {
+      expect(cleanupScope.getByText(/332 MB over budget/i)).toBeTruthy()
+      expect(
+        cleanupScope.getByText("Why layout state should stay separate from source and query state"),
+      ).toBeTruthy()
+      expect(
+        cleanupScope.getByText(
+          "Making narrow-window behavior predictable before routing and async data land",
+        ),
+      ).toBeTruthy()
+    })
+
+    await user.click(cleanupScope.getByRole("button", { name: "Run cleanup" }))
+
+    await waitFor(async () => {
+      const shellData = await fetchReaderShellData()
+      const protectedAudioAttachment = shellData.articleDetails[
+        "article-midnight-dispatch"
+      ]?.attachments.find((attachment) => attachment.id === "attachment-midnight-dispatch-audio")
+
+      expect(shellData.cacheStatus.overBudgetBytes).toBe(0)
+      expect(shellData.cacheStatus.cleanupCandidates).toHaveLength(0)
+      expect(shellData.cacheStatus.latestCleanup?.evictedEntryCount).toBe(2)
+      expect(shellData.cacheStatus.latestCleanup?.remainingBytes).toBe(436_207_616)
+      expect(protectedAudioAttachment?.localCachePath).toBe(
+        "cache/media/night-audio/dispatch-42.mp3",
+      )
+    })
+
+    await waitFor(() => {
+      expect(
+        cleanupScope.getByText(/within budget and aligned with current source policy/i),
+      ).toBeTruthy()
+      expect(cleanupScope.getByText(/freed 428 MB across 2 entries/i)).toBeTruthy()
+    })
+  })
+
   test("imports OPML with nested folders and skips duplicate feed URLs", async () => {
     window.scrollTo = () => {}
     const user = userEvent.setup()

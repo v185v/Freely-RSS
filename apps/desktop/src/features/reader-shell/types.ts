@@ -62,6 +62,43 @@ export interface ReaderCacheSettings {
   maxBytes: number
 }
 
+export type ReaderCacheEntryKind = "attachment" | "content"
+
+export type ReaderCacheCleanupReason = "lru" | "policy-mismatch"
+
+export interface ReaderCacheCleanupCandidate {
+  articleId: ArticleListItemDto["id"]
+  articleTitle: string
+  bytes: number
+  kind: ReaderCacheEntryKind
+  path: string
+  reason: ReaderCacheCleanupReason
+}
+
+export interface ReaderCacheCleanupReport {
+  completedAt: string
+  evictedBytes: number
+  evictedEntryCount: number
+  lruEntryCount: number
+  policyMismatchEntryCount: number
+  protectedArticleCount: number
+  remainingBytes: number
+  stillOverBudgetBytes: number
+}
+
+export interface ReaderCacheStatus {
+  cleanupCandidates: ReaderCacheCleanupCandidate[]
+  entryCount: number
+  evictableBytes: number
+  latestCleanup: ReaderCacheCleanupReport | null
+  limitBytes: number
+  overBudgetBytes: number
+  policyMismatchBytes: number
+  protectedArticleCount: number
+  protectedBytes: number
+  totalBytes: number
+}
+
 export interface SourceRow {
   description: string
   depth?: number
@@ -105,6 +142,7 @@ export interface OpmlExportReport {
 export interface ReaderShellData {
   articleDetails: Record<string, ArticleDetailDto>
   articles: ArticleListItemDto[]
+  cacheStatus: ReaderCacheStatus
   cacheSettings: ReaderCacheSettings
   feedDetails: Record<string, FeedDto>
   feeds: FeedSummaryDto[]
