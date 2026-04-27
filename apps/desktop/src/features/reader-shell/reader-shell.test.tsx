@@ -1118,6 +1118,7 @@ describe("reader shell navigation", () => {
       editorScope.getByLabelText("Icon URL"),
       "https://query.example/assets/query-notes.svg",
     )
+    await user.click(editorScope.getByRole("button", { name: "Content + attachments" }))
 
     await user.click(editorScope.getByRole("button", { name: "Save changes" }))
 
@@ -1135,6 +1136,11 @@ describe("reader shell navigation", () => {
       expect((editorScope.getByLabelText("Icon URL") as HTMLInputElement).value).toBe(
         "https://query.example/assets/query-notes.svg",
       )
+      expect(
+        editorScope
+          .getByRole("button", { name: "Content + attachments" })
+          .getAttribute("aria-pressed"),
+      ).toBe("true")
     })
 
     const queuePane = screen.getByRole("region", { name: "Article queue" })
@@ -1170,6 +1176,11 @@ describe("reader shell navigation", () => {
       expect((reopenedEditorScope.getByLabelText("Icon URL") as HTMLInputElement).value).toBe(
         "https://query.example/assets/query-notes.svg",
       )
+      expect(
+        reopenedEditorScope
+          .getByRole("button", { name: "Content + attachments" })
+          .getAttribute("aria-pressed"),
+      ).toBe("true")
     })
 
     await user.click(reopenedEditorScope.getByRole("button", { name: "Manual refresh" }))
@@ -1178,6 +1189,84 @@ describe("reader shell navigation", () => {
       expect(reopenedEditorScope.getAllByText("healthy").length).toBeGreaterThan(0)
       expect(reopenedEditorScope.queryByText(/malformed XML near the channel header/i)).toBeNull()
     })
+  })
+
+  test("persists global cache settings and seeds imported feeds with the current default policy", async () => {
+    window.scrollTo = () => {}
+    const user = userEvent.setup()
+    const renderShell = () =>
+      render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+
+    renderShell()
+
+    const sourcePane = await screen.findByRole("region", { name: "Sources" })
+    const cacheSettingsSection = within(sourcePane)
+      .getByRole("heading", {
+        name: "Cache settings",
+      })
+      .closest("section")
+
+    expect(cacheSettingsSection).not.toBeNull()
+
+    const cacheSettingsScope = within(cacheSettingsSection as HTMLElement)
+
+    await user.clear(cacheSettingsScope.getByLabelText("Global cache limit (MB)"))
+    await user.type(cacheSettingsScope.getByLabelText("Global cache limit (MB)"), "1024")
+    await user.click(cacheSettingsScope.getByRole("button", { name: "Metadata only" }))
+    await user.click(cacheSettingsScope.getByRole("button", { name: "Save cache settings" }))
+
+    await waitFor(async () => {
+      const shellData = await fetchReaderShellData()
+
+      expect(shellData.cacheSettings.maxBytes).toBe(1_073_741_824)
+      expect(shellData.cacheSettings.defaultPolicy).toBe("metadata-only")
+    })
+
+    cleanup()
+    renderShell()
+
+    const reopenedSourcePane = await screen.findByRole("region", { name: "Sources" })
+    const reopenedCacheSettingsSection = within(reopenedSourcePane)
+      .getByRole("heading", {
+        name: "Cache settings",
+      })
+      .closest("section")
+
+    expect(reopenedCacheSettingsSection).not.toBeNull()
+
+    const reopenedCacheSettingsScope = within(reopenedCacheSettingsSection as HTMLElement)
+
+    await waitFor(() => {
+      expect(
+        (reopenedCacheSettingsScope.getByLabelText("Global cache limit (MB)") as HTMLInputElement)
+          .value,
+      ).toBe("1024")
+      expect(
+        reopenedCacheSettingsScope
+          .getByRole("button", { name: "Metadata only" })
+          .getAttribute("aria-pressed"),
+      ).toBe("true")
+    })
+
+    const importResult = await importMockOpml(`<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <body>
+    <outline text="Cache defaults" title="Cache defaults">
+      <outline
+        text="Cache Default Feed"
+        title="Cache Default Feed"
+        type="rss"
+        xmlUrl="https://cache-default.example/feed.xml"
+        htmlUrl="https://cache-default.example"
+      />
+    </outline>
+  </body>
+</opml>`)
+    const importedFeed = Object.values(importResult.shellData.feedDetails).find(
+      (feed) => feed.feedUrl === "https://cache-default.example/feed.xml",
+    )
+
+    expect(importedFeed?.cachePolicy).toBe("metadata-only")
   })
 
   test("imports OPML with nested folders and skips duplicate feed URLs", async () => {

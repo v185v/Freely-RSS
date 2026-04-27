@@ -360,9 +360,9 @@ fn match_node(node: &QueryNode, context: &RuleMatchContext<'_>) -> bool {
 #[cfg(test)]
 mod tests {
     use freelyrss_core_domain::{
-        Article, ArticleId, Attachment, AttachmentId, AttachmentType, CachePath, Feed, FeedFormat,
-        FeedHealthStatus, FeedId, FolderId, ImportanceLevel, IsoDateTime, JsonBlob, LanguageCode,
-        ReadState, Rule, RuleId, Tag, TagId, TagScope, UrlString, UserState,
+        Article, ArticleId, Attachment, AttachmentId, AttachmentType, CachePath, CachePolicy, Feed,
+        FeedFormat, FeedHealthStatus, FeedId, FolderId, ImportanceLevel, IsoDateTime, JsonBlob,
+        LanguageCode, ReadState, Rule, RuleId, Tag, TagId, TagScope, UrlString, UserState,
     };
     use serde_json::json;
 
@@ -421,6 +421,7 @@ mod tests {
             custom_name: Some("Engineering Desk".to_owned()),
             sort_order: 0,
             update_interval: None,
+            cache_policy: CachePolicy::Content,
             health_status: FeedHealthStatus::Healthy,
             last_checked_at: None,
             last_success_at: None,

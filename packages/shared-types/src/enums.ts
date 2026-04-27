@@ -7,6 +7,9 @@ export type FeedHealthStatus = (typeof FEED_HEALTH_STATUSES)[number]
 export const FEED_ERROR_KINDS = ["network", "permission", "parse", "empty"] as const
 export type FeedErrorKind = (typeof FEED_ERROR_KINDS)[number]
 
+export const CACHE_POLICIES = ["metadata-only", "content", "content-and-attachments"] as const
+export type CachePolicy = (typeof CACHE_POLICIES)[number]
+
 export const FOLDER_KINDS = ["regular", "system", "group"] as const
 export type FolderKind = (typeof FOLDER_KINDS)[number]
 

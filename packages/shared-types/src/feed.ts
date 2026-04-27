@@ -1,4 +1,4 @@
-import type { FeedErrorKind, FeedFormat, FeedHealthStatus } from "./enums"
+import type { CachePolicy, FeedErrorKind, FeedFormat, FeedHealthStatus } from "./enums"
 import type { FeedId, FolderId, TagId } from "./ids"
 import type { FolderDto } from "./organization"
 import type { ISODateTimeString, Nullable, UrlString } from "./primitives"
@@ -14,6 +14,7 @@ export interface FeedDto {
   customName: Nullable<string>
   sortOrder: number
   updateInterval: Nullable<number>
+  cachePolicy: CachePolicy
   healthStatus: FeedHealthStatus
   lastCheckedAt: Nullable<ISODateTimeString>
   lastSuccessAt: Nullable<ISODateTimeString>

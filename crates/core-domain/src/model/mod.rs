@@ -10,8 +10,8 @@ mod primitives;
 pub use article::{Annotation, Article, Attachment, UserState};
 pub use automation::{AIArtifact, Rule, RuleAudit, SmartFolder, SyncEvent};
 pub use enums::{
-    AIArtifactKind, AnnotationType, AttachmentType, FeedErrorKind, FeedFormat, FeedHealthStatus,
-    FolderKind, ImportanceLevel, ReadState, RuleAuditMatchResult, TagScope,
+    AIArtifactKind, AnnotationType, AttachmentType, CachePolicy, FeedErrorKind, FeedFormat,
+    FeedHealthStatus, FolderKind, ImportanceLevel, ReadState, RuleAuditMatchResult, TagScope,
 };
 pub use error::ModelError;
 pub use feed::Feed;

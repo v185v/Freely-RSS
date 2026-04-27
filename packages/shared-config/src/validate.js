@@ -1,4 +1,11 @@
-import { AI_PROVIDERS, APP_ENVS, LOG_LEVELS, RUNTIME_TARGETS, SYNC_MODES } from "./defaults.js"
+import {
+  AI_PROVIDERS,
+  APP_ENVS,
+  CACHE_POLICIES,
+  LOG_LEVELS,
+  RUNTIME_TARGETS,
+  SYNC_MODES,
+} from "./defaults.js"
 import { ConfigValidationError } from "./errors.js"
 
 const assertEnum = (path, value, values) => {
@@ -10,6 +17,12 @@ const assertEnum = (path, value, values) => {
 const assertNonNegativeInteger = (path, value) => {
   if (!Number.isInteger(value) || value < 0) {
     throw new ConfigValidationError(path, "must be a non-negative integer")
+  }
+}
+
+const assertPositiveInteger = (path, value) => {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new ConfigValidationError(path, "must be a positive integer")
   }
 }
 
@@ -110,6 +123,9 @@ export const validateConfig = (config) => {
   } else if (config.ai.baseUrl !== null) {
     assertUrl("ai.baseUrl", config.ai.baseUrl)
   }
+
+  assertEnum("cache.defaultPolicy", config.cache.defaultPolicy, CACHE_POLICIES)
+  assertPositiveInteger("cache.maxBytes", config.cache.maxBytes)
 
   return config
 }

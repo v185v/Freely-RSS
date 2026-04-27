@@ -3,6 +3,7 @@ import type {
   AnnotationDto,
   ArticleDetailDto,
   ArticleListItemDto,
+  CachePolicy,
   FeedDto,
   FeedSummaryDto,
   FolderDto,
@@ -56,6 +57,11 @@ export interface ReaderPresentationSettings {
   themeTone: ReaderThemeTone
 }
 
+export interface ReaderCacheSettings {
+  defaultPolicy: CachePolicy
+  maxBytes: number
+}
+
 export interface SourceRow {
   description: string
   depth?: number
@@ -99,6 +105,7 @@ export interface OpmlExportReport {
 export interface ReaderShellData {
   articleDetails: Record<string, ArticleDetailDto>
   articles: ArticleListItemDto[]
+  cacheSettings: ReaderCacheSettings
   feedDetails: Record<string, FeedDto>
   feeds: FeedSummaryDto[]
   folders: FolderDto[]

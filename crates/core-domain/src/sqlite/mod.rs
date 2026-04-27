@@ -182,7 +182,7 @@ mod tests {
             .expect("database initialization should succeed");
 
         assert_eq!(report.current_version, latest_schema_version());
-        assert_eq!(report.applied_versions, vec![1, 2, 3, 4, 5, 6, 7]);
+        assert_eq!(report.applied_versions, vec![1, 2, 3, 4, 5, 6, 7, 8]);
         assert!(database_path.exists());
 
         let connection = Connection::open(&database_path).expect("open database");
@@ -201,7 +201,7 @@ mod tests {
             )
             .expect("bootstrap metadata should be present");
 
-        assert_eq!(recorded_version, 7);
+        assert_eq!(recorded_version, 8);
         assert_eq!(bootstrap_value, "ready");
     }
 
@@ -242,6 +242,7 @@ mod tests {
                     "last_error_message",
                     "last_error_at",
                     "consecutive_failures",
+                    "cache_policy",
                 ],
             ),
             (
@@ -850,10 +851,10 @@ mod tests {
             &DatabaseInitializationOptions::new().with_backup_dir(&backup_dir),
             embedded_migrations(),
         )
-        .expect("apply v7 migration");
+        .expect("apply v7-v8 migrations");
 
-        assert_eq!(report.current_version, 7);
-        assert_eq!(report.applied_versions, vec![7]);
+        assert_eq!(report.current_version, 8);
+        assert_eq!(report.applied_versions, vec![7, 8]);
         assert!(report.backup_path.is_some());
         assert_eq!(
             table_columns(&connection, "RuleAudit"),
@@ -880,6 +881,84 @@ mod tests {
                 .iter()
                 .any(|index| index.name == "idx_rule_audit_article_id_created_at")
         );
+    }
+
+    #[test]
+    fn applies_feed_cache_policy_when_upgrading_from_v7_to_v8() {
+        let temp_dir = tempdir().expect("tempdir");
+        let database_path = temp_dir.path().join("freelyrss.sqlite3");
+        let backup_dir = temp_dir.path().join("backups");
+        let mut connection = Connection::open(&database_path).expect("open database");
+
+        prepare_connection(&connection).expect("prepare connection");
+        apply_migration_set(
+            &mut connection,
+            &database_path,
+            &DatabaseInitializationOptions::default(),
+            &embedded_migrations()[..7],
+        )
+        .expect("apply v1-v7 migrations");
+        connection
+            .execute(
+                "INSERT INTO Feed (id, title, feed_url, format) VALUES (?1, ?2, ?3, ?4)",
+                params![
+                    "feed-cache-policy-upgrade",
+                    "Cache policy upgrade feed",
+                    "https://example.com/cache-upgrade.xml",
+                    "rss"
+                ],
+            )
+            .expect("insert legacy feed row");
+
+        let report = apply_migration_set(
+            &mut connection,
+            &database_path,
+            &DatabaseInitializationOptions::new().with_backup_dir(&backup_dir),
+            embedded_migrations(),
+        )
+        .expect("apply v8 migration");
+
+        assert_eq!(report.current_version, 8);
+        assert_eq!(report.applied_versions, vec![8]);
+        assert!(report.backup_path.is_some());
+        assert_eq!(
+            table_columns(&connection, "Feed"),
+            vec![
+                "id",
+                "title",
+                "site_url",
+                "feed_url",
+                "format",
+                "icon",
+                "folder_id",
+                "custom_name",
+                "sort_order",
+                "update_interval",
+                "health_status",
+                "last_checked_at",
+                "last_success_at",
+                "etag",
+                "last_modified",
+                "last_error_kind",
+                "last_error_message",
+                "last_error_at",
+                "consecutive_failures",
+                "cache_policy",
+            ]
+        );
+
+        let default_policy: String = connection
+            .query_row(
+                "SELECT cache_policy
+                FROM Feed
+                WHERE id = ?1
+                LIMIT 1",
+                params!["feed-cache-policy-upgrade"],
+                |row| row.get(0),
+            )
+            .expect("read upgraded cache policy");
+
+        assert_eq!(default_policy, "content");
     }
 
     #[test]

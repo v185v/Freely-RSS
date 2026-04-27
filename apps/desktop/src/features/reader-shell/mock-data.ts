@@ -21,11 +21,17 @@ import type {
   CreateReaderAnnotationInput,
   OpmlExportReport,
   OpmlImportReport,
+  ReaderCacheSettings,
   ReaderShellData,
   SourceRow,
 } from "./types"
 
 export const readerShellQueryKey = ["desktop-reader-shell", "mock-data"] as const
+
+const initialCacheSettings: ReaderCacheSettings = {
+  maxBytes: 2_147_483_648,
+  defaultPolicy: "content",
+}
 
 const folders: FolderDto[] = [
   {
@@ -70,6 +76,7 @@ const feedDetails: FeedDto[] = [
     customName: null,
     sortOrder: 10,
     updateInterval: 45,
+    cachePolicy: "content",
     healthStatus: "healthy",
     lastCheckedAt: "2026-04-18T09:20:00Z",
     lastSuccessAt: "2026-04-18T09:20:00Z",
@@ -91,6 +98,7 @@ const feedDetails: FeedDto[] = [
     customName: "Rust Systems Watch",
     sortOrder: 20,
     updateInterval: 120,
+    cachePolicy: "content",
     healthStatus: "healthy",
     lastCheckedAt: "2026-04-18T08:55:00Z",
     lastSuccessAt: "2026-04-18T08:55:00Z",
@@ -112,6 +120,7 @@ const feedDetails: FeedDto[] = [
     customName: null,
     sortOrder: 10,
     updateInterval: 90,
+    cachePolicy: "metadata-only",
     healthStatus: "degraded",
     lastCheckedAt: "2026-04-18T07:40:00Z",
     lastSuccessAt: "2026-04-18T05:15:00Z",
@@ -133,6 +142,7 @@ const feedDetails: FeedDto[] = [
     customName: null,
     sortOrder: 10,
     updateInterval: null,
+    cachePolicy: "content-and-attachments",
     healthStatus: "paused",
     lastCheckedAt: "2026-04-17T22:10:00Z",
     lastSuccessAt: "2026-04-17T22:10:00Z",
@@ -154,6 +164,7 @@ const feedDetails: FeedDto[] = [
     customName: null,
     sortOrder: 40,
     updateInterval: 240,
+    cachePolicy: "metadata-only",
     healthStatus: "paused",
     lastCheckedAt: "2026-04-17T18:00:00Z",
     lastSuccessAt: "2026-04-17T18:00:00Z",
@@ -622,6 +633,7 @@ const DEFAULT_ANNOTATION_COLORS: Record<CreateReaderAnnotationInput["type"], str
 type MockReaderState = {
   articleDetails: Record<string, ArticleDetailDto>
   articles: ArticleListItemDto[]
+  cacheSettings: ReaderCacheSettings
   feedDetails: FeedDto[]
   feedTagIdsByFeedId: Record<string, string[]>
   folders: FolderDto[]
@@ -1083,6 +1095,7 @@ function createEmptyMockReaderState(): MockReaderState {
   return {
     articleDetails: {},
     articles: [],
+    cacheSettings: cloneValue(initialCacheSettings),
     feedDetails: [],
     feedTagIdsByFeedId: {},
     folders: [],
@@ -1105,6 +1118,7 @@ function createDenseQueueFeed(): FeedDto {
     customName: null,
     sortOrder: 20,
     updateInterval: 30,
+    cachePolicy: "content",
     healthStatus: "healthy",
     lastCheckedAt: "2026-04-21T08:20:00Z",
     lastSuccessAt: "2026-04-21T08:20:00Z",
@@ -1333,6 +1347,7 @@ function buildReaderShellSnapshot(state: MockReaderState): ReaderShellData {
   return {
     articleDetails: cloneValue(state.articleDetails),
     articles: cloneValue(state.articles),
+    cacheSettings: cloneValue(state.cacheSettings),
     feedDetails: Object.fromEntries(
       state.feedDetails.map((feed) => [feed.id, cloneValue(feed)]),
     ) as Record<string, FeedDto>,
@@ -1355,6 +1370,7 @@ function createInitialMockReaderState(): MockReaderState {
   return {
     articleDetails: cloneValue(articleDetails),
     articles: cloneValue(articles),
+    cacheSettings: cloneValue(initialCacheSettings),
     feedDetails: cloneValue(feedDetails),
     feedTagIdsByFeedId: cloneValue(feedTagIdsByFeedId),
     folders: cloneValue(folders),
@@ -1517,6 +1533,7 @@ export async function fetchReaderShellData(): Promise<ReaderShellData> {
 }
 
 export async function updateMockFeed(input: {
+  cachePolicy: FeedDto["cachePolicy"]
   customName: string | null
   feedId: FeedDto["id"]
   icon: string | null
@@ -1532,6 +1549,7 @@ export async function updateMockFeed(input: {
 
   const nextFeed: FeedDto = {
     ...currentFeed,
+    cachePolicy: input.cachePolicy,
     title: normalizedTitle,
     customName: input.customName,
     updateInterval: input.updateInterval,
@@ -1540,6 +1558,14 @@ export async function updateMockFeed(input: {
 
   replaceFeed(nextFeed)
   syncFeedPresentation(nextFeed)
+
+  return buildReaderShellSnapshot(mockReaderState)
+}
+
+export async function updateMockCacheSettings(
+  settings: ReaderCacheSettings,
+): Promise<ReaderShellData> {
+  mockReaderState.cacheSettings = cloneValue(settings)
 
   return buildReaderShellSnapshot(mockReaderState)
 }
@@ -1690,6 +1716,7 @@ export async function importMockOpml(opmlText: string): Promise<MockOpmlImportRe
         customName: null,
         sortOrder: takeNextSortOrder(feedSortOrders, parentId),
         updateInterval: null,
+        cachePolicy: mockReaderState.cacheSettings.defaultPolicy,
         healthStatus: "pending",
         lastCheckedAt: null,
         lastSuccessAt: null,

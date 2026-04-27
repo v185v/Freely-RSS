@@ -3,7 +3,14 @@ import { type CSSProperties, type Ref, useRef } from "react"
 import type { FeedDto } from "@freelyrss/shared-types"
 import { Button, ListRow, ListSection, SplitPane, Surface } from "@freelyrss/ui"
 
-import type { OpmlExportReport, OpmlImportReport, SourceRow, SubscriptionTreeRow } from "../types"
+import type {
+  OpmlExportReport,
+  OpmlImportReport,
+  ReaderCacheSettings,
+  SourceRow,
+  SubscriptionTreeRow,
+} from "../types"
+import { CacheSettingsCard } from "./cache-settings-card"
 import { FeedEditorCard } from "./feed-editor-card"
 import { OpmlExportCard } from "./opml-export-card"
 import { OpmlImportCard } from "./opml-import-card"
@@ -12,6 +19,8 @@ type SourcePaneProps = {
   activeSourceId: string
   activeFeed: FeedDto | null
   canCollapseFolders: boolean
+  cacheSettings: ReaderCacheSettings
+  cacheSettingsErrorMessage: string | null
   describedBy?: string
   editorErrorMessage: string | null
   exportErrorMessage: string | null
@@ -23,13 +32,16 @@ type SourcePaneProps = {
   isExportingOpml: boolean
   isImportingOpml: boolean
   isRefreshingFeed: boolean
+  isSavingCacheSettings: boolean
   isSavingFeed: boolean
   onCollapseAllFolders: () => void
   onExportOpml: () => void
   onImportOpml: (opmlText: string) => void
   onRefreshFeed: (feedId: FeedDto["id"]) => void
+  onSaveCacheSettings: (settings: ReaderCacheSettings) => void
   onSelectSource: (sourceId: string) => void
   onSaveFeed: (input: {
+    cachePolicy: FeedDto["cachePolicy"]
     customName: string | null
     feedId: FeedDto["id"]
     icon: string | null
@@ -56,6 +68,8 @@ export function SourcePane({
   activeSourceId,
   activeFeed,
   canCollapseFolders,
+  cacheSettings,
+  cacheSettingsErrorMessage,
   describedBy,
   editorErrorMessage,
   exportErrorMessage,
@@ -67,11 +81,13 @@ export function SourcePane({
   isExportingOpml,
   isImportingOpml,
   isRefreshingFeed,
+  isSavingCacheSettings,
   isSavingFeed,
   onCollapseAllFolders,
   onExportOpml,
   onImportOpml,
   onRefreshFeed,
+  onSaveCacheSettings,
   onSelectSource,
   onSaveFeed,
   onToggleFolderCollapsed,
@@ -100,8 +116,8 @@ export function SourcePane({
           <h2 id={headingId}>Sources</h2>
           <p className="desktop-pane__description">
             Quick views stay route-backed, folder expansion remains local shell state, and feed
-            editing plus OPML portability now live beside source selection instead of leaking into
-            shared DTO assembly.
+            editing, cache defaults, and OPML portability now live beside source selection instead
+            of leaking into shared DTO assembly.
           </p>
         </div>
 
@@ -203,6 +219,13 @@ export function SourcePane({
             isSaving={isSavingFeed}
             onRefreshFeed={onRefreshFeed}
             onSaveFeed={onSaveFeed}
+          />
+
+          <CacheSettingsCard
+            errorMessage={cacheSettingsErrorMessage}
+            isSaving={isSavingCacheSettings}
+            onSaveSettings={onSaveCacheSettings}
+            settings={cacheSettings}
           />
 
           <OpmlImportCard

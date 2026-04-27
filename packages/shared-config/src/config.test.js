@@ -11,6 +11,8 @@ test("loads a desktop development config with layered proxy settings", () => {
       HTTP_PROXY: "http://standard-proxy.internal:8080",
       NO_PROXY: "localhost,127.0.0.1",
       FREELYRSS_PROXY_API_URL: "http://api-proxy.internal:9000",
+      FREELYRSS_CACHE_MAX_BYTES: "536870912",
+      FREELYRSS_CACHE_DEFAULT_POLICY: "metadata-only",
       FREELYRSS_EXPERIMENTAL_DESKTOP_LOCAL_API: "true",
     },
   })
@@ -28,6 +30,8 @@ test("loads a desktop development config with layered proxy settings", () => {
   assert.equal(config.proxy.httpUrl, "http://standard-proxy.internal:8080")
   assert.equal(config.proxy.apiProxyUrl, "http://api-proxy.internal:9000")
   assert.deepEqual(config.proxy.noProxy, ["localhost", "127.0.0.1"])
+  assert.equal(config.cache.maxBytes, 536_870_912)
+  assert.equal(config.cache.defaultPolicy, "metadata-only")
   assert.equal(config.experimental.desktopLocalApi, true)
   assert.equal(config.sync.enabled, false)
   assert.equal(config.ai.enabled, false)
@@ -56,6 +60,8 @@ test("loads a desktop test config with deterministic defaults and explicit overr
   assert.equal(config.logLevel, "warn")
   assert.equal(config.sync.deviceName, "desktop-test-runner")
   assert.equal(config.sync.pollIntervalMinutes, 1)
+  assert.equal(config.cache.maxBytes, 2_147_483_648)
+  assert.equal(config.cache.defaultPolicy, "content")
   assert.equal(config.experimental.syncAdapters, true)
 })
 
@@ -96,6 +102,25 @@ test("throws a clear error when AI is enabled without required provider credenti
       assert.ok(error instanceof ConfigValidationError)
       assert.equal(error.path, "ai.apiKey")
       assert.match(error.message, /required when ai\.provider is "openai-compatible"/)
+      return true
+    },
+  )
+})
+
+test("throws a clear error when cache max bytes is not a positive integer", () => {
+  assert.throws(
+    () =>
+      loadConfig({
+        env: {
+          FREELYRSS_APP_ENV: "development",
+          FREELYRSS_RUNTIME_TARGET: "desktop",
+          FREELYRSS_CACHE_MAX_BYTES: "0",
+        },
+      }),
+    (error) => {
+      assert.ok(error instanceof ConfigValidationError)
+      assert.equal(error.path, "cache.maxBytes")
+      assert.match(error.message, /positive integer/)
       return true
     },
   )

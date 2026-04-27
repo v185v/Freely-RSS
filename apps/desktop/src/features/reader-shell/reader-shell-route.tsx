@@ -34,6 +34,7 @@ import {
   readerShellQueryKey,
   refreshMockFeed,
   updateMockArticleState,
+  updateMockCacheSettings,
   updateMockFeed,
 } from "./mock-data"
 import {
@@ -118,6 +119,12 @@ export function ReaderShellRoute() {
   })
   const refreshFeedMutation = useMutation({
     mutationFn: refreshMockFeed,
+    onSuccess: (nextShellData) => {
+      queryClient.setQueryData(readerShellQueryKey, nextShellData)
+    },
+  })
+  const saveCacheSettingsMutation = useMutation({
+    mutationFn: updateMockCacheSettings,
     onSuccess: (nextShellData) => {
       queryClient.setQueryData(readerShellQueryKey, nextShellData)
     },
@@ -397,6 +404,10 @@ export function ReaderShellRoute() {
   const editorErrorMessage =
     (saveFeedMutation.error instanceof Error ? saveFeedMutation.error.message : null) ??
     (refreshFeedMutation.error instanceof Error ? refreshFeedMutation.error.message : null)
+  const cacheSettingsErrorMessage =
+    saveCacheSettingsMutation.error instanceof Error
+      ? saveCacheSettingsMutation.error.message
+      : null
   const articleStateErrorMessage =
     updateArticleStateMutation.error instanceof Error
       ? updateArticleStateMutation.error.message
@@ -422,8 +433,8 @@ export function ReaderShellRoute() {
     return (
       <main className="desktop-shell">
         <div className="desktop-loading">
-          <p className="desktop-shell__eyebrow">Stage 5 / Step 47</p>
-          <h1>Loading the route-backed reader shell and shared-query validation flow.</h1>
+          <p className="desktop-shell__eyebrow">Stage 7 / Step 54</p>
+          <h1>Loading cache policy controls for the desktop reader shell.</h1>
         </div>
       </main>
     )
@@ -529,19 +540,15 @@ export function ReaderShellRoute() {
 
       <header className="desktop-shell__header">
         <div className="desktop-shell__title-block">
-          <p className="desktop-shell__eyebrow">Stage 5 / Step 47</p>
-          <h1>The desktop shell now parses and validates queue filters through shared-query.</h1>
+          <p className="desktop-shell__eyebrow">Stage 7 / Step 54</p>
+          <h1>The desktop shell now configures global and per-feed cache policies.</h1>
           <p className="desktop-shell__lead">
             Route state still owns the active source and article, the shell store still owns only
-            local queue controls, folder expansion, the persisted reader content-mode preference,
-            and the persisted reading presentation settings, while the mock repository remains a
-            shell-side snapshot source. Step 47 keeps the Step 37 query boundary, Step 38
-            virtualization boundary, Step 39 reading-panel boundary, Step 40 content-mode boundary,
-            Step 42 attachment presentation boundary, Step 43 article-state command boundary, Step
-            44 keyboard workflow boundary, Step 45 reader-preference boundary, and Step 46
-            annotation boundary intact, then routes queue filter text through the shared-query
-            parser and validator so explicit filter errors become visible without promoting query
-            execution into route state, shared DTOs, or SQLite yet.
+            local queue controls and presentation preferences, and the mock repository remains the
+            shell-side snapshot source. Step 54 keeps the existing reader, search, and annotation
+            boundaries intact while adding one desktop-wide cache budget plus one per-feed cache
+            policy path, so later eviction and offline-download work can consume explicit settings
+            instead of inferring them from ad hoc UI state.
           </p>
         </div>
 
@@ -573,11 +580,10 @@ export function ReaderShellRoute() {
           </div>
 
           <p className="desktop-summary__note">
-            The queue still consumes one route-backed article query while source editing, OPML
-            portability, and tree expansion remain separate concerns. Step 47 keeps the existing
-            landmark shortcuts, reader authoring workflow, and shell-owned annotation path, then
-            adds parser-backed queue filtering so malformed text queries fail in one shared-query
-            boundary instead of silently diverging inside the shell.
+            The queue still consumes one route-backed article query while cache configuration,
+            source editing, OPML portability, and tree expansion remain separate concerns. Step 54
+            adds explicit cache defaults and feed-specific policy controls without pushing storage
+            eviction logic into the React route layer.
           </p>
 
           <div className="desktop-shortcuts">
@@ -633,6 +639,8 @@ export function ReaderShellRoute() {
             canCollapseFolders={subscriptionRows.some(
               (row) => row.kind === "folder" && !row.isCollapsed,
             )}
+            cacheSettings={resolvedShellData.cacheSettings}
+            cacheSettingsErrorMessage={cacheSettingsErrorMessage}
             describedBy={READER_SHORTCUT_HINT_ID}
             editorErrorMessage={editorErrorMessage}
             exportErrorMessage={
@@ -648,6 +656,7 @@ export function ReaderShellRoute() {
             isExportingOpml={exportOpmlMutation.isPending}
             isImportingOpml={importOpmlMutation.isPending}
             isRefreshingFeed={refreshFeedMutation.isPending}
+            isSavingCacheSettings={saveCacheSettingsMutation.isPending}
             isSavingFeed={saveFeedMutation.isPending}
             onCollapseAllFolders={() => setCollapsedFolderIds(collapsibleFolderIds)}
             onExportOpml={() => {
@@ -666,8 +675,18 @@ export function ReaderShellRoute() {
               setOpmlExportResult(null)
               importOpmlMutation.reset()
               refreshFeedMutation.reset()
+              saveCacheSettingsMutation.reset()
               saveFeedMutation.reset()
               refreshFeedMutation.mutate(feedId)
+            }}
+            onSaveCacheSettings={(settings) => {
+              exportOpmlMutation.reset()
+              setOpmlExportResult(null)
+              importOpmlMutation.reset()
+              refreshFeedMutation.reset()
+              saveFeedMutation.reset()
+              saveCacheSettingsMutation.reset()
+              saveCacheSettingsMutation.mutate(settings)
             }}
             onSelectSource={selectSource}
             onSaveFeed={(input) => {
@@ -675,6 +694,7 @@ export function ReaderShellRoute() {
               setOpmlExportResult(null)
               importOpmlMutation.reset()
               refreshFeedMutation.reset()
+              saveCacheSettingsMutation.reset()
               saveFeedMutation.reset()
               saveFeedMutation.mutate(input)
             }}

@@ -3,6 +3,7 @@ export const RUNTIME_TARGETS = ["desktop", "web", "mobile", "sync-server"]
 export const LOG_LEVELS = ["debug", "info", "warn", "error"]
 export const SYNC_MODES = ["disabled", "cloud", "webdav", "nextcloud"]
 export const AI_PROVIDERS = ["disabled", "openai-compatible", "ollama"]
+export const CACHE_POLICIES = ["metadata-only", "content", "content-and-attachments"]
 
 export const CONFIG_SOURCE_PRIORITY = Object.freeze([
   "defaults",
@@ -54,6 +55,10 @@ export const createDefaultConfig = (appEnv = "development", runtimeTarget = "des
       apiKey: null,
       model: null,
       timeoutMs: 30_000,
+    },
+    cache: {
+      maxBytes: 2_147_483_648,
+      defaultPolicy: "content",
     },
     experimental: {
       desktopLocalApi: false,

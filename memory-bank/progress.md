@@ -1233,3 +1233,38 @@
 - `crates/core-domain/src/sqlite/article_search_store.rs` now owns durable snippet generation in addition to ranked search/list retrieval.
 - `apps/desktop/src/features/reader-shell/search-highlighting.tsx` owns browser/mock fallback snippet building and reader highlight range derivation, not durable queue loading.
 - `apps/desktop/src/features/reader-shell/components/queue-pane.tsx` and `components/reader-pane.tsx` now own Step 53 presentation only; they still do not define search semantics or storage behavior.
+
+## 2026-04-27 ASCII Addendum XVIII
+
+### Stage 7 Step 54 Completed: cache policy configuration
+
+- Completed `implementation-plan.md` Stage 7 Step 54 by separating cache configuration into two explicit contracts: desktop-wide runtime defaults and per-feed durable cache policy metadata.
+- Finished the runtime-wide configuration boundary in `packages/shared-config` by adding cache defaults, environment parsing, validation, and documentation for `cache.maxBytes` plus `cache.defaultPolicy`.
+- Finished the shared feed contract by adding the `CachePolicy` enum and `FeedDto.cachePolicy` in `packages/shared-types`, then carrying the same field through `crates/core-domain` and SQLite migration `008_feed_cache_policy.sql`.
+- Kept the per-feed policy durable while keeping the desktop-wide cache budget non-SQLite. This is the key boundary decision in Step 54: feed-level cache behavior belongs to feed metadata, but the global byte budget and default policy still belong to runtime configuration rather than a new business table.
+- Added `apps/desktop/src/features/reader-shell/cache-policy.ts` as a small desktop helper boundary for human-readable policy labels and MB/bytes conversion so multiple components do not duplicate cache-policy wording or unit math.
+- Added `apps/desktop/src/features/reader-shell/components/cache-settings-card.tsx` so the source pane now has an explicit desktop-wide cache settings surface, separate from feed metadata editing.
+- Extended `apps/desktop/src/features/reader-shell/components/feed-editor-card.tsx` so source metadata editing now includes a per-feed cache policy choice without mixing that concern into queue filtering, reader presentation, or OPML UI.
+- Updated `apps/desktop/src/features/reader-shell/mock-data.ts` so shell snapshots now carry `cacheSettings`, feed edits persist `cachePolicy`, and imported feeds inherit the current desktop default policy. This keeps new-source creation aligned with the cache-settings contract instead of inventing an import-only fallback.
+- Added browser-side regression coverage proving that per-feed cache policy survives shell reopen and that changing the global default policy changes the default assigned to newly imported feeds.
+
+### Step 54 Verification
+
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm --filter @freelyrss/desktop test -- --run reader-shell.test.tsx`
+- Passed `corepack pnpm run test:config`
+- Passed `cargo test -p freelyrss-core-domain`
+- Passed `corepack pnpm run format`
+- Passed `cargo fmt --all`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+
+### Next Step (ASCII update)
+
+- The next implementation step in `implementation-plan.md` is Stage 7 Step 55: cache eviction strategy.
+- Preserve the current boundary split:
+- `packages/shared-config` owns the desktop-wide cache limit and default cache policy contract.
+- `packages/shared-types` plus `crates/core-domain` own the shared `CachePolicy` enum and durable feed DTO/domain field.
+- `crates/core-domain/src/sqlite/store.rs` writes `cache_policy` on feed creation but intentionally does not overwrite user-managed feed policy during ordinary ingest updates.
+- `apps/desktop/src/features/reader-shell` now edits both global defaults and per-feed policy, but it still does not implement eviction or attachment/content download behavior itself.
+- Step 55 should consume these settings as inputs to eviction logic rather than redefining cache policy state in a second place.

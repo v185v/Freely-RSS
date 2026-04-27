@@ -1,10 +1,10 @@
 use crate::model::{
     AIArtifact, AIArtifactId, AIArtifactKind, Annotation, AnnotationId, AnnotationType, Article,
-    ArticleId, ArticleTag, Attachment, AttachmentId, AttachmentType, CachePath, DeviceId, Feed,
-    FeedErrorKind, FeedFormat, FeedHealthStatus, FeedId, FeedTag, Folder, FolderId, FolderKind,
-    HexColor, ImportanceLevel, IsoDateTime, JsonBlob, LanguageCode, ModelError, ReadState, Rule,
-    RuleAudit, RuleAuditId, RuleAuditMatchResult, RuleId, SmartFolder, SmartFolderId, SyncEvent,
-    SyncEventId, Tag, TagId, TagScope, UrlString, UserState,
+    ArticleId, ArticleTag, Attachment, AttachmentId, AttachmentType, CachePath, CachePolicy,
+    DeviceId, Feed, FeedErrorKind, FeedFormat, FeedHealthStatus, FeedId, FeedTag, Folder, FolderId,
+    FolderKind, HexColor, ImportanceLevel, IsoDateTime, JsonBlob, LanguageCode, ModelError,
+    ReadState, Rule, RuleAudit, RuleAuditId, RuleAuditMatchResult, RuleId, SmartFolder,
+    SmartFolderId, SyncEvent, SyncEventId, Tag, TagId, TagScope, UrlString, UserState,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -49,6 +49,7 @@ struct FeedRecord {
     custom_name: Option<String>,
     sort_order: i64,
     update_interval: Option<i64>,
+    cache_policy: String,
     health_status: String,
     last_checked_at: Option<String>,
     last_success_at: Option<String>,
@@ -276,6 +277,7 @@ impl TryFrom<FeedRecord> for Feed {
             custom_name: record.custom_name,
             sort_order: record.sort_order,
             update_interval: record.update_interval,
+            cache_policy: CachePolicy::try_from(record.cache_policy)?,
             health_status: FeedHealthStatus::try_from(record.health_status)?,
             last_checked_at: record
                 .last_checked_at
@@ -314,6 +316,7 @@ impl From<Feed> for FeedRecord {
             custom_name: value.custom_name,
             sort_order: value.sort_order,
             update_interval: value.update_interval,
+            cache_policy: value.cache_policy.as_str().to_owned(),
             health_status: value.health_status.as_str().to_owned(),
             last_checked_at: value.last_checked_at.map(Into::into),
             last_success_at: value.last_success_at.map(Into::into),
@@ -706,6 +709,7 @@ mod tests {
             custom_name: Some("Rust Weekly Custom".into()),
             sort_order: 7,
             update_interval: Some(60),
+            cache_policy: "content-and-attachments".into(),
             health_status: "healthy".into(),
             last_checked_at: Some("2026-04-11T10:10:00Z".into()),
             last_success_at: Some("2026-04-11T10:00:00Z".into()),
@@ -988,6 +992,7 @@ mod tests {
             custom_name: None,
             sort_order: 0,
             update_interval: None,
+            cache_policy: "content".into(),
             health_status: "healthy".into(),
             last_checked_at: None,
             last_success_at: None,

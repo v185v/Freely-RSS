@@ -3,6 +3,8 @@ import { useEffect, useState } from "react"
 import type { FeedDto } from "@freelyrss/shared-types"
 import { Button, ListSection, Surface, TextInput } from "@freelyrss/ui"
 
+import { CACHE_POLICY_OPTIONS, getCachePolicyOption } from "../cache-policy"
+
 type FeedEditorCardProps = {
   errorMessage: string | null
   feed: FeedDto | null
@@ -10,6 +12,7 @@ type FeedEditorCardProps = {
   isSaving: boolean
   onRefreshFeed: (feedId: FeedDto["id"]) => void
   onSaveFeed: (input: {
+    cachePolicy: FeedDto["cachePolicy"]
     customName: string | null
     feedId: FeedDto["id"]
     icon: string | null
@@ -19,6 +22,7 @@ type FeedEditorCardProps = {
 }
 
 type FeedEditorDraft = {
+  cachePolicy: FeedDto["cachePolicy"]
   customName: string
   icon: string
   title: string
@@ -27,6 +31,7 @@ type FeedEditorDraft = {
 
 function buildDraft(feed: FeedDto | null): FeedEditorDraft {
   return {
+    cachePolicy: feed?.cachePolicy ?? "content",
     title: feed?.title ?? "",
     customName: feed?.customName ?? "",
     updateInterval: feed?.updateInterval == null ? "" : String(feed.updateInterval),
@@ -120,6 +125,7 @@ export function FeedEditorCard({
     }
 
     onSaveFeed({
+      cachePolicy: draft.cachePolicy,
       feedId: activeFeed.id,
       title,
       customName: normalizeNullableText(draft.customName),
@@ -146,6 +152,10 @@ export function FeedEditorCard({
           <div>
             <span className="desktop-summary__label">Failures</span>
             <strong>{activeFeed.consecutiveFailures}</strong>
+          </div>
+          <div>
+            <span className="desktop-summary__label">Cache policy</span>
+            <strong>{getCachePolicyOption(draft.cachePolicy).label}</strong>
           </div>
         </div>
 
@@ -202,6 +212,35 @@ export function FeedEditorCard({
             placeholder="https://assets.example/icon.svg"
             value={draft.icon}
           />
+
+          <div className="desktop-editor__policy-field">
+            <span className="desktop-summary__label">Feed cache policy</span>
+            <p className="desktop-editor__policy-note">
+              Source-level cache rules stay with this feed, even if the desktop-wide default changes
+              later for newly added subscriptions.
+            </p>
+            <fieldset aria-label="Feed cache policy" className="desktop-editor__policy-grid">
+              {CACHE_POLICY_OPTIONS.map((option) => (
+                <Button
+                  aria-pressed={draft.cachePolicy === option.value}
+                  className={
+                    draft.cachePolicy === option.value
+                      ? "desktop-editor__policy-button desktop-editor__policy-button--active"
+                      : "desktop-editor__policy-button"
+                  }
+                  key={option.value}
+                  onClick={() => updateDraft("cachePolicy", option.value)}
+                  size="sm"
+                  tone={draft.cachePolicy === option.value ? "neutral" : "ghost"}
+                >
+                  {option.label}
+                </Button>
+              ))}
+            </fieldset>
+            <p className="desktop-editor__policy-description">
+              {getCachePolicyOption(draft.cachePolicy).description}
+            </p>
+          </div>
         </div>
 
         {activeFeed.lastErrorMessage ? (

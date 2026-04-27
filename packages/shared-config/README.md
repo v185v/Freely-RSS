@@ -4,12 +4,13 @@
 
 ## Scope
 
-The package currently owns five configuration areas:
+The package currently owns six configuration areas:
 
 - runtime environment and target
 - proxy settings
 - sync settings
 - AI settings
+- cache settings
 - experimental feature flags
 
 ## Source Priority
@@ -59,6 +60,11 @@ AI:
 - `FREELYRSS_AI_MODEL`
 - `FREELYRSS_AI_TIMEOUT_MS`
 
+Cache:
+
+- `FREELYRSS_CACHE_MAX_BYTES`
+- `FREELYRSS_CACHE_DEFAULT_POLICY`: `metadata-only`, `content`, `content-and-attachments`
+
 Experimental flags:
 
 - `FREELYRSS_EXPERIMENTAL_DESKTOP_LOCAL_API`
@@ -73,5 +79,6 @@ Experimental flags:
 - AI can only be enabled when a provider, base URL, and model are present.
 - `openai-compatible` also requires an API key.
 - Proxy cannot be enabled without at least one configured proxy URL.
+- Cache must keep a positive global byte limit and one of the supported default cache policies.
 
 Validation failures throw `ConfigValidationError` with the failing path and a clear message.

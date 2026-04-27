@@ -5,8 +5,8 @@ use std::{
 };
 
 use freelyrss_core_domain::{
-    Article, ArticleId, Attachment, AttachmentId, Feed, FeedHealthStatus, FeedId, IsoDateTime,
-    ModelError, UrlString,
+    Article, ArticleId, Attachment, AttachmentId, CachePolicy, Feed, FeedHealthStatus, FeedId,
+    IsoDateTime, ModelError, UrlString,
     sqlite::{FeedStore, prepare_database_connection},
 };
 use rusqlite::Connection;
@@ -199,6 +199,7 @@ fn build_feed(feed: NormalizedFeedRecord, feed_id: FeedId) -> Feed {
         custom_name: None,
         sort_order: 0,
         update_interval: None,
+        cache_policy: CachePolicy::Content,
         health_status: FeedHealthStatus::Healthy,
         last_checked_at: Some(feed.last_checked_at),
         last_success_at: Some(feed.last_success_at),

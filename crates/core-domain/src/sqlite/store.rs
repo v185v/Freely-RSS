@@ -269,6 +269,7 @@ fn upsert_feed(transaction: &Transaction<'_>, feed: &Feed) -> Result<(), rusqlit
             custom_name,
             sort_order,
             update_interval,
+            cache_policy,
             health_status,
             last_checked_at,
             last_success_at,
@@ -279,7 +280,7 @@ fn upsert_feed(transaction: &Transaction<'_>, feed: &Feed) -> Result<(), rusqlit
             last_error_at,
             consecutive_failures
         ) VALUES (
-            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19
+            ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20
         )
         ON CONFLICT(id) DO UPDATE SET
             title = excluded.title,
@@ -307,6 +308,7 @@ fn upsert_feed(transaction: &Transaction<'_>, feed: &Feed) -> Result<(), rusqlit
             feed.custom_name,
             feed.sort_order,
             feed.update_interval,
+            feed.cache_policy.as_str(),
             feed.health_status.as_str(),
             feed.last_checked_at.as_ref().map(|value| value.as_str()),
             feed.last_success_at.as_ref().map(|value| value.as_str()),

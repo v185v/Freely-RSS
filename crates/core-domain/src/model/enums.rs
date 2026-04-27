@@ -68,6 +68,12 @@ string_enum!(FeedErrorKind => [
     Empty = "empty",
 ]);
 
+string_enum!(CachePolicy => [
+    MetadataOnly = "metadata-only",
+    Content = "content",
+    ContentAndAttachments = "content-and-attachments",
+]);
+
 string_enum!(FolderKind => [
     Regular = "regular",
     System = "system",

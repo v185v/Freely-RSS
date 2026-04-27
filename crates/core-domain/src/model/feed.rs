@@ -1,5 +1,6 @@
 use super::{
-    FeedErrorKind, FeedFormat, FeedHealthStatus, FeedId, FolderId, IsoDateTime, UrlString,
+    CachePolicy, FeedErrorKind, FeedFormat, FeedHealthStatus, FeedId, FolderId, IsoDateTime,
+    UrlString,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -14,6 +15,7 @@ pub struct Feed {
     pub custom_name: Option<String>,
     pub sort_order: i64,
     pub update_interval: Option<i64>,
+    pub cache_policy: CachePolicy,
     pub health_status: FeedHealthStatus,
     pub last_checked_at: Option<IsoDateTime>,
     pub last_success_at: Option<IsoDateTime>,

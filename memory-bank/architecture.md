@@ -1885,3 +1885,55 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `apps/desktop/src/features/reader-shell/search-highlighting.tsx` is deliberately not a second executor. Its job is limited to mock-mode fallback snippet construction and reader-side presentation, not queue filtering or durable retrieval.
 - `packages/shared-types` remains DTO-only; it now carries snippet data, but it still does not define storage plans, query parsers, or UI algorithms.
 - Step 53 still does not solve durable reader-detail loading. Queue rows can now show real snippets, but article detail hydration remains on the existing shell/mock path until a later milestone extends the desktop bridge beyond queue retrieval.
+
+## 2026-04-27 ASCII Addendum XVIII
+
+### Step 54 Architecture Insights
+
+- Step 54 introduces two cache-policy boundaries on purpose: a desktop-wide runtime cache budget/default policy contract and a per-feed durable cache policy contract. They solve different problems and should not collapse into one settings surface or one table.
+- `packages/shared-config` is now the owner of `cache.maxBytes` and `cache.defaultPolicy`. These values affect local runtime behavior and belong in app configuration, not in a new synced business table.
+- `Feed.cache_policy` is durable source metadata. It belongs in shared DTOs, Rust domain models, and SQLite because it expresses how a specific subscription wants offline storage handled even if the global default changes later.
+- Imported feeds seed their `cachePolicy` from the current global default, but they immediately become ordinary feed-owned metadata after creation. This keeps OPML import from becoming a second cache-policy system.
+- The desktop shell now edits global cache defaults and per-feed cache policy through separate mutation paths. That keeps future Step 55 eviction logic from having to infer whether a change came from app configuration or feed metadata.
+- Ordinary ingest intentionally does not overwrite an existing `Feed.cache_policy` during conflict updates. User-managed source policy must survive refresh and feed metadata updates.
+- No eviction, attachment prefetch scheduling, or cache reclamation behavior ships in Step 54. This step only establishes the stable settings inputs that Step 55 should consume.
+
+### Step 54 File Responsibilities
+
+- `packages/shared-config/README.md`: documents the runtime cache configuration surface, including environment variable names and the intended split between desktop-wide defaults and durable per-feed policy.
+- `packages/shared-config/src/defaults.js`: defines default runtime cache settings (`cache.maxBytes`, `cache.defaultPolicy`) for startup.
+- `packages/shared-config/src/env.js`: parses `FREELYRSS_CACHE_MAX_BYTES` and `FREELYRSS_CACHE_DEFAULT_POLICY` from environment input into the shared config shape.
+- `packages/shared-config/src/validate.js`: enforces that cache policy values stay inside the shared enum set and that cache limits are positive integers.
+- `packages/shared-config/src/config.test.js`: verifies defaulting, environment overrides, and validation failures for the runtime cache configuration boundary.
+- `packages/shared-types/src/enums.ts`: defines the cross-language `CachePolicy` enum values used by config, DTOs, desktop UI, and Rust.
+- `packages/shared-types/src/feed.ts`: adds `FeedDto.cachePolicy`, making per-feed cache behavior part of the shared subscription contract.
+- `packages/shared-types/src/index.ts`: re-exports the new cache policy contract so downstream packages consume one stable shared-types entry point.
+- `crates/core-domain/src/model/enums.rs`: defines the Rust-side `CachePolicy` enum that mirrors the shared TypeScript contract.
+- `crates/core-domain/src/model/feed.rs`: adds durable `cache_policy` to the `Feed` domain entity.
+- `crates/core-domain/src/model/mod.rs`: re-exports `CachePolicy` so storage and ingest code depend on one domain enum source.
+- `crates/core-domain/src/sqlite/migrations/008_feed_cache_policy.sql`: adds the durable SQLite schema field for per-feed cache policy.
+- `crates/core-domain/src/sqlite/migrations.rs`: registers schema version 8 so the cache policy column becomes part of the normal upgrade flow.
+- `crates/core-domain/src/sqlite/records.rs`: maps SQLite rows to and from the durable `CachePolicy` enum during feed record conversion.
+- `crates/core-domain/src/sqlite/store.rs`: persists `cache_policy` on feed creation and preserves existing user-managed policy during feed upserts.
+- `crates/core-domain/src/sqlite/mod.rs`: exports the updated SQLite boundary and verifies migration upgrade expectations through tests.
+- `crates/feed-engine/src/sqlite_repository.rs`: seeds newly discovered feeds with `CachePolicy::Content` until a caller or later edit chooses another policy.
+- `crates/rule-engine/src/audit.rs`: updates audit fixtures so rule-audit serialization continues to reflect the full `Feed` domain shape after the new field landed.
+- `crates/rule-engine/src/engine.rs`: updates rule-engine fixtures and tests for the expanded `Feed` model while leaving cache policy semantics outside rule execution.
+- `apps/desktop/src/features/reader-shell/cache-policy.ts`: centralizes user-facing policy labels plus bytes/megabytes conversion helpers for the Step 54 UI.
+- `apps/desktop/src/features/reader-shell/components/cache-settings-card.tsx`: renders and validates desktop-wide cache defaults editing.
+- `apps/desktop/src/features/reader-shell/components/feed-editor-card.tsx`: adds per-feed cache policy editing to the existing source metadata editor.
+- `apps/desktop/src/features/reader-shell/components/source-pane.tsx`: composes the left-pane source tree, feed editor, OPML tools, and the new global cache settings surface without mixing their state models.
+- `apps/desktop/src/features/reader-shell/mock-data.ts`: stores mock `cacheSettings`, persists feed `cachePolicy`, and seeds imported feeds from the active default policy.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`: keeps global cache settings saves separate from feed metadata saves and wires both through the shell route state.
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`: verifies cache settings persistence, feed policy persistence, and imported-feed default seeding.
+- `apps/desktop/src/features/reader-shell/types.ts`: adds the desktop-local `ReaderCacheSettings` contract and threads it through `ReaderShellData`.
+- `apps/desktop/src/styles.css`: contains the Step 54 editor and settings-card presentation rules for the desktop shell.
+
+### Step 54 Boundary Notes
+
+- The database change for this step is intentionally narrow: `Feed` now includes `cache_policy TEXT NOT NULL DEFAULT 'content'`. Step 54 does not add a second settings table for global cache defaults.
+- `packages/shared-config` owns the runtime-wide cache budget and default policy. Those values may come from environment or app-level settings and are not the durable source of truth for an individual feed after creation.
+- `packages/shared-types`, `crates/core-domain`, and SQLite own per-feed cache policy as durable subscription metadata.
+- `apps/desktop` currently exposes both configuration surfaces, but it still does not perform eviction, attachment prefetch, or cache cleanup. Future Step 55 logic should consume the existing contracts rather than introducing new state.
+- `crates/feed-engine` and `crates/core-domain/src/sqlite/store.rs` together preserve a useful ownership rule: creation can seed a default cache policy, but ordinary ingest must not rewrite a policy the user already chose.
+- `crates/rule-engine` is not a cache-policy owner in this step; its touched files only keep tests and audit fixtures aligned with the expanded `Feed` entity.

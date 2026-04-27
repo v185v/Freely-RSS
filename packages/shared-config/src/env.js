@@ -1,6 +1,7 @@
 import {
   AI_PROVIDERS,
   APP_ENVS,
+  CACHE_POLICIES,
   EXPERIMENTAL_FLAG_NAMES,
   LOG_LEVELS,
   RUNTIME_TARGETS,
@@ -158,6 +159,15 @@ export const parseFreelyRssEnv = (env = process.env) => {
 
   if (Object.values(aiPartial).some((value) => value !== undefined)) {
     partialConfig.ai = aiPartial
+  }
+
+  const cachePartial = {
+    maxBytes: readInteger(env, "FREELYRSS_CACHE_MAX_BYTES"),
+    defaultPolicy: readEnum(env, "FREELYRSS_CACHE_DEFAULT_POLICY", CACHE_POLICIES),
+  }
+
+  if (Object.values(cachePartial).some((value) => value !== undefined)) {
+    partialConfig.cache = cachePartial
   }
 
   const experimentalPartial = {}
