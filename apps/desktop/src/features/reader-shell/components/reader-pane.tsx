@@ -23,8 +23,10 @@ import type {
   ReaderFontScale,
   ReaderLineHeight,
   ReaderMarginMode,
+  ReaderMarkdownExportResult,
   ReaderThemeTone,
 } from "../types"
+import { MarkdownExportCard } from "./markdown-export-card"
 
 type ReaderStateMutationInput = {
   articleId: ArticleDetailDto["article"]["id"]
@@ -49,8 +51,13 @@ type ReaderPaneProps = {
   describedBy?: string
   headingId: string
   isCreatingAnnotation: boolean
+  isExportingMarkdown: boolean
   isUpdatingArticleState: boolean
+  markdownExportErrorMessage: string | null
+  markdownExportResult: ReaderMarkdownExportResult | null
   onCreateAnnotation: (input: CreateReaderAnnotationInput) => void
+  onExportMarkdownBatch: () => void
+  onExportMarkdownSingle: () => void
   onSetReaderContentMode: (readerContentMode: ReaderContentMode) => void
   onSetReaderFontFamily: (readerFontFamily: ReaderFontFamily) => void
   onSetReaderFontScale: (readerFontScale: ReaderFontScale) => void
@@ -67,6 +74,7 @@ type ReaderPaneProps = {
   readerMarginMode: ReaderMarginMode
   searchHighlightTerms: string[]
   themeTone: ReaderThemeTone
+  visibleArticleCount: number
 }
 
 const READ_STATE_OPTIONS: Array<{
@@ -541,8 +549,13 @@ export function ReaderPane({
   describedBy,
   headingId,
   isCreatingAnnotation,
+  isExportingMarkdown,
   isUpdatingArticleState,
+  markdownExportErrorMessage,
+  markdownExportResult,
   onCreateAnnotation,
+  onExportMarkdownBatch,
+  onExportMarkdownSingle,
   onSetReaderContentMode,
   onSetReaderFontFamily,
   onSetReaderFontScale,
@@ -559,11 +572,13 @@ export function ReaderPane({
   readerMarginMode,
   searchHighlightTerms,
   themeTone,
+  visibleArticleCount,
 }: ReaderPaneProps) {
   const [annotationNoteDraft, setAnnotationNoteDraft] = useState("")
   const [pendingSelection, setPendingSelection] = useState<ReaderPendingSelection | null>(null)
   const [selectionErrorMessage, setSelectionErrorMessage] = useState<string | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
+  const markdownTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const annotationNoteId = useId()
   const extractedContent = activeDetail?.article.contentExtracted?.trim() ?? null
   const rawContent = activeDetail?.article.contentRaw?.trim() ?? null
@@ -1398,6 +1413,17 @@ export function ReaderPane({
                     </div>
                   )}
                 </section>
+
+                <MarkdownExportCard
+                  errorMessage={markdownExportErrorMessage}
+                  exportResult={markdownExportResult}
+                  hasActiveArticle={activeDetail !== null}
+                  isExporting={isExportingMarkdown}
+                  onExportBatch={onExportMarkdownBatch}
+                  onExportSingle={onExportMarkdownSingle}
+                  textareaRef={markdownTextareaRef}
+                  visibleArticleCount={visibleArticleCount}
+                />
 
                 <section className="desktop-reader__attachments">
                   <div className="desktop-reader__attachments-header">

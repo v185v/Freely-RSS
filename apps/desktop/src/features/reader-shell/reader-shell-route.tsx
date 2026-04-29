@@ -25,9 +25,11 @@ import { ReaderPane } from "./components/reader-pane"
 import { SourcePane } from "./components/source-pane"
 import { fetchDurableQueueArticles } from "./desktop-bridge"
 import {
+  type MockMarkdownExportResult,
   type MockOpmlExportResult,
   type MockOpmlImportResult,
   createMockAnnotation,
+  exportMockMarkdown,
   exportMockOpml,
   fetchReaderShellData,
   importMockOpml,
@@ -103,6 +105,9 @@ export function ReaderShellRoute() {
     null,
   )
   const [opmlExportResult, setOpmlExportResult] = useState<MockOpmlExportResult | null>(null)
+  const [markdownExportResult, setMarkdownExportResult] = useState<MockMarkdownExportResult | null>(
+    null,
+  )
   const navigationRef = useRef<HTMLElement | null>(null)
   const sourcePaneRef = useRef<HTMLElement | null>(null)
   const queuePaneRef = useRef<HTMLElement | null>(null)
@@ -160,6 +165,12 @@ export function ReaderShellRoute() {
     mutationFn: exportMockOpml,
     onSuccess: (result) => {
       setOpmlExportResult(result)
+    },
+  })
+  const exportMarkdownMutation = useMutation({
+    mutationFn: exportMockMarkdown,
+    onSuccess: (result) => {
+      setMarkdownExportResult(result)
     },
   })
 
@@ -423,6 +434,8 @@ export function ReaderShellRoute() {
       : null
   const annotationErrorMessage =
     createAnnotationMutation.error instanceof Error ? createAnnotationMutation.error.message : null
+  const markdownExportErrorMessage =
+    exportMarkdownMutation.error instanceof Error ? exportMarkdownMutation.error.message : null
 
   useEffect(() => {
     if (shellData && activeArticleId !== routeState.articleId) {
@@ -442,8 +455,8 @@ export function ReaderShellRoute() {
     return (
       <main className="desktop-shell">
         <div className="desktop-loading">
-          <p className="desktop-shell__eyebrow">Stage 7 / Step 55</p>
-          <h1>Loading cache cleanup controls for the desktop reader shell.</h1>
+          <p className="desktop-shell__eyebrow">Stage 7 / Step 56</p>
+          <h1>Loading Markdown export controls for the desktop reader shell.</h1>
         </div>
       </main>
     )
@@ -549,15 +562,14 @@ export function ReaderShellRoute() {
 
       <header className="desktop-shell__header">
         <div className="desktop-shell__title-block">
-          <p className="desktop-shell__eyebrow">Stage 7 / Step 55</p>
-          <h1>The desktop shell now plans and applies cache cleanup.</h1>
+          <p className="desktop-shell__eyebrow">Stage 7 / Step 56</p>
+          <h1>The desktop shell now exports readable Markdown.</h1>
           <p className="desktop-shell__lead">
             Route state still owns the active source and article, the shell store still owns only
             local queue controls and presentation preferences, and the mock repository remains the
-            shell-side snapshot source. Step 55 consumes the cache budget and per-feed policy inputs
-            from Step 54, then applies two explicit cleanup rules: source-policy mismatch entries
-            are reclaimed first, and remaining pressure falls back to least-recently-used cleanup
-            across non-protected articles only.
+            shell-side snapshot source. Step 56 adds a Markdown export boundary that can render the
+            selected article or the current visible queue with metadata, body content, annotations,
+            and attachment references without moving serialization rules into the reader component.
           </p>
         </div>
 
@@ -590,9 +602,10 @@ export function ReaderShellRoute() {
 
           <p className="desktop-summary__note">
             The queue still consumes one route-backed article query while cache configuration,
-            source editing, OPML portability, and tree expansion remain separate concerns. Step 55
-            keeps cleanup planning outside the React route layer and lets the shell trigger one
-            stable cache-maintenance path instead of embedding eviction rules into view code.
+            source editing, OPML portability, Markdown export, and tree expansion remain separate
+            concerns. Step 56 keeps export formatting outside the React route layer and lets the
+            shell trigger one stable Markdown generation path for both single-article and visible
+            queue export.
           </p>
 
           <div className="desktop-shortcuts">
@@ -769,10 +782,34 @@ export function ReaderShellRoute() {
             describedBy={READER_SHORTCUT_HINT_ID}
             headingId={READER_LANDMARK_IDS.readerHeading}
             isCreatingAnnotation={createAnnotationMutation.isPending}
+            isExportingMarkdown={exportMarkdownMutation.isPending}
             isUpdatingArticleState={updateArticleStateMutation.isPending}
+            markdownExportErrorMessage={markdownExportErrorMessage}
+            markdownExportResult={markdownExportResult}
             onCreateAnnotation={(input) => {
               createAnnotationMutation.reset()
               createAnnotationMutation.mutate(input)
+            }}
+            onExportMarkdownBatch={() => {
+              exportMarkdownMutation.reset()
+              setMarkdownExportResult(null)
+              exportMarkdownMutation.mutate({
+                articleIds: visibleArticles.map((article) => article.id),
+                mode: "batch",
+                title: `${activeSource.title} Markdown export`,
+              })
+            }}
+            onExportMarkdownSingle={() => {
+              if (!activeDetail) {
+                return
+              }
+
+              exportMarkdownMutation.reset()
+              setMarkdownExportResult(null)
+              exportMarkdownMutation.mutate({
+                articleIds: [activeDetail.article.id],
+                mode: "single",
+              })
             }}
             onSetReaderContentMode={setReaderContentMode}
             onSetReaderFontFamily={setReaderFontFamily}
@@ -793,6 +830,7 @@ export function ReaderShellRoute() {
             readerMarginMode={readerMarginMode}
             searchHighlightTerms={resolvedArticleQuery.searchHighlightTerms}
             themeTone={themeTone}
+            visibleArticleCount={visibleArticles.length}
           />
         </SplitLayout>
       </div>

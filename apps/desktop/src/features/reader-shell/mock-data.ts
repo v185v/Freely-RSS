@@ -22,12 +22,15 @@ import {
   planReaderCacheCleanup,
   summarizeReaderCache,
 } from "./cache-maintenance"
+import { buildReaderMarkdownExport } from "./markdown-export"
 import type {
   CreateReaderAnnotationInput,
   OpmlExportReport,
   OpmlImportReport,
   ReaderCacheCleanupReport,
   ReaderCacheSettings,
+  ReaderMarkdownExportMode,
+  ReaderMarkdownExportResult,
   ReaderShellData,
   SourceRow,
 } from "./types"
@@ -709,6 +712,8 @@ export type MockOpmlExportResult = {
   opmlText: string
   report: OpmlExportReport
 }
+
+export type MockMarkdownExportResult = ReaderMarkdownExportResult
 
 const ROOT_SORT_KEY = "__root__"
 
@@ -1912,4 +1917,18 @@ export async function importMockOpml(opmlText: string): Promise<MockOpmlImportRe
 
 export async function exportMockOpml(): Promise<MockOpmlExportResult> {
   return buildOpmlDocument(mockReaderState)
+}
+
+export async function exportMockMarkdown(input: {
+  articleIds: ArticleDetailDto["article"]["id"][]
+  mode: ReaderMarkdownExportMode
+  title?: string
+}): Promise<MockMarkdownExportResult> {
+  const details = input.articleIds.map((articleId) => findArticleDetailOrThrow(articleId))
+
+  return buildReaderMarkdownExport({
+    details,
+    mode: input.mode,
+    title: input.title,
+  })
 }

@@ -78,3 +78,12 @@
 - Fixed the stale migration expectation in `crates/core-domain/src/sqlite/mod.rs` so the upgrade test from schema v6 now correctly expects both pending migrations (`v7` and `v8`) to apply in sequence.
 - Verified the Step 54 work with `corepack pnpm run desktop:build`, `corepack pnpm --filter @freelyrss/desktop test -- --run reader-shell.test.tsx`, `corepack pnpm run test:config`, `cargo test -p freelyrss-core-domain`, `corepack pnpm run format`, `cargo fmt --all`, `corepack pnpm run verify`, and `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`.
 - Updated `progress.md`, `memory-bank/progress.md`, and `memory-bank/architecture.md` with the Step 54 implementation record, architectural boundary notes, verification results, and per-file responsibility details for the next developer.
+
+## 2026-04-29
+
+- Reviewed every file in `memory-bank/` and resumed from `memory-bank/progress.md`, which identified `memory-bank/implementation-plan.md` Stage 7 Step 56 as the next implementation target.
+- Implemented a dedicated Markdown export boundary in `apps/desktop/src/features/reader-shell/markdown-export.ts` for selected-article and visible-queue export, preserving metadata, body text, annotations, anchors, and attachment references.
+- Added shell-level export contracts in `apps/desktop/src/features/reader-shell/types.ts`, mock export resolution in `mock-data.ts`, route mutation wiring in `reader-shell-route.tsx`, and presentation-only controls in `components/markdown-export-card.tsx` composed by `components/reader-pane.tsx`.
+- Added focused unit coverage in `markdown-export.test.ts` plus reader-shell flow coverage in `reader-shell.test.tsx`.
+- Verified the Step 56 work with `corepack pnpm --filter @freelyrss/desktop test -- --run markdown-export.test.ts reader-shell.test.tsx`, `corepack pnpm run format`, `corepack pnpm run desktop:build`, `corepack pnpm run verify`, and `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`.
+- Updated `memory-bank/progress.md` and `memory-bank/architecture.md` with the Step 56 implementation record, verification results, architectural insights, and per-file responsibility notes for the next developer.

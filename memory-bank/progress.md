@@ -2,9 +2,15 @@
 
 ## 当前状态
 
-- 阶段：阶段 7 Step 55 已完成，桌面端现已在 Step 54 的“全局缓存预算 + per-feed durable cache policy”输入之上，新增一个独立的缓存清理规划层：先回收违背源级策略的缓存条目，再对未受保护的文章缓存执行 LRU 淘汰，同时继续保持“React route 只负责触发、mock repository 负责应用结果、缓存规划逻辑集中在独立模块中”的边界；下一步进入阶段 7 Step 56 的 Markdown 导出。
-- 最后更新：2026-04-27
-- 风险状态：已从“Step 54 仅固化缓存配置输入，还没有任何淘汰执行层”推进到“Step 55 已建立可验证的缓存回收边界，但后续 Step 56 仍需在不把导出格式拼装塞回 reader route 的前提下，为单篇与批量文章建立独立导出管线”
+- 阶段：阶段 7 Step 56 已完成，桌面端现已拥有独立的 Markdown 导出管线：`markdown-export.ts` 负责把文章详情、元数据、正文、批注与附件引用序列化为 Markdown，mock repository 负责选择单篇或当前可见队列，reader 面板只负责展示导出结果和触发命令；下一步进入阶段 7 Step 57 的 HTML / PDF 导出。
+- 最后更新：2026-04-29
+- 风险状态：已从“Step 56 需要建立独立导出管线，避免把 Markdown 拼接塞进 reader route 或 UI 组件”推进到“Step 56 已建立可验证的 Markdown 导出边界，但 Step 57 仍需复用该导出契约并处理 HTML/PDF 排版与打印边界，不能把 HTML/PDF 序列化重新堆回 reader pane”
+
+### 2026-04-29 状态快照
+
+- 当前完成：阶段 7 Step 56 已完成，`apps/desktop` 现已支持导出当前选中文章与当前可见文章队列为 Markdown。导出内容保留文章标题、来源、作者、发布时间、URL、标签、阅读状态、正文、批注锚点、批注备注和附件引用。
+- 当前验证：`corepack pnpm --filter @freelyrss/desktop test -- --run markdown-export.test.ts reader-shell.test.tsx`、`corepack pnpm run format`、`corepack pnpm run desktop:build`、`corepack pnpm run verify` 与 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle` 全部通过。
+- 当前下一步：进入阶段 7 Step 57“实现 HTML 与 PDF 导出”，应复用 Step 56 的文章选择、批量导出和导出报告边界，并把格式差异限制在新的 HTML/PDF 序列化层，而不是改写 Markdown 导出或 reader route。
 
 ### 2026-04-27 状态快照
 
@@ -1297,3 +1303,33 @@
 - `apps/desktop/src/features/reader-shell/components/cache-maintenance-card.tsx` owns cache-maintenance presentation only; it does not define cleanup rules.
 - `apps/desktop/src/features/reader-shell/reader-shell-route.tsx` remains a mutation trigger and composition boundary, not a cleanup executor.
 - Stage 7 Step 56 should build an export boundary that consumes article detail, annotations, and cache-neutral reader data rather than embedding Markdown serialization inside reader components.
+
+## 2026-04-29 ASCII Addendum XX
+
+### Stage 7 Step 56 Completed: Markdown export boundary
+
+- Completed `implementation-plan.md` Stage 7 Step 56 by adding a reusable Markdown export boundary for both the selected article and the current visible article queue.
+- Added `apps/desktop/src/features/reader-shell/markdown-export.ts` as the pure serialization module. It accepts resolved `ArticleDetailDto` records and produces Markdown that preserves article metadata, summary, readable body content, annotations, annotation anchors, attachment references, generated file name, and export report facts.
+- Kept export selection and shell snapshot access in `apps/desktop/src/features/reader-shell/mock-data.ts`. The mock repository now maps requested article ids to article details and delegates formatting to `markdown-export.ts` instead of assembling Markdown inline.
+- Added `apps/desktop/src/features/reader-shell/components/markdown-export-card.tsx` as a presentation-only reader surface for generated Markdown, export summary facts, and single/batch export commands.
+- Updated `apps/desktop/src/features/reader-shell/components/reader-pane.tsx` so the right pane can present Markdown export without owning serialization logic.
+- Updated `apps/desktop/src/features/reader-shell/reader-shell-route.tsx` so route composition triggers selected-article and visible-queue export mutations while leaving formatting in the export module.
+- Added focused unit coverage in `markdown-export.test.ts` and user-visible flow coverage in `reader-shell.test.tsx` for metadata, body, annotation, attachment, selected-article export, and visible-queue export.
+
+### Step 56 Verification
+
+- Passed `corepack pnpm --filter @freelyrss/desktop test -- --run markdown-export.test.ts reader-shell.test.tsx`
+- Passed `corepack pnpm run format`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+
+### Next Step (ASCII update)
+
+- The next implementation step in `implementation-plan.md` is Stage 7 Step 57: HTML and PDF export.
+- Preserve the current boundary split:
+- `apps/desktop/src/features/reader-shell/markdown-export.ts` owns Markdown serialization only; it should not become a generic file writer, HTML renderer, PDF printer, or route mutation layer.
+- `apps/desktop/src/features/reader-shell/mock-data.ts` owns mock article selection for export and can be reused by future format-specific exporters.
+- `apps/desktop/src/features/reader-shell/components/markdown-export-card.tsx` owns Markdown export presentation only; it does not know how Markdown is assembled.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx` remains the command trigger and composition boundary for export mutations.
+- Stage 7 Step 57 should introduce a separate HTML/PDF serialization boundary that consumes the same resolved article detail inputs instead of modifying the Markdown-specific formatter.

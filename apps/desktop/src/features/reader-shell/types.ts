@@ -139,6 +139,23 @@ export interface OpmlExportReport {
   generatedAt: string
 }
 
+export type ReaderMarkdownExportMode = "batch" | "single"
+
+export interface ReaderMarkdownExportReport {
+  annotationCount: number
+  exportedArticleCount: number
+  generatedAt: string
+  mode: ReaderMarkdownExportMode
+  title: string
+}
+
+export interface ReaderMarkdownExportResult {
+  articleIds: ArticleDetailDto["article"]["id"][]
+  fileName: string
+  markdownText: string
+  report: ReaderMarkdownExportReport
+}
+
 export interface ReaderShellData {
   articleDetails: Record<string, ArticleDetailDto>
   articles: ArticleListItemDto[]

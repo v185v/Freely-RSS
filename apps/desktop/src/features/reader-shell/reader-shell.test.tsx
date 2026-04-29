@@ -1334,6 +1334,59 @@ describe("reader shell navigation", () => {
     })
   })
 
+  test("exports selected and visible articles to Markdown with metadata and annotations", async () => {
+    window.scrollTo = () => {}
+    const user = userEvent.setup()
+
+    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+
+    const readerPane = await screen.findByRole("region", { name: "Reading panel" })
+    const readerScope = within(readerPane)
+    const markdownSection = readerScope
+      .getByRole("heading", {
+        name: "Markdown export",
+      })
+      .closest("section")
+
+    expect(markdownSection).not.toBeNull()
+
+    const markdownScope = within(markdownSection as HTMLElement)
+    const exportedMarkdown = markdownScope.getByLabelText(
+      "Exported Markdown",
+    ) as HTMLTextAreaElement
+
+    await user.click(markdownScope.getByRole("button", { name: "Export selected article" }))
+
+    await waitFor(() => {
+      expect(exportedMarkdown.value).toContain(
+        "# Turning the desktop shell into a stable three-pane reader skeleton",
+      )
+      expect(exportedMarkdown.value).toContain("- Source: FreelyRSS Engineering")
+      expect(exportedMarkdown.value).toContain("## Annotations")
+      expect(exportedMarkdown.value).toContain(
+        "Note: Route search params now own these selections.",
+      )
+    })
+
+    expect(markdownScope.getByText("Articles exported").parentElement?.textContent).toContain("1")
+    expect(markdownScope.getByText("Annotations").parentElement?.textContent).toContain("1")
+    expect(markdownScope.getByText("Mode").parentElement?.textContent).toContain("single article")
+
+    await user.click(markdownScope.getByRole("button", { name: "Export visible queue" }))
+
+    await waitFor(() => {
+      expect(exportedMarkdown.value).toContain("# Unread desk Markdown export")
+      expect(exportedMarkdown.value).toContain("- Article count: 4")
+      expect(exportedMarkdown.value).toContain(
+        "# Midnight dispatch 42: attachment boundaries for podcast feeds",
+      )
+      expect(exportedMarkdown.value).toContain("cache/media/night-audio/dispatch-42.mp3")
+    })
+
+    expect(markdownScope.getByText("Articles exported").parentElement?.textContent).toContain("4")
+    expect(markdownScope.getByText("Mode").parentElement?.textContent).toContain("visible queue")
+  })
+
   test("imports OPML with nested folders and skips duplicate feed URLs", async () => {
     window.scrollTo = () => {}
     const user = userEvent.setup()

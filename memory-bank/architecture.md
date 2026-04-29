@@ -1972,3 +1972,35 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `apps/desktop/src/features/reader-shell/mock-data.ts` is still a mock repository, not the future production cache backend. This step proves cleanup semantics and UI boundaries before durable cache execution arrives.
 - `crates/core-domain`, SQLite, and `apps/desktop/src-tauri/src/storage.rs` remain unchanged in this increment. Durable cache reclamation in the real desktop runtime is still a later step.
 - Step 55 intentionally stops before Step 56 export work: no Markdown generation, batch export pipeline, or HTML/PDF serialization logic was added here.
+
+## 2026-04-29 ASCII Addendum XX
+
+### Step 56 Architecture Insights
+
+- Step 56 puts Markdown export in the correct shell-side boundary: export formatting is now a pure transformation from resolved article details into a portable document, not a responsibility of `reader-pane.tsx` or `reader-shell-route.tsx`.
+- The export contract deliberately consumes `ArticleDetailDto` instead of queue rows. Queue rows are optimized for listing, while export needs the article body, feed metadata, tags, annotations, anchors, and attachment records.
+- Single-article export and visible-queue export share the same formatter. The only difference is which article ids the route asks the mock repository to resolve before formatting.
+- The generated Markdown is cache-neutral. It records attachment URLs and local cache paths as metadata, but it does not copy cache files, mutate cache state, or depend on the Step 55 cleanup planner.
+- No database schema migration was required for this step. Existing article detail, annotation, attachment, and state DTOs already carry the information needed for Markdown export.
+- Step 56 intentionally remains format-specific. Future HTML/PDF export should reuse the article selection and report pattern, but it should not turn `markdown-export.ts` into a mixed-format serializer.
+
+### Step 56 File Responsibilities
+
+- `apps/desktop/src/features/reader-shell/markdown-export.ts`: owns Markdown serialization, file-name generation, batch document assembly, metadata rendering, body fallback rules, annotation rendering, anchor rendering, attachment rendering, and export report construction.
+- `apps/desktop/src/features/reader-shell/markdown-export.test.ts`: validates the pure export boundary for single-article and batch documents, including metadata, body text, annotations, and cached attachment references.
+- `apps/desktop/src/features/reader-shell/components/markdown-export-card.tsx`: owns the reader-side Markdown export presentation surface, including the readonly payload textarea, report facts, selected-article command, visible-queue command, and export errors.
+- `apps/desktop/src/features/reader-shell/components/reader-pane.tsx`: composes the Markdown export card inside the reading panel and passes through export callbacks/results without formatting Markdown itself.
+- `apps/desktop/src/features/reader-shell/mock-data.ts`: owns mock export article resolution by id and delegates the actual Markdown document construction to `markdown-export.ts`.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`: owns export mutation wiring, selects either the active article id or the current visible queue article ids, and keeps route state separate from export formatting.
+- `apps/desktop/src/features/reader-shell/types.ts`: defines the desktop-local Markdown export mode, report, and result contracts used by the formatter, route, mock repository, and presentation component.
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`: verifies the user-visible Step 56 flow for exporting the selected article and current visible queue from the reader shell.
+- `memory-bank/progress.md`: records the completed Step 56 milestone, validation commands, and the Step 57 handoff.
+- `memory-bank/architecture.md`: records the Step 56 export boundary, the cache-neutral rule, and the file-level responsibility split for future maintainers.
+
+### Step 56 Boundary Notes
+
+- `markdown-export.ts` does not fetch durable data. It only formats details already resolved by a repository boundary.
+- `markdown-export.ts` does not write files. It returns a generated filename and Markdown payload so later desktop filesystem work can decide how and where to persist artifacts.
+- `components/markdown-export-card.tsx` does not inspect DTO internals beyond showing the returned result. That keeps UI concerns separate from export semantics.
+- `reader-shell-route.tsx` remains a composition layer. It chooses single vs. batch ids and triggers the mutation, but it does not build Markdown strings.
+- Step 57 should add HTML/PDF-specific formatting or print boundaries beside this Markdown path, not inside it.
