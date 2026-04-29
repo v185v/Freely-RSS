@@ -22,6 +22,7 @@ import {
   planReaderCacheCleanup,
   summarizeReaderCache,
 } from "./cache-maintenance"
+import { buildReaderDocumentExport } from "./html-pdf-export"
 import { buildReaderMarkdownExport } from "./markdown-export"
 import type {
   CreateReaderAnnotationInput,
@@ -29,6 +30,9 @@ import type {
   OpmlImportReport,
   ReaderCacheCleanupReport,
   ReaderCacheSettings,
+  ReaderDocumentExportFormat,
+  ReaderDocumentExportPresentation,
+  ReaderDocumentExportResult,
   ReaderMarkdownExportMode,
   ReaderMarkdownExportResult,
   ReaderShellData,
@@ -714,6 +718,8 @@ export type MockOpmlExportResult = {
 }
 
 export type MockMarkdownExportResult = ReaderMarkdownExportResult
+
+export type MockDocumentExportResult = ReaderDocumentExportResult
 
 const ROOT_SORT_KEY = "__root__"
 
@@ -1929,6 +1935,24 @@ export async function exportMockMarkdown(input: {
   return buildReaderMarkdownExport({
     details,
     mode: input.mode,
+    title: input.title,
+  })
+}
+
+export async function exportMockDocument(input: {
+  articleIds: ArticleDetailDto["article"]["id"][]
+  format: ReaderDocumentExportFormat
+  mode: ReaderMarkdownExportMode
+  presentation: ReaderDocumentExportPresentation
+  title?: string
+}): Promise<MockDocumentExportResult> {
+  const details = input.articleIds.map((articleId) => findArticleDetailOrThrow(articleId))
+
+  return buildReaderDocumentExport({
+    details,
+    format: input.format,
+    mode: input.mode,
+    presentation: input.presentation,
     title: input.title,
   })
 }

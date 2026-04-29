@@ -156,6 +156,34 @@ export interface ReaderMarkdownExportResult {
   report: ReaderMarkdownExportReport
 }
 
+export type ReaderDocumentExportFormat = "html" | "pdf"
+
+export type ReaderDocumentExportMode = ReaderMarkdownExportMode
+
+export interface ReaderDocumentExportPresentation extends ReaderPresentationSettings {
+  contentMode: ReaderContentMode
+}
+
+export interface ReaderDocumentExportReport {
+  annotationCount: number
+  attachmentCount: number
+  contentMode: ReaderContentMode
+  exportedArticleCount: number
+  format: ReaderDocumentExportFormat
+  generatedAt: string
+  mode: ReaderDocumentExportMode
+  presentationSummary: string
+  themeTone: ReaderThemeTone
+  title: string
+}
+
+export interface ReaderDocumentExportResult {
+  articleIds: ArticleDetailDto["article"]["id"][]
+  documentText: string
+  fileName: string
+  report: ReaderDocumentExportReport
+}
+
 export interface ReaderShellData {
   articleDetails: Record<string, ArticleDetailDto>
   articles: ArticleListItemDto[]

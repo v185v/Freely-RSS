@@ -1387,6 +1387,78 @@ describe("reader shell navigation", () => {
     expect(markdownScope.getByText("Mode").parentElement?.textContent).toContain("visible queue")
   })
 
+  test("exports selected HTML and prepares a PDF print document from the current reader view", async () => {
+    window.scrollTo = () => {}
+    const user = userEvent.setup()
+
+    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+
+    const readerPane = await screen.findByRole("region", { name: "Reading panel" })
+    const readerScope = within(readerPane)
+    const documentSection = readerScope
+      .getByRole("heading", {
+        name: "HTML/PDF export",
+      })
+      .closest("section")
+
+    expect(documentSection).not.toBeNull()
+
+    const documentScope = within(documentSection as HTMLElement)
+    const exportedDocument = documentScope.getByLabelText(
+      "Exported document source",
+    ) as HTMLTextAreaElement
+
+    await user.click(documentScope.getByRole("button", { name: "Export selected HTML" }))
+
+    await waitFor(() => {
+      expect(exportedDocument.value).toContain("<!doctype html>")
+      expect(exportedDocument.value).toContain(`data-export-format="html"`)
+      expect(exportedDocument.value).toContain(
+        "<h1>Turning the desktop shell into a stable three-pane reader skeleton</h1>",
+      )
+      expect(exportedDocument.value).toContain("<dt>Source</dt><dd>FreelyRSS Engineering</dd>")
+      expect(exportedDocument.value).toContain("Step 16 is about state ownership.")
+      expect(exportedDocument.value).toContain(`data-annotation-id="annotation-layout-shell"`)
+    })
+
+    expect(documentScope.getByText("Format").parentElement?.textContent).toContain("HTML document")
+    expect(documentScope.getByText("Mode").parentElement?.textContent).toContain("single article")
+    expect(documentScope.getByText("File name").parentElement?.textContent).toContain(".html")
+
+    await user.click(readerScope.getByRole("button", { name: "Original content" }))
+
+    await waitFor(() => {
+      expect(
+        readerScope
+          .getByRole("button", {
+            name: "Original content",
+          })
+          .getAttribute("aria-pressed"),
+      ).toBe("true")
+    })
+
+    await user.click(documentScope.getByRole("button", { name: "Prepare queue PDF" }))
+
+    await waitFor(() => {
+      expect(exportedDocument.value).toContain(`data-export-format="pdf"`)
+      expect(exportedDocument.value).toContain("@page")
+      expect(exportedDocument.value).toContain("FreelyRSS PDF print source")
+      expect(exportedDocument.value).toContain("&lt;article class=&quot;post&quot;&gt;")
+      expect(exportedDocument.value).toContain(
+        "Midnight dispatch 42: attachment boundaries for podcast feeds",
+      )
+    })
+
+    expect(documentScope.getByText("Format").parentElement?.textContent).toContain(
+      "PDF print source",
+    )
+    expect(documentScope.getByText("Mode").parentElement?.textContent).toContain("visible queue")
+    expect(documentScope.getByText("File name").parentElement?.textContent).toContain(".pdf")
+    expect(documentScope.getByText("Reader view").parentElement?.textContent).toContain(
+      "Original content",
+    )
+  })
+
   test("imports OPML with nested folders and skips duplicate feed URLs", async () => {
     window.scrollTo = () => {}
     const user = userEvent.setup()

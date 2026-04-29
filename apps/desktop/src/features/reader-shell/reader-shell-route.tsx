@@ -25,10 +25,12 @@ import { ReaderPane } from "./components/reader-pane"
 import { SourcePane } from "./components/source-pane"
 import { fetchDurableQueueArticles } from "./desktop-bridge"
 import {
+  type MockDocumentExportResult,
   type MockMarkdownExportResult,
   type MockOpmlExportResult,
   type MockOpmlImportResult,
   createMockAnnotation,
+  exportMockDocument,
   exportMockMarkdown,
   exportMockOpml,
   fetchReaderShellData,
@@ -108,6 +110,9 @@ export function ReaderShellRoute() {
   const [markdownExportResult, setMarkdownExportResult] = useState<MockMarkdownExportResult | null>(
     null,
   )
+  const [documentExportResult, setDocumentExportResult] = useState<MockDocumentExportResult | null>(
+    null,
+  )
   const navigationRef = useRef<HTMLElement | null>(null)
   const sourcePaneRef = useRef<HTMLElement | null>(null)
   const queuePaneRef = useRef<HTMLElement | null>(null)
@@ -171,6 +176,12 @@ export function ReaderShellRoute() {
     mutationFn: exportMockMarkdown,
     onSuccess: (result) => {
       setMarkdownExportResult(result)
+    },
+  })
+  const exportDocumentMutation = useMutation({
+    mutationFn: exportMockDocument,
+    onSuccess: (result) => {
+      setDocumentExportResult(result)
     },
   })
 
@@ -436,6 +447,8 @@ export function ReaderShellRoute() {
     createAnnotationMutation.error instanceof Error ? createAnnotationMutation.error.message : null
   const markdownExportErrorMessage =
     exportMarkdownMutation.error instanceof Error ? exportMarkdownMutation.error.message : null
+  const documentExportErrorMessage =
+    exportDocumentMutation.error instanceof Error ? exportDocumentMutation.error.message : null
 
   useEffect(() => {
     if (shellData && activeArticleId !== routeState.articleId) {
@@ -455,8 +468,8 @@ export function ReaderShellRoute() {
     return (
       <main className="desktop-shell">
         <div className="desktop-loading">
-          <p className="desktop-shell__eyebrow">Stage 7 / Step 56</p>
-          <h1>Loading Markdown export controls for the desktop reader shell.</h1>
+          <p className="desktop-shell__eyebrow">Stage 7 / Step 57</p>
+          <h1>Loading document export controls for the desktop reader shell.</h1>
         </div>
       </main>
     )
@@ -562,14 +575,14 @@ export function ReaderShellRoute() {
 
       <header className="desktop-shell__header">
         <div className="desktop-shell__title-block">
-          <p className="desktop-shell__eyebrow">Stage 7 / Step 56</p>
-          <h1>The desktop shell now exports readable Markdown.</h1>
+          <p className="desktop-shell__eyebrow">Stage 7 / Step 57</p>
+          <h1>The desktop shell now exports reader documents.</h1>
           <p className="desktop-shell__lead">
             Route state still owns the active source and article, the shell store still owns only
             local queue controls and presentation preferences, and the mock repository remains the
-            shell-side snapshot source. Step 56 adds a Markdown export boundary that can render the
-            selected article or the current visible queue with metadata, body content, annotations,
-            and attachment references without moving serialization rules into the reader component.
+            shell-side snapshot source. Step 57 keeps Markdown intact and adds HTML plus PDF print
+            document generation beside it, so format rules stay in export modules instead of the
+            reader component.
           </p>
         </div>
 
@@ -602,10 +615,9 @@ export function ReaderShellRoute() {
 
           <p className="desktop-summary__note">
             The queue still consumes one route-backed article query while cache configuration,
-            source editing, OPML portability, Markdown export, and tree expansion remain separate
-            concerns. Step 56 keeps export formatting outside the React route layer and lets the
-            shell trigger one stable Markdown generation path for both single-article and visible
-            queue export.
+            source editing, OPML portability, document export, and tree expansion remain separate
+            concerns. Step 57 reuses the same article selection contract for Markdown, HTML, and PDF
+            print output while leaving each formatter in its own module.
           </p>
 
           <div className="desktop-shortcuts">
@@ -780,8 +792,11 @@ export function ReaderShellRoute() {
             annotationErrorMessage={annotationErrorMessage}
             articleStateErrorMessage={articleStateErrorMessage}
             describedBy={READER_SHORTCUT_HINT_ID}
+            documentExportErrorMessage={documentExportErrorMessage}
+            documentExportResult={documentExportResult}
             headingId={READER_LANDMARK_IDS.readerHeading}
             isCreatingAnnotation={createAnnotationMutation.isPending}
+            isExportingDocument={exportDocumentMutation.isPending}
             isExportingMarkdown={exportMarkdownMutation.isPending}
             isUpdatingArticleState={updateArticleStateMutation.isPending}
             markdownExportErrorMessage={markdownExportErrorMessage}
@@ -789,6 +804,45 @@ export function ReaderShellRoute() {
             onCreateAnnotation={(input) => {
               createAnnotationMutation.reset()
               createAnnotationMutation.mutate(input)
+            }}
+            onExportDocumentBatch={(format) => {
+              exportDocumentMutation.reset()
+              setDocumentExportResult(null)
+              exportDocumentMutation.mutate({
+                articleIds: visibleArticles.map((article) => article.id),
+                format,
+                mode: "batch",
+                presentation: {
+                  contentMode: readerContentMode,
+                  fontFamily: readerFontFamily,
+                  fontScale: readerFontScale,
+                  lineHeight: readerLineHeight,
+                  marginMode: readerMarginMode,
+                  themeTone,
+                },
+                title: `${activeSource.title} ${format.toUpperCase()} export`,
+              })
+            }}
+            onExportDocumentSingle={(format) => {
+              if (!activeDetail) {
+                return
+              }
+
+              exportDocumentMutation.reset()
+              setDocumentExportResult(null)
+              exportDocumentMutation.mutate({
+                articleIds: [activeDetail.article.id],
+                format,
+                mode: "single",
+                presentation: {
+                  contentMode: readerContentMode,
+                  fontFamily: readerFontFamily,
+                  fontScale: readerFontScale,
+                  lineHeight: readerLineHeight,
+                  marginMode: readerMarginMode,
+                  themeTone,
+                },
+              })
             }}
             onExportMarkdownBatch={() => {
               exportMarkdownMutation.reset()

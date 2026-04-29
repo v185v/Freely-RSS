@@ -2,15 +2,15 @@
 
 ## 当前状态
 
-- 阶段：阶段 7 Step 56 已完成，桌面端现已拥有独立的 Markdown 导出管线：`markdown-export.ts` 负责把文章详情、元数据、正文、批注与附件引用序列化为 Markdown，mock repository 负责选择单篇或当前可见队列，reader 面板只负责展示导出结果和触发命令；下一步进入阶段 7 Step 57 的 HTML / PDF 导出。
+- 阶段：阶段 7 Step 57 已完成，桌面端现已在 Markdown 导出管线旁新增独立 HTML / PDF 导出边界：`html-pdf-export.ts` 负责把文章详情、当前 reader 呈现设置、正文、批注与附件引用序列化为独立 HTML 或 PDF print source，mock repository 只负责解析待导出文章，reader 面板只负责展示结果和触发命令；下一步进入阶段 7 Step 58 的批量操作。
 - 最后更新：2026-04-29
-- 风险状态：已从“Step 56 需要建立独立导出管线，避免把 Markdown 拼接塞进 reader route 或 UI 组件”推进到“Step 56 已建立可验证的 Markdown 导出边界，但 Step 57 仍需复用该导出契约并处理 HTML/PDF 排版与打印边界，不能把 HTML/PDF 序列化重新堆回 reader pane”
+- 风险状态：已从“Step 57 需要复用 Step 56 导出契约并处理 HTML/PDF 排版与打印边界”推进到“Step 57 已建立可验证的 HTML/PDF 格式边界，但 Step 58 仍需保持批量操作与导出、缓存清理、reader route 分离，不能把批量状态变更堆回 reader pane”
 
 ### 2026-04-29 状态快照
 
-- 当前完成：阶段 7 Step 56 已完成，`apps/desktop` 现已支持导出当前选中文章与当前可见文章队列为 Markdown。导出内容保留文章标题、来源、作者、发布时间、URL、标签、阅读状态、正文、批注锚点、批注备注和附件引用。
-- 当前验证：`corepack pnpm --filter @freelyrss/desktop test -- --run markdown-export.test.ts reader-shell.test.tsx`、`corepack pnpm run format`、`corepack pnpm run desktop:build`、`corepack pnpm run verify` 与 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle` 全部通过。
-- 当前下一步：进入阶段 7 Step 57“实现 HTML 与 PDF 导出”，应复用 Step 56 的文章选择、批量导出和导出报告边界，并把格式差异限制在新的 HTML/PDF 序列化层，而不是改写 Markdown 导出或 reader route。
+- 当前完成：阶段 7 Step 57 已完成，`apps/desktop` 现已支持把当前选中文章或当前可见文章队列导出为独立 HTML 文档，并可准备面向桌面打印管线的 PDF print source。HTML/PDF 导出保留文章标题、来源、作者、发布时间、URL、标签、阅读状态、当前 reader 内容模式、正文、批注标记、批注备注、附件引用和导出报告。
+- 当前验证：`corepack pnpm --filter @freelyrss/desktop test -- --run html-pdf-export.test.ts markdown-export.test.ts reader-shell.test.tsx`、`corepack pnpm run format`、`corepack pnpm run desktop:build`、`corepack pnpm run verify` 与 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle` 全部通过。
+- 当前下一步：进入阶段 7 Step 58“实现批量操作”，应复用当前可见队列选择边界，并把批量标记已读、加标签、稍后读和缓存删除保持在独立 mutation / repository 路径中，而不是改写导出 formatter 或 reader pane。
 
 ### 2026-04-27 状态快照
 
@@ -32,7 +32,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 7 Step 56 需要在不破坏 `apps/desktop/src/features/reader-shell/components/reader-pane.tsx` 的阅读呈现职责前提下，把 Markdown 导出格式化、批量导出和后续 HTML/PDF 扩展收敛到一个独立导出边界，而不是继续堆进 reader route 或卡片组件。
+- 当前无阻塞；下一步风险点是阶段 7 Step 58 需要在不破坏 `apps/desktop/src/features/reader-shell/components/reader-pane.tsx` 与导出 formatter 职责的前提下，把批量操作的选择、执行、错误提示和 mock 持久化收敛到独立边界，而不是把批量状态变更散落到 reader route 或队列渲染组件。
 
 ## 本次执行记录
 
@@ -1333,3 +1333,35 @@
 - `apps/desktop/src/features/reader-shell/components/markdown-export-card.tsx` owns Markdown export presentation only; it does not know how Markdown is assembled.
 - `apps/desktop/src/features/reader-shell/reader-shell-route.tsx` remains the command trigger and composition boundary for export mutations.
 - Stage 7 Step 57 should introduce a separate HTML/PDF serialization boundary that consumes the same resolved article detail inputs instead of modifying the Markdown-specific formatter.
+
+## 2026-04-29 ASCII Addendum XXI
+
+### Stage 7 Step 57 Completed: HTML and PDF document export boundary
+
+- Completed `implementation-plan.md` Stage 7 Step 57 by adding HTML and PDF document export beside the existing Markdown exporter.
+- Added `apps/desktop/src/features/reader-shell/html-pdf-export.ts` as the new pure document formatter. It consumes resolved `ArticleDetailDto` records plus the current reader presentation settings and emits either a standalone HTML document or a PDF print-source document.
+- Added `apps/desktop/src/features/reader-shell/document-export-styles.ts` so standalone document CSS and print CSS stay separate from article serialization logic.
+- Kept the PDF path intentionally print-oriented. The formatter returns a `.pdf` target file name and print-ready HTML with `@page` rules, but it does not create a binary PDF, write files, or invoke native printing in this step.
+- Preserved Markdown boundaries. `markdown-export.ts` remains Markdown-only, and the new document formatter does not call into or mutate Markdown serialization.
+- Added `components/document-export-card.tsx` so the reader panel can present HTML/PDF output, format facts, target filename, reader-view summary, and selected/visible-queue commands without knowing how documents are serialized.
+- Updated `reader-shell-route.tsx` so route composition captures current reader presentation settings (`contentMode`, theme, font, scale, leading, margins) and passes them into the mock repository as export input.
+- Updated `mock-data.ts` so mock export selection now has two delegated formatters: Markdown goes to `markdown-export.ts`, and HTML/PDF goes to `html-pdf-export.ts`.
+- Added unit coverage in `html-pdf-export.test.ts` and user-visible shell coverage in `reader-shell.test.tsx` for selected HTML export, queue PDF print-source generation, raw/extracted content mode handling, metadata, annotations, attachments, file names, and print CSS.
+
+### Step 57 Verification
+
+- Passed `corepack pnpm --filter @freelyrss/desktop test -- --run html-pdf-export.test.ts markdown-export.test.ts reader-shell.test.tsx`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run format`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+
+### Next Step (ASCII update)
+
+- The next implementation step in `implementation-plan.md` is Stage 7 Step 58: batch operations.
+- Preserve the current boundary split:
+- `apps/desktop/src/features/reader-shell/html-pdf-export.ts` owns document serialization only; it should not become a file writer, selection store, batch-operation executor, or native print adapter.
+- `apps/desktop/src/features/reader-shell/markdown-export.ts` remains Markdown-only and should not absorb HTML/PDF rules.
+- `apps/desktop/src/features/reader-shell/mock-data.ts` owns mock article-detail resolution for export and should own or delegate future mock batch mutations through explicit functions.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx` remains the command trigger and composition boundary. Step 58 should add batch operation wiring without turning the route into the batch executor.
+- Step 58 should add a separate batch-action contract for selected/visible article ids, status updates, tag changes, read-later changes, and cache deletion instead of reusing export result state as a generic multi-select model.

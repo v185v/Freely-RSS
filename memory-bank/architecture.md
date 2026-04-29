@@ -2004,3 +2004,38 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `components/markdown-export-card.tsx` does not inspect DTO internals beyond showing the returned result. That keeps UI concerns separate from export semantics.
 - `reader-shell-route.tsx` remains a composition layer. It chooses single vs. batch ids and triggers the mutation, but it does not build Markdown strings.
 - Step 57 should add HTML/PDF-specific formatting or print boundaries beside this Markdown path, not inside it.
+
+## 2026-04-29 ASCII Addendum XXI
+
+### Step 57 Architecture Insights
+
+- Step 57 adds HTML/PDF document export beside the existing Markdown exporter instead of widening `markdown-export.ts` into a mixed-format serializer.
+- HTML export and PDF export share one new document formatter because both are HTML-shaped documents at this stage: HTML is the standalone saved document, while PDF is a print-ready HTML source intended for the future desktop print pipeline.
+- The PDF path deliberately returns a `.pdf` target file name plus print source markup, not a binary PDF. Actual filesystem writing and native print invocation remain outside this step.
+- The formatter consumes resolved `ArticleDetailDto` records plus the current reader presentation settings. It does not consume queue rows, query state, cache inventory, or route search params directly.
+- The current reader content mode now matters for document export. Extracted mode emits readable paragraphs with annotation marks, while raw mode emits escaped source markup in a preformatted block.
+- No database schema migration was required for this step. Article detail, annotation anchors, attachment metadata, and reader presentation settings already provide the necessary export input.
+
+### Step 57 File Responsibilities
+
+- `apps/desktop/src/features/reader-shell/html-pdf-export.ts`: owns HTML/PDF document serialization, filename generation, report construction, reader-presentation mapping, extracted/raw body fallback, annotation mark rendering, metadata rendering, and attachment rendering.
+- `apps/desktop/src/features/reader-shell/document-export-styles.ts`: owns standalone document CSS, reader-presentation-to-CSS mapping, print CSS, and the PDF print-source visual treatment used by `html-pdf-export.ts`.
+- `apps/desktop/src/features/reader-shell/html-pdf-export.test.ts`: validates the pure formatter boundary for standalone HTML and PDF print-source output, including metadata, content mode, annotations, attachments, print CSS, and file naming.
+- `apps/desktop/src/features/reader-shell/components/document-export-card.tsx`: owns the reader-side HTML/PDF export presentation surface, including the readonly document-source textarea, format/mode/file report facts, selected-article commands, visible-queue commands, and export errors.
+- `apps/desktop/src/features/reader-shell/components/reader-pane.tsx`: composes the HTML/PDF export card beside the Markdown export card and passes through callbacks/results without formatting documents itself.
+- `apps/desktop/src/features/reader-shell/mock-data.ts`: owns mock article-detail resolution for document export and delegates actual HTML/PDF construction to `html-pdf-export.ts`.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`: owns mutation wiring for document export, selects either the active article id or current visible queue ids, captures the current reader presentation settings, and passes those inputs to the mock repository.
+- `apps/desktop/src/features/reader-shell/types.ts`: defines the desktop-local document export format, presentation, report, and result contracts shared by the formatter, route, mock repository, and presentation component.
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`: verifies the user-visible Step 57 flow for selected-article HTML export and visible-queue PDF print-source preparation from the current reader mode.
+- `apps/desktop/src/styles.css`: keeps document export summary layout resilient for longer report values such as generated filenames and reader presentation summaries.
+- `memory-bank/progress.md`: records the completed Step 57 milestone, verification commands, and the Step 58 handoff.
+- `memory-bank/architecture.md`: records the Step 57 format boundary, the print-source rule, and the file-level responsibility split for future maintainers.
+
+### Step 57 Boundary Notes
+
+- `html-pdf-export.ts` is a formatter, not a file writer, browser print invoker, durable storage adapter, or route layer.
+- `markdown-export.ts` remains Markdown-only. The new HTML/PDF work reuses the same article selection pattern through `mock-data.ts`, but it does not reuse or mutate Markdown serialization internals.
+- `components/document-export-card.tsx` displays returned output and report facts only. It does not inspect `ArticleDetailDto` internals or assemble HTML strings.
+- `reader-shell-route.tsx` captures current reader settings as export input, but it still does not build document strings. This keeps route composition separate from format semantics.
+- Future durable export work should add a Tauri filesystem/print boundary after these pure formatters, not move file-writing or native print logic into React components.
+- Step 58 should implement batch operations through a separate mutation boundary. It should not reuse document export state as a general multi-select state store.

@@ -19,6 +19,8 @@ import type {
   ReaderAnnotationAnchor,
   ReaderAnnotationKind,
   ReaderContentMode,
+  ReaderDocumentExportFormat,
+  ReaderDocumentExportResult,
   ReaderFontFamily,
   ReaderFontScale,
   ReaderLineHeight,
@@ -26,6 +28,7 @@ import type {
   ReaderMarkdownExportResult,
   ReaderThemeTone,
 } from "../types"
+import { DocumentExportCard } from "./document-export-card"
 import { MarkdownExportCard } from "./markdown-export-card"
 
 type ReaderStateMutationInput = {
@@ -49,13 +52,18 @@ type ReaderPaneProps = {
   annotationErrorMessage: string | null
   articleStateErrorMessage: string | null
   describedBy?: string
+  documentExportErrorMessage: string | null
+  documentExportResult: ReaderDocumentExportResult | null
   headingId: string
   isCreatingAnnotation: boolean
+  isExportingDocument: boolean
   isExportingMarkdown: boolean
   isUpdatingArticleState: boolean
   markdownExportErrorMessage: string | null
   markdownExportResult: ReaderMarkdownExportResult | null
   onCreateAnnotation: (input: CreateReaderAnnotationInput) => void
+  onExportDocumentBatch: (format: ReaderDocumentExportFormat) => void
+  onExportDocumentSingle: (format: ReaderDocumentExportFormat) => void
   onExportMarkdownBatch: () => void
   onExportMarkdownSingle: () => void
   onSetReaderContentMode: (readerContentMode: ReaderContentMode) => void
@@ -547,13 +555,18 @@ export function ReaderPane({
   annotationErrorMessage,
   articleStateErrorMessage,
   describedBy,
+  documentExportErrorMessage,
+  documentExportResult,
   headingId,
   isCreatingAnnotation,
+  isExportingDocument,
   isExportingMarkdown,
   isUpdatingArticleState,
   markdownExportErrorMessage,
   markdownExportResult,
   onCreateAnnotation,
+  onExportDocumentBatch,
+  onExportDocumentSingle,
   onExportMarkdownBatch,
   onExportMarkdownSingle,
   onSetReaderContentMode,
@@ -578,6 +591,7 @@ export function ReaderPane({
   const [pendingSelection, setPendingSelection] = useState<ReaderPendingSelection | null>(null)
   const [selectionErrorMessage, setSelectionErrorMessage] = useState<string | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
+  const documentTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const markdownTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const annotationNoteId = useId()
   const extractedContent = activeDetail?.article.contentExtracted?.trim() ?? null
@@ -1422,6 +1436,17 @@ export function ReaderPane({
                   onExportBatch={onExportMarkdownBatch}
                   onExportSingle={onExportMarkdownSingle}
                   textareaRef={markdownTextareaRef}
+                  visibleArticleCount={visibleArticleCount}
+                />
+
+                <DocumentExportCard
+                  errorMessage={documentExportErrorMessage}
+                  exportResult={documentExportResult}
+                  hasActiveArticle={activeDetail !== null}
+                  isExporting={isExportingDocument}
+                  onExportBatch={onExportDocumentBatch}
+                  onExportSingle={onExportDocumentSingle}
+                  textareaRef={documentTextareaRef}
                   visibleArticleCount={visibleArticleCount}
                 />
 
