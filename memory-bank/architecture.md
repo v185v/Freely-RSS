@@ -705,6 +705,53 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `payload` 保存实体变更或操作日志。
 - 当前阶段保留表结构，但首发版本不启用远程同步。
 
+#### 12.14.1 SyncEvent 同步字段边界
+
+Step 60 已将 `SyncEvent` 限定为用户可携带状态、订阅组织和自动化配置的事件日志，不承载设备运行状态、抓取诊断、搜索索引或 UI 任务状态。
+
+通过 `SyncEvent` 同步的实体与字段：
+
+- `Feed`：`title`、`site_url`、`feed_url`、`format`、`icon`、`folder_id`、`custom_name`、`sort_order`、`update_interval`、`cache_policy`
+- `Folder`：`name`、`parent_id`、`sort_order`、`kind`
+- `Tag`：`name`、`scope`、`color`
+- `FeedTag`：`feed_id`、`tag_id`
+- `ArticleTag`：`article_id`、`tag_id`
+- `UserState`：`read_state`、`starred`、`liked`、`importance`、`read_later`、`reading_progress`、`last_opened_at`
+- `Annotation`：`type`、`selected_text`、`anchor`、`note`、`color`、`created_at`
+- `Rule`：`name`、`enabled`、`priority`、`conditions`、`actions`、`scope`
+- `SmartFolder`：`name`、`query_definition`、`sort_definition`
+
+只保留本地、不进入 `SyncEvent` 的字段与数据：
+
+- `Feed.health_status`、`last_checked_at`、`last_success_at`、`etag`、`last_modified`、`last_error_kind`、`last_error_message`、`last_error_at`、`consecutive_failures`，因为它们描述本设备最近一次抓取事实。
+- `Article.fetched_at`，因为它描述本地库接收文章的时间，不是跨设备用户状态。
+- `Attachment.local_cache_path`，因为它是设备文件系统路径。
+- `RuleAudit.input_snapshot`、`planned_commands`、`applied_effects`、`created_at`，因为规则审计先作为本地可观测历史保留。
+- `ArticleSearch`、`ArticleSearchSource` 和所有 FTS 投影，因为搜索索引由本地数据库重建。
+- Step 59 的 task status、React Query mutation state、retry label 和 recovery text，因为它们是当前 shell 的运行时观察结果。
+
+按需懒加载、不内联进普通 `SyncEvent.payload` 的内容：
+
+- `Article.content_raw`
+- `Article.content_extracted`
+- 附件二进制内容及其大对象元数据
+
+这些内容后续应通过 `EncryptedBlob` 引用、密文对象清单和按需下载进入本地缓存，而不是把正文或附件字节塞进事件 payload。
+
+#### 12.14.2 服务端最小实体
+
+同步服务端只保存支持账号、设备、事件交换和密文对象索引所需的最小集合，不复制客户端完整业务 schema。
+
+服务端最小实体：
+
+- `User`：账号主体，只保存身份、创建时间、禁用时间和必要的不可逆标识摘要，不保存明文文章、笔记或阅读历史。
+- `Device`：用户设备，保存 `device_id`、`user_id`、显示名、公钥、注册时间和最近活跃时间，用于事件归属、游标和加密边界。
+- `SyncEvent`：设备上传的实体级事件或操作日志，保存事件 id、实体类型、实体 id、变更类型、密文或最小 payload 引用、设备 id 和创建时间。
+- `EncryptedBlob`：密文对象索引，保存 blob id、用户 id、类型、对象存储 key、大小、校验和、创建时间和可选关联事件 id；对象内容仍在 S3 兼容存储或 WebDAV/Nextcloud 对象存储中。
+- `UserSettings`：用户级同步配置与协议偏好，保存用户 id、设置 JSON、版本和更新时间；不得扩展为客户端业务表镜像。
+
+服务端明确不拥有 `Article`、`Feed`、`Annotation`、`UserState` 等业务读取主表。服务端可以验证、交换和存放密文事件，但业务查询、全文搜索和本地阅读仍由客户端本地库承载。
+
 ### 12.14 全文搜索结构
 
 #### 12.14.1 `ArticleSearchSource`
@@ -791,7 +838,7 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `crates/content-pipeline`：正文提取、HTML 清洗、缩略图与附件识别。
 - `crates/rule-engine`：统一查询表达式命中判断与动作执行。
 - `crates/search-engine`：SQLite FTS5 搜索、过滤与高亮片段组装。
-- `crates/sync-engine`：事件日志、同步批次、重放与冲突合并。
+- `crates/sync-engine`：同步实体、字段边界、事件日志、同步批次、重放与冲突合并；当前 Step 60 已先落地纯分类规则，后续再接本地事件写入和远程交换。
 - `crates/integration-engine`：Webhook、REST 连接器、桥接服务与导出适配层。
 
 ### 13.5 当前工作区清单与文件职责
@@ -860,13 +907,14 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `packages/shared-types/CHANGELOG.md`：共享类型包的发布说明，用于跟踪 DTO、枚举与领域类型契约变化。
 - `packages/shared-types/tsconfig.json`：共享类型包的 TypeScript 校验边界，确保该包可在不依赖任何应用壳的前提下独立完成严格类型检查。
 - `packages/shared-types/src/index.ts`：共享类型包的统一导出面，集中暴露标识符、基础原语、状态枚举与各领域 DTO，避免应用壳深链引用具体文件。
-- `packages/shared-types/src/ids.ts`：共享领域标识符别名定义，统一 `Feed`、`Folder`、`Article`、`Annotation`、`Rule`、`SmartFolder`、`AIArtifact` 与 `SyncEvent` 等实体 ID 的命名边界。
+- `packages/shared-types/src/ids.ts`：共享领域标识符别名定义，统一 `Feed`、`Folder`、`Article`、`Annotation`、`Rule`、`SmartFolder`、`AIArtifact`、`SyncEvent`、`User` 与 `EncryptedBlob` 等实体 ID 的命名边界。
 - `packages/shared-types/src/primitives.ts`：共享基础原语文件，定义 `Nullable`、ISO 时间字符串、URL、语言代码、缓存路径与 JSON 值等跨模块可复用类型。
 - `packages/shared-types/src/enums.ts`：共享受控枚举集合，当前固化 feed 格式、folder kind、tag scope、附件类型、阅读状态、重要级别、批注类型与 AI Artifact kind 等状态语义。
 - `packages/shared-types/src/organization.ts`：订阅组织与标签相关 DTO 文件，定义 `Folder`、`Tag`、`FeedTag` 与 `ArticleTag` 的共享类型边界。
 - `packages/shared-types/src/feed.ts`：订阅源相关 DTO 文件，定义 `Feed` 基础模型、订阅树摘要模型与树节点联合类型，供桌面壳后续订阅树与源管理界面消费。
 - `packages/shared-types/src/article.ts`：文章阅读相关 DTO 文件，定义 `Article`、`Attachment`、`UserState`、`Annotation` 以及文章列表项与文章详情模型，供后续中栏和右栏阅读界面复用。
-- `packages/shared-types/src/automation.ts`：规则、智能文件夹、AI Artifact 与同步事件相关 DTO 文件，当前以 `JsonValue` 形式保留查询条件、动作定义与同步 payload 边界，为后续 `shared-query` 和同步协议落地预留接口。
+- `packages/shared-types/src/automation.ts`：规则、智能文件夹与 AI Artifact 相关 DTO 文件，当前以 `JsonValue` 形式保留查询条件、动作定义和 AI 结果边界；Step 60 后同步事件 DTO 已迁出到 `sync.ts`，避免自动化契约继续承载同步协议语义。
+- `packages/shared-types/src/sync.ts`：共享同步契约文件，负责定义 `SyncEvent` 实体类型、变更类型、payload 形状、字段边界常量、密文 blob 类型，以及服务端最小实体 `User`、`Device`、`SyncEvent`、`EncryptedBlob`、`UserSettings` 的 DTO；它不负责生成事件、执行同步传输或解释本地 UI mutation 状态。
 - `packages/shared-query/package.json`：共享查询表达式包的清单文件，当前显式暴露源码入口、独立 `check` / `test` 脚本与本地 TypeScript 依赖，固定该包的分发和验证边界。
 - `packages/shared-query/CHANGELOG.md`：共享查询表达式包的发布说明，用于跟踪 AST、解析器与序列化协议变化。
 - `packages/shared-query/tsconfig.json`：共享查询表达式包的 TypeScript 校验边界，当前采用 `NodeNext` 与 `allowImportingTsExtensions`，让源码既能被工作区类型检查，也能被 Node 原生测试直接消费。
@@ -893,7 +941,8 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `packages/shared-config/src/errors.js`：共享配置错误模型，提供带路径信息的 `ConfigValidationError`，让调用方能直接定位失败字段，而不是只看到模糊异常。
 - `packages/shared-config/src/config.test.js`：共享配置的 Node 原生测试，覆盖桌面开发环境、桌面测试环境和缺失必填配置时的失败路径，用作阶段 1 Step 10 的自动化验收。
 - `crates/*/Cargo.toml`：各 Rust crate 的边界声明文件，用于把抓取、搜索、规则、同步等能力维持在独立模块，而不是回退成单体 Rust 包。
-- `crates/*/src/lib.rs`：各 Rust crate 的最小库入口，当前只承担可编译占位职责；后续应逐步承接真实领域逻辑与测试。
+- `crates/*/src/lib.rs`：各 Rust crate 的库入口；部分 crate 仍只承担可编译占位职责，`core-domain`、`feed-engine`、`content-pipeline`、`rule-engine` 与 `sync-engine` 已逐步承接真实领域逻辑与测试。
+- `crates/sync-engine/src/lib.rs`：同步引擎当前入口，Step 60 负责定义 `SyncEvent` / local-only / lazy encrypted blob 三类边界、同步实体类型、变更类型、用户状态字段、批注字段、正文 blob 分类和关系事件分类；它是纯分类层，不读写 SQLite、不生成持久事件 id、不调用远程服务，也不复用 reader shell 的任务状态。
 - `crates/core-domain/Cargo.toml`：核心领域 crate 的清单文件；从阶段 3 Step 18 起，它不再只是占位，而是显式声明 `rusqlite`、`thiserror` 与本地数据库迁移所需依赖；到阶段 3 Step 24 又补齐 `serde` 与 `serde_json`，把“共享领域模型可序列化”也固定为 crate 契约的一部分。
 - `crates/core-domain/src/lib.rs`：核心领域 crate 的根入口，当前同时导出 `model` 与 `sqlite` 模块，使桌面宿主与后续其他 Rust 模块都能沿同一入口消费领域语义、数据库 bootstrap 与迁移能力。
 - `crates/core-domain/src/model/mod.rs`：领域模型聚合入口，负责把实体、值对象、枚举与错误模型收敛为单一共享导出面，避免桌面宿主或后续抓取引擎深链到具体子文件。
@@ -2039,3 +2088,99 @@ FreelyRSS 当前应先把桌面端作为首个完整交付平台完成落地，�
 - `reader-shell-route.tsx` captures current reader settings as export input, but it still does not build document strings. This keeps route composition separate from format semantics.
 - Future durable export work should add a Tauri filesystem/print boundary after these pure formatters, not move file-writing or native print logic into React components.
 - Step 58 should implement batch operations through a separate mutation boundary. It should not reuse document export state as a general multi-select state store.
+
+## 2026-04-30 ASCII Addendum XXII
+
+### Step 58 Architecture Insights
+
+- Step 58 keeps batch selection and batch execution deliberately separate. Selection is transient shell UI state in `state.ts`; execution is a pure mutation rule in `batch-operations.ts`; persistence is still represented by the mock repository in `mock-data.ts`.
+- The selected article boundary is the current visible queue, not the current export set and not the whole local library. This keeps batch work aligned with what the user can inspect in the queue pane.
+- Batch commands mutate list rows and resolved article details together so the queue and reader panel stay consistent after a mutation. Cache deletion also clears affected attachment `localCachePath` values in article details.
+- Batch cache deletion reuses the shell cache inventory shape introduced by Step 55, but it does not run the Step 55 LRU planner. User-selected deletion is an explicit command, while cleanup remains a separate policy-driven operation.
+- No database schema migration was required for this step. Step 58 proves desktop shell semantics and mock repository mutation behavior before adding a durable backend batch executor.
+- Export modules remain untouched as mutation executors. Markdown, HTML, and PDF formatters still serialize documents only; they do not own multi-select state, tag changes, read-state changes, or cache deletion.
+
+### Step 58 File Responsibilities
+
+- `apps/desktop/src/features/reader-shell/batch-operations.ts`: owns pure batch command execution for selected article ids, including id normalization, unknown-id validation, mark-read updates, read-later updates, article-tag application, selected cache deletion, attachment cache-path clearing, and report construction.
+- `apps/desktop/src/features/reader-shell/batch-operations.test.ts`: validates the pure batch boundary for selected-only read-state changes, tag application without duplicates, read-later updates, and selected cache deletion without affecting unselected cache entries.
+- `apps/desktop/src/features/reader-shell/components/batch-operations-card.tsx`: renders the queue-side batch control surface, including selected/visible counts, select-all and clear-selection commands, state/tag/cache action buttons, latest result facts, and mutation errors.
+- `apps/desktop/src/features/reader-shell/components/queue-pane.tsx`: owns visible queue selection presentation by rendering row checkboxes, selected-row styling hooks, the batch operations card, and callbacks for toggling or selecting all visible articles.
+- `apps/desktop/src/features/reader-shell/state.ts`: owns transient shell UI selection state for batch operations, including deduped selection setting, row toggling, clearing, and pruning selections when the visible queue changes.
+- `apps/desktop/src/features/reader-shell/types.ts`: defines desktop-local batch action, command, input, report, and result contracts, and exposes article tags on `ReaderShellData` so the batch UI can offer valid article-tag commands.
+- `apps/desktop/src/features/reader-shell/mock-data.ts`: owns mock batch execution against the current shell snapshot, delegates mutation rules to `batch-operations.ts`, updates mock articles, article details, and cache inventory, then returns a fresh `ReaderShellData` snapshot plus the batch result.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`: owns route-level mutation wiring, visible-queue id derivation, selection pruning, batch result state, error message extraction, and passing batch callbacks/data into `QueuePane`.
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`: verifies the user-visible Step 58 flow: selecting queue rows, marking selected articles read, adding a tag to selected articles, deleting selected cache, and confirming unselected rows stay unchanged.
+- `apps/desktop/src/styles.css`: contains the desktop shell presentation rules for queue selection controls, selected queue rows, batch summary grids, batch result grids, and responsive layout behavior.
+- `memory-bank/progress.md`: records the completed Step 58 milestone, validation commands, and the Step 59 handoff.
+- `memory-bank/architecture.md`: records the Step 58 selection/execution/repository boundary and file-level responsibility split for future maintainers.
+
+### Step 58 Boundary Notes
+
+- `batch-operations.ts` is not a durable storage adapter. It mutates passed-in shell snapshots and returns updated values; a later backend implementation should preserve this rule boundary instead of embedding batch semantics in transport code.
+- `BatchOperationsCard` is not the future task status panel. It shows only the latest local batch result and direct mutation error; Step 59 should introduce a broader task-status surface for background work.
+- `queue-pane.tsx` owns selection affordances, but it does not decide how a command changes article state, tags, or cache inventory.
+- `reader-shell-route.tsx` coordinates mutations and query-cache replacement only. It should stay free of per-action mutation rules.
+- `mock-data.ts` remains a mock repository. Durable Step 58 behavior still needs a future Tauri/Rust command path before production storage can execute these mutations.
+- `markdown-export.ts`, `html-pdf-export.ts`, `document-export-styles.ts`, and `reader-pane.tsx` remain outside the batch execution path. Step 58 deliberately avoids reusing export selection or document result state as a generic batch state model.
+- Step 59 should consume current feature-level errors and task results from dedicated boundaries rather than moving feed refresh, cache cleanup, export, and batch operation logic into one monolithic status component.
+
+## 2026-04-30 ASCII Addendum XXIII
+
+### Step 59 Architecture Insights
+
+- Step 59 establishes task status as an observation boundary, not an execution boundary. Refresh, OPML import/export, Markdown export, HTML/PDF export, cache cleanup, and batch operations still execute through their existing feature-specific mutation paths.
+- The key architectural decision is that task status entries are normalized from current shell facts. `task-status.ts` receives mutation/result facts and returns display-ready state; it does not store jobs, schedule work, retry automatically, or mutate repository data.
+- Retry is intentionally contextual. The task panel exposes a retry button only where the current route still has enough information to safely rerun the same kind of command, such as refreshing the active feed or rerunning cleanup/export from the current reader context.
+- Failure fixtures stay in the mock repository. The empty archive feed refresh now fails on purpose so the shell can verify user-visible recovery behavior without changing durable feed-engine semantics.
+- No database schema migration was required for this step. Task status is transient desktop shell state and must not be mistaken for `SyncEvent`, rule audit history, or a future durable background job queue.
+- Step 59 keeps existing cards narrow. `BatchOperationsCard`, export cards, `CacheMaintenanceCard`, and `FeedEditorCard` still present local command controls and local results; the new task panel is the cross-feature monitor.
+
+### Step 59 File Responsibilities
+
+- `apps/desktop/src/features/reader-shell/task-status.ts`: owns pure task-entry normalization, error-message extraction, task state priority, and aggregate task monitor summaries.
+- `apps/desktop/src/features/reader-shell/task-status.test.ts`: validates the pure status boundary for running, failed, completed, and idle task states plus summary counts/headline behavior.
+- `apps/desktop/src/features/reader-shell/components/task-status-panel.tsx`: renders the shell-level task monitor, task counts, task rows, failure details, recovery text, timestamps, and retry buttons where provided.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`: composes task status inputs from existing React Query mutations and feature results, passes entries into the task panel, and wires contextual retry callbacks without owning feature-specific execution rules.
+- `apps/desktop/src/features/reader-shell/types.ts`: defines desktop-local task status kind, state, entry, and summary contracts shared by the route, pure task-status helper, and presentation component.
+- `apps/desktop/src/features/reader-shell/mock-data.ts`: keeps the mock refresh failure fixture for the empty archive feed and continues to own mock repository behavior for shell validation only.
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`: verifies the user-visible Step 59 flow: completed export status appears in the monitor, failed source refresh reports the reason, recovery guidance is visible, and retry remains available.
+- `apps/desktop/src/styles.css`: contains the task monitor layout, status badges, status row states, and responsive shell sidecar layout.
+- `memory-bank/progress.md`: records the completed Step 59 milestone, validation commands, and the Step 60 handoff.
+- `memory-bank/architecture.md`: records the Step 59 observation boundary and file-level responsibility split for future maintainers.
+
+### Step 59 Boundary Notes
+
+- `task-status.ts` is not a durable scheduler, task executor, sync log, retry policy engine, or event-sourcing layer.
+- `TaskStatusPanel` is not the owner of feature errors. It renders normalized observations and calls explicit route-provided retry callbacks only.
+- `reader-shell-route.tsx` should remain a composition layer. It can observe mutation states, but it should not absorb the semantics of feed refresh, cache cleanup, document export, or batch mutation execution.
+- Step 60 must define synchronization entities and event boundaries independently from Step 59 task status. React Query mutation state, panel rows, and mock failure fixtures are UI/runtime observations, not synchronization facts.
+
+## 2026-04-30 ASCII Addendum XXIV
+
+### Step 60 Architecture Insights
+
+- Step 60 starts the sync phase by defining boundaries, not by starting transport. The new code classifies what will become `SyncEvent`, what stays local, and what must be represented as lazy encrypted blobs.
+- `SyncEvent` is now explicitly reserved for user-portable changes: subscription organization, feed user metadata, tags, article tag membership, user reading state, annotations, rules, and smart folders.
+- Device facts stay local. Feed health diagnostics, cache validators, local fetch timestamps, local cache file paths, FTS rows, rule audit internals, and Step 59 task-status observations do not cross devices through `SyncEvent`.
+- Article body bytes and attachment bytes are neither local-only nor ordinary event payload. They are a lazy content boundary: events may reference encrypted blob records later, but payloads should not inline article bodies or attachment bytes.
+- The sync server's minimum model is deliberately smaller than the client schema. `User`, `Device`, `SyncEvent`, `EncryptedBlob`, and `UserSettings` are enough for account/device identity, event exchange, encrypted object indexing, and protocol settings; they are not a remote copy of the local SQLite business tables.
+- No database migration was required for Step 60. The existing local `SyncEvent` table already has the generic event slot; this step fixes the semantic contract that Step 61 must consume when generating records.
+
+### Step 60 File Responsibilities
+
+- `packages/shared-types/src/sync.ts`: owns cross-platform sync DTOs, event entity/change enums, payload shape, field-boundary constants, encrypted blob kinds, and service-side minimal entity DTOs.
+- `packages/shared-types/src/ids.ts`: now also exposes `UserId` and `EncryptedBlobId`, keeping service identity and encrypted object references in the same shared id boundary as existing domain ids.
+- `packages/shared-types/src/index.ts`: exports the new sync constants and DTO types so desktop, future Web/mobile clients, and the future sync server can consume the same vocabulary.
+- `packages/shared-types/src/automation.ts`: remains responsible for rules, smart folders, and AI artifacts only; `SyncEventDto` moved out so sync protocol semantics no longer live in a broad automation file.
+- `crates/sync-engine/src/lib.rs`: owns the pure Rust sync-boundary classifier for `SyncEvent`, local-only, and lazy encrypted blob decisions. Its tests prove the Step 60 acceptance cases without needing SQLite or a server.
+- `memory-bank/progress.md`: records the completed Step 60 milestone, verification commands, and the Step 61 handoff.
+- `memory-bank/architecture.md`: records the event field matrix, local-only facts, lazy blob rule, service-side minimal entities, and file-level responsibility split for future maintainers.
+
+### Step 60 Boundary Notes
+
+- `crates/sync-engine/src/lib.rs` does not write `SyncEvent` rows. Step 61 should add event generation at local mutation/write boundaries and reuse the classifier instead of duplicating field lists.
+- `packages/shared-types/src/sync.ts` does not define the desktop runtime task system. Step 59 task rows remain UI observations and must not leak into sync payload contracts.
+- `Article.content_raw` and `Article.content_extracted` should be lazy encrypted blobs in future sync work. Local body cache materialization or eviction is a device-local cache fact, not a cross-device state change.
+- `Attachment.local_cache_path` remains local-only because it points at a device filesystem path. Attachment content can later be represented by encrypted blobs without syncing that path.
+- Step 61 should begin with user state, annotation, tag relationship, and subscription structure writes. It should not start by syncing SQLite files, FTS rows, rule audit internals, or Step 59 task monitor data.

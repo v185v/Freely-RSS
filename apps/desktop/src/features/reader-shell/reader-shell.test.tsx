@@ -1334,6 +1334,166 @@ describe("reader shell navigation", () => {
     })
   })
 
+  test("surfaces task status completion, failure details, recovery, and retry entry", async () => {
+    window.scrollTo = () => {}
+    const user = userEvent.setup()
+
+    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+
+    const taskPanel = await screen.findByRole("region", { name: "Task status" })
+    const taskScope = within(taskPanel)
+    const readerPane = screen.getByRole("region", { name: "Reading panel" })
+    const readerScope = within(readerPane)
+    const markdownSection = readerScope
+      .getByRole("heading", {
+        name: "Markdown export",
+      })
+      .closest("section")
+
+    expect(markdownSection).not.toBeNull()
+
+    const markdownScope = within(markdownSection as HTMLElement)
+
+    await user.click(markdownScope.getByRole("button", { name: "Export selected article" }))
+
+    await waitFor(() => {
+      const markdownTask = taskScope.getByText("Markdown export").closest("li")
+
+      expect(markdownTask?.textContent).toContain("Completed")
+      expect(markdownTask?.textContent).toContain("Generated")
+      expect(markdownTask?.textContent).toContain("1 article")
+    })
+
+    const sourcePane = screen.getByRole("region", { name: "Sources" })
+    const sourceScope = within(sourcePane)
+    const subscriptionTree = sourceScope
+      .getByRole("heading", {
+        name: "Subscription tree",
+      })
+      .closest("section")
+
+    expect(subscriptionTree).not.toBeNull()
+
+    const treeScope = within(subscriptionTree as HTMLElement)
+
+    await user.click(
+      treeScope.getByRole("button", {
+        name: /paused.*Archive holding pen/i,
+      }),
+    )
+
+    await waitFor(() => {
+      expect(window.location.search).toContain("sourceId=feed-empty-holding")
+    })
+
+    const feedEditor = sourceScope
+      .getByRole("heading", {
+        name: "Feed editor",
+      })
+      .closest("section")
+
+    expect(feedEditor).not.toBeNull()
+
+    const editorScope = within(feedEditor as HTMLElement)
+
+    await user.click(editorScope.getByRole("button", { name: "Manual refresh" }))
+
+    await waitFor(() => {
+      const refreshTask = taskScope.getByText("Source refresh").closest("li")
+
+      expect(refreshTask?.textContent).toContain("Failed")
+      expect(refreshTask?.textContent).toContain("Archive holding pen refresh failed")
+      expect(refreshTask?.textContent).toContain("keep intentionally empty feeds paused")
+    })
+
+    const retryButton = taskScope.getByRole("button", { name: "Retry refresh" })
+
+    await user.click(retryButton)
+
+    await waitFor(() => {
+      const refreshTask = taskScope.getByText("Source refresh").closest("li")
+
+      expect(refreshTask?.textContent).toContain("Failed")
+      expect(refreshTask?.textContent).toContain("Archive holding pen refresh failed")
+    })
+  })
+
+  test("runs batch queue operations only against selected visible articles", async () => {
+    window.scrollTo = () => {}
+    const user = userEvent.setup()
+
+    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+
+    const queuePane = await screen.findByRole("region", { name: "Article queue" })
+    const queueScope = within(queuePane)
+    const batchSection = queueScope
+      .getByRole("heading", {
+        name: "Batch operations",
+      })
+      .closest("section")
+
+    expect(batchSection).not.toBeNull()
+
+    const batchScope = within(batchSection as HTMLElement)
+
+    await user.click(queueScope.getByLabelText(/Select Why layout state should stay separate/i))
+    await user.click(batchScope.getByRole("button", { name: "Mark selected read" }))
+
+    await waitFor(async () => {
+      const shellData = await fetchReaderShellData()
+      const sourceContext = shellData.articles.find(
+        (article) => article.id === "article-source-context",
+      )
+      const queryBridge = shellData.articles.find(
+        (article) => article.id === "article-query-bridge",
+      )
+
+      expect(sourceContext?.state.readState).toBe("read")
+      expect(sourceContext?.state.readingProgress).toBe(1)
+      expect(queryBridge?.state.readState).toBe("unread")
+    })
+
+    await waitFor(() => {
+      expect(batchScope.getByText("Articles changed").parentElement?.textContent).toContain("1")
+    })
+
+    await user.click(
+      queueScope.getByLabelText(/Select Shared-query is ready, but the reader shell/i),
+    )
+    await user.click(batchScope.getByRole("button", { name: "Add product tag" }))
+
+    await waitFor(async () => {
+      const shellData = await fetchReaderShellData()
+      const queryBridge = shellData.articles.find(
+        (article) => article.id === "article-query-bridge",
+      )
+      const detailTags = shellData.articleDetails["article-query-bridge"]?.tags.map(
+        (tag) => tag.name,
+      )
+
+      expect(queryBridge?.tagIds).toContain("tag-product")
+      expect(detailTags).toContain("product")
+    })
+
+    await user.click(batchScope.getByRole("button", { name: "Clear selection" }))
+    await user.click(queueScope.getByLabelText(/Select Midnight dispatch 42/i))
+    await user.click(batchScope.getByRole("button", { name: "Delete selected cache" }))
+
+    await waitFor(async () => {
+      const shellData = await fetchReaderShellData()
+      const midnightAttachment = shellData.articleDetails[
+        "article-midnight-dispatch"
+      ]?.attachments.find((attachment) => attachment.id === "attachment-midnight-dispatch-audio")
+      const windowBehavior = shellData.articles.find(
+        (article) => article.id === "article-window-behavior",
+      )
+
+      expect(shellData.cacheStatus.entryCount).toBe(3)
+      expect(midnightAttachment?.localCachePath).toBeNull()
+      expect(windowBehavior?.state.readState).toBe("read")
+    })
+  })
+
   test("exports selected and visible articles to Markdown with metadata and annotations", async () => {
     window.scrollTo = () => {}
     const user = userEvent.setup()

@@ -32,6 +32,7 @@ export type {
   ArticleId,
   AttachmentId,
   DeviceId,
+  EncryptedBlobId,
   EntityId,
   FeedId,
   FolderId,
@@ -39,6 +40,7 @@ export type {
   SmartFolderId,
   SyncEventId,
   TagId,
+  UserId,
 } from "./ids"
 
 export type {
@@ -72,4 +74,28 @@ export type {
   UserStateDto,
 } from "./article"
 
-export type { AIArtifactDto, RuleDto, SmartFolderDto, SyncEventDto } from "./automation"
+export type { AIArtifactDto, RuleDto, SmartFolderDto } from "./automation"
+
+export {
+  ENCRYPTED_BLOB_KINDS,
+  LAZY_BLOB_FIELD_BOUNDARIES,
+  LOCAL_ONLY_FIELD_BOUNDARIES,
+  SYNC_EVENT_CHANGE_TYPES,
+  SYNC_EVENT_ENTITY_TYPES,
+  SYNC_EVENT_FIELD_BOUNDARIES,
+  SYNC_FIELD_BOUNDARIES,
+} from "./sync"
+
+export type {
+  EncryptedBlobDto,
+  EncryptedBlobKind,
+  SyncDeviceDto,
+  SyncEventChangeType,
+  SyncEventDto,
+  SyncEventEntityType,
+  SyncEventPayloadDto,
+  SyncFieldBoundary,
+  SyncFieldBoundaryDto,
+  SyncUserDto,
+  UserSettingsDto,
+} from "./sync"

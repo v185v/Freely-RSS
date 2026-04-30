@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react"
 import type { ChangeEvent, Ref } from "react"
 
-import type { ArticleListItemDto } from "@freelyrss/shared-types"
+import type { ArticleListItemDto, TagDto } from "@freelyrss/shared-types"
 import { Button, ListRow, ListSection, SplitPane, Surface, TextInput } from "@freelyrss/ui"
 import { useVirtualizer } from "@tanstack/react-virtual"
 
@@ -15,25 +15,37 @@ import { formatArticleMeta } from "../selectors"
 import { READER_STATUS_FILTER_OPTIONS } from "../types"
 import type {
   ReaderArticleQuerySummary,
+  ReaderBatchOperationCommand,
+  ReaderBatchOperationResult,
   ReaderSortMode,
   ReaderStatusFilter,
   SourceRow,
 } from "../types"
+import { BatchOperationsCard } from "./batch-operations-card"
 
 type QueuePaneProps = {
   activeArticleId: string | null
   activeSource: SourceRow
+  availableBatchTags: TagDto[]
+  batchOperationErrorMessage: string | null
+  batchOperationResult: ReaderBatchOperationResult | null
   describedBy?: string
   headingId: string
+  isRunningBatchOperation: boolean
+  onClearBatchSelection: () => void
+  onRunBatchOperation: (command: ReaderBatchOperationCommand) => void
   onSearchTextChange: (searchText: string) => void
   onSelectArticle: (articleId: string) => void
+  onSelectAllVisibleBatchArticles: () => void
   onSetSortMode: (sortMode: ReaderSortMode) => void
   onSetStatusFilter: (statusFilter: ReaderStatusFilter) => void
+  onToggleBatchArticleSelection: (articleId: ArticleListItemDto["id"]) => void
   paneId: string
   paneRef?: Ref<HTMLElement>
   queryResetKey: string
   querySummary: ReaderArticleQuerySummary
   searchText: string
+  selectedBatchArticleIds: ArticleListItemDto["id"][]
   sortMode: ReaderSortMode
   statusFilter: ReaderStatusFilter
   visibleArticles: ArticleListItemDto[]
@@ -54,22 +66,32 @@ function renderArticleSummary(article: ArticleListItemDto) {
 export function QueuePane({
   activeArticleId,
   activeSource,
+  availableBatchTags,
+  batchOperationErrorMessage,
+  batchOperationResult,
   describedBy,
   headingId,
+  isRunningBatchOperation,
+  onClearBatchSelection,
+  onRunBatchOperation,
   onSearchTextChange,
   onSelectArticle,
+  onSelectAllVisibleBatchArticles,
   onSetSortMode,
   onSetStatusFilter,
+  onToggleBatchArticleSelection,
   paneId,
   paneRef,
   queryResetKey,
   querySummary,
   searchText,
+  selectedBatchArticleIds,
   sortMode,
   statusFilter,
   visibleArticles,
 }: QueuePaneProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const selectedBatchArticleIdSet = new Set(selectedBatchArticleIds)
 
   function handleSearchTextChange(event: ChangeEvent<HTMLInputElement>) {
     onSearchTextChange(event.target.value)
@@ -195,6 +217,18 @@ export function QueuePane({
           <pre className="desktop-view-state__preview">{querySummary.jsonPreview}</pre>
         </Surface>
 
+        <BatchOperationsCard
+          availableTags={availableBatchTags}
+          errorMessage={batchOperationErrorMessage}
+          isRunning={isRunningBatchOperation}
+          onClearSelection={onClearBatchSelection}
+          onRunOperation={onRunBatchOperation}
+          onSelectAllVisible={onSelectAllVisibleBatchArticles}
+          result={batchOperationResult}
+          selectedArticleCount={selectedBatchArticleIds.length}
+          visibleArticleCount={visibleArticles.length}
+        />
+
         <div className="desktop-pane__scroll desktop-pane__scroll--queue" ref={scrollRef}>
           {visibleArticles.length > 0 ? (
             <ListSection
@@ -216,7 +250,11 @@ export function QueuePane({
 
                   return (
                     <div
-                      className="desktop-virtual-list__item"
+                      className={
+                        selectedBatchArticleIdSet.has(article.id)
+                          ? "desktop-virtual-list__item desktop-virtual-list__item--selected"
+                          : "desktop-virtual-list__item"
+                      }
                       data-virtual-index={virtualRow.index}
                       key={article.id}
                       style={{
@@ -224,16 +262,27 @@ export function QueuePane({
                         transform: `translateY(${virtualRow.start}px)`,
                       }}
                     >
-                      <ListRow
-                        active={activeArticleId === article.id}
-                        aria-current={activeArticleId === article.id ? "page" : undefined}
-                        className="desktop-article-row"
-                        eyebrow={article.feedTitle}
-                        meta={formatArticleMeta(article)}
-                        onClick={() => onSelectArticle(article.id)}
-                        summary={renderArticleSummary(article)}
-                        title={article.title}
-                      />
+                      <div className="desktop-article-row-shell">
+                        <label className="desktop-queue__selection-control">
+                          <input
+                            aria-label={`Select ${article.title}`}
+                            checked={selectedBatchArticleIdSet.has(article.id)}
+                            className="desktop-queue__selection-checkbox"
+                            onChange={() => onToggleBatchArticleSelection(article.id)}
+                            type="checkbox"
+                          />
+                        </label>
+                        <ListRow
+                          active={activeArticleId === article.id}
+                          aria-current={activeArticleId === article.id ? "page" : undefined}
+                          className="desktop-article-row"
+                          eyebrow={article.feedTitle}
+                          meta={formatArticleMeta(article)}
+                          onClick={() => onSelectArticle(article.id)}
+                          summary={renderArticleSummary(article)}
+                          title={article.title}
+                        />
+                      </div>
                     </div>
                   )
                 })}

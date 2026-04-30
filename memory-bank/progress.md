@@ -2,9 +2,15 @@
 
 ## 当前状态
 
-- 阶段：阶段 7 Step 57 已完成，桌面端现已在 Markdown 导出管线旁新增独立 HTML / PDF 导出边界：`html-pdf-export.ts` 负责把文章详情、当前 reader 呈现设置、正文、批注与附件引用序列化为独立 HTML 或 PDF print source，mock repository 只负责解析待导出文章，reader 面板只负责展示结果和触发命令；下一步进入阶段 7 Step 58 的批量操作。
-- 最后更新：2026-04-29
-- 风险状态：已从“Step 57 需要复用 Step 56 导出契约并处理 HTML/PDF 排版与打印边界”推进到“Step 57 已建立可验证的 HTML/PDF 格式边界，但 Step 58 仍需保持批量操作与导出、缓存清理、reader route 分离，不能把批量状态变更堆回 reader pane”
+- 阶段：阶段 8 Step 60 已完成，同步实体与事件边界已落到 `packages/shared-types/src/sync.ts` 与 `crates/sync-engine/src/lib.rs`，明确 `SyncEvent` 同步字段、本地字段、懒加载密文 blob 字段，以及服务端最小实体 `User`、`Device`、`SyncEvent`、`EncryptedBlob`、`UserSettings`。
+- 最后更新：2026-04-30
+- 风险状态：已从“不能把 Step 59 的 UI 状态面板误当成同步事件日志或后台任务持久化模型”推进到“Step 60 已固定同步分类规则；下一步 Step 61 生成本地事件日志时，必须消费当前分类边界，而不是让桌面 UI mutation 状态直接写入 `SyncEvent`”
+
+### 2026-04-30 状态快照
+
+- 当前完成：阶段 8 Step 60 已完成，`packages/shared-types` 现已拥有同步专用 DTO、字段边界常量和服务端最小实体类型；`crates/sync-engine` 现已拥有纯同步分类器，可以把文章状态变更、批注变更、正文缓存物化/逐出、正文密文 blob 引用、文章标签关系变更和源抓取诊断归入正确边界。
+- 当前验证：`corepack pnpm --filter @freelyrss/shared-types check`、`cargo test -p freelyrss-sync-engine`、`corepack pnpm run desktop:build`、`corepack pnpm run verify` 与 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle` 全部通过。
+- 当前下一步：进入阶段 8 Step 61“在本地实现事件日志生成”，应在用户状态、批注、标签归属和订阅结构变化落库时生成 `SyncEvent`，并继续保持正文缓存物化、本地抓取诊断、搜索索引和 Step 59 任务状态为本地事实。
 
 ### 2026-04-29 状态快照
 
@@ -32,7 +38,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 7 Step 58 需要在不破坏 `apps/desktop/src/features/reader-shell/components/reader-pane.tsx` 与导出 formatter 职责的前提下，把批量操作的选择、执行、错误提示和 mock 持久化收敛到独立边界，而不是把批量状态变更散落到 reader route 或队列渲染组件。
+- 当前无阻塞；下一步风险点是阶段 8 Step 61 需要在本地写入路径生成 `SyncEvent`，同时复用 Step 60 的分类器，避免把正文缓存物化、抓取诊断、搜索索引或 reader-shell 任务状态误写成跨设备事件。
 
 ## 本次执行记录
 
@@ -1365,3 +1371,92 @@
 - `apps/desktop/src/features/reader-shell/mock-data.ts` owns mock article-detail resolution for export and should own or delegate future mock batch mutations through explicit functions.
 - `apps/desktop/src/features/reader-shell/reader-shell-route.tsx` remains the command trigger and composition boundary. Step 58 should add batch operation wiring without turning the route into the batch executor.
 - Step 58 should add a separate batch-action contract for selected/visible article ids, status updates, tag changes, read-later changes, and cache deletion instead of reusing export result state as a generic multi-select model.
+
+## 2026-04-30 ASCII Addendum XXII
+
+### Stage 7 Step 58 Completed: visible-queue batch operations
+
+- Completed `implementation-plan.md` Stage 7 Step 58 by adding a dedicated batch-operation path for the current visible queue selection.
+- Added `apps/desktop/src/features/reader-shell/batch-operations.ts` as the pure execution boundary. It accepts selected article ids and a batch command, validates ids, deduplicates selection, updates article list rows plus article detail state, applies article tags, and removes selected cache entries without touching unselected articles.
+- Added `components/batch-operations-card.tsx` and extended `components/queue-pane.tsx` so the queue can select individual visible rows, select all visible rows, clear selection, run state/tag/cache commands, and display the latest batch report.
+- Extended `state.ts` with local queue-selection helpers. Selection is intentionally a shell UI concern, not a repository snapshot field or export result.
+- Updated `reader-shell-route.tsx` to prune selections when the visible queue changes and to delegate execution through `runMockBatchOperation` instead of mutating queue state inline.
+- Updated `mock-data.ts` so the mock repository applies batch operation results to its shell snapshot, including article details, list rows, and cache inventory.
+- Added focused unit coverage in `batch-operations.test.ts` and user-visible shell coverage in `reader-shell.test.tsx` proving that selected articles are updated and unselected articles remain unchanged.
+
+### Step 58 Verification
+
+- Passed `corepack pnpm --filter @freelyrss/desktop test -- --run batch-operations.test.ts reader-shell.test.tsx`
+- Passed `corepack pnpm run format`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+
+### Next Step (ASCII update)
+
+- The next implementation step in `implementation-plan.md` is Stage 7 Step 59: error prompts and task status panel.
+- Preserve the current boundary split:
+- `apps/desktop/src/features/reader-shell/batch-operations.ts` owns pure batch mutation rules only; it should not become a task-status registry, durable backend executor, or UI component.
+- `apps/desktop/src/features/reader-shell/state.ts` owns local queue selection only; it should not persist batch execution results or cache inventory.
+- `apps/desktop/src/features/reader-shell/mock-data.ts` owns mock batch execution against the shell snapshot until a durable backend path exists.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx` remains the mutation wiring and composition layer, not the batch executor.
+- Step 59 should introduce a task/status boundary that can observe failures from batch operations, exports, cache cleanup, and feed work without moving those feature-specific rules into a single monolithic component.
+
+## 2026-04-30 ASCII Addendum XXIII
+
+### Stage 7 Step 59 Completed: task status panel and recoverable error prompts
+
+- Completed `implementation-plan.md` Stage 7 Step 59 by adding a dedicated task-status observation boundary for the desktop reader shell.
+- Added `apps/desktop/src/features/reader-shell/task-status.ts` as the pure status summarizer. It converts feature mutation inputs into normalized task entries with `idle`, `running`, `completed`, and `failed` states, and computes the task monitor headline/counts without owning any feature execution rules.
+- Added `components/task-status-panel.tsx` so the shell header can show source refresh, OPML import/export, Markdown export, HTML/PDF export, cache cleanup, and batch-operation status from one visible surface. Failed tasks include error details, recovery guidance, and a retry button only when the route has enough context to safely retry.
+- Updated `reader-shell-route.tsx` to compose task observations from existing React Query mutations and feature results while keeping refresh, export, cleanup, and batch execution inside their existing mutation/repository paths.
+- Updated `mock-data.ts` with a deliberate failure path for the empty archive feed refresh, allowing Step 59 to verify task failure, recovery text, and retry entry without weakening successful refresh behavior for normal feeds.
+- Added pure unit coverage in `task-status.test.ts` and user-visible shell coverage in `reader-shell.test.tsx` for task completion, task failure details, recovery text, and retry behavior.
+
+### Step 59 Verification
+
+- Passed `corepack pnpm --filter @freelyrss/desktop test -- --run task-status.test.ts reader-shell.test.tsx`
+- Passed `corepack pnpm run format`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+
+### Next Step (ASCII update)
+
+- The next implementation step in `implementation-plan.md` is Stage 8 Step 60: define synchronization entities and event boundaries.
+- Preserve the current boundary split:
+- `apps/desktop/src/features/reader-shell/task-status.ts` owns task observation and summary normalization only; it is not a sync log, persistent job queue, mutation executor, or durable backend task registry.
+- `components/task-status-panel.tsx` owns the visible task monitor only; it does not decide how refresh, export, cleanup, or batch rules execute.
+- `reader-shell-route.tsx` remains the shell composition layer. It may pass current mutation state into the status panel, but it should not absorb feature-specific execution rules.
+- `mock-data.ts` remains a mock repository and failure-fixture owner for shell validation. Durable Step 60 work should define real sync-event semantics in the domain/storage boundary rather than reusing mock task states.
+- Step 60 should start from the architecture-level sync model (`SyncEvent`, local-only fields, lazy-loaded content, and service-side minimal entities), not from React Query mutation status or the Step 59 panel UI.
+
+## 2026-04-30 ASCII Addendum XXIV
+
+### Stage 8 Step 60 Completed: synchronization entities and event boundaries
+
+- Completed `implementation-plan.md` Stage 8 Step 60 by adding a shared synchronization contract and a pure Rust boundary classifier.
+- Added `packages/shared-types/src/sync.ts` so cross-platform code now has typed `SyncEvent` entity kinds, change kinds, payload shape, field-boundary labels, encrypted blob kinds, and service-side minimal DTOs for `User`, `Device`, `SyncEvent`, `EncryptedBlob`, and `UserSettings`.
+- Updated `packages/shared-types/src/ids.ts` and `packages/shared-types/src/index.ts` so `UserId`, `EncryptedBlobId`, sync DTOs, sync constants, and boundary types are exported from the shared type package.
+- Moved `SyncEventDto` out of the broad automation DTO file. `automation.ts` still owns rules, smart folders, and AI artifacts; synchronization now has its own shared file because Step 60 starts the sync phase.
+- Replaced the placeholder `crates/sync-engine/src/lib.rs` with a pure classifier for `SyncEvent`, local-only, and lazy encrypted blob boundaries. It currently classifies user-state updates, annotation changes, article-tag relationship changes, article content blob updates, local article body cache materialization/eviction, and local feed diagnostics.
+- Verified the Step 60 acceptance cases directly: article state changes become `user-state` sync events, annotation changes become `annotation` sync events, and body cache materialization stays device-local while actual body bytes are represented as lazy encrypted blobs.
+
+### Step 60 Verification
+
+- Passed `corepack pnpm --filter @freelyrss/shared-types check`
+- Passed `cargo test -p freelyrss-sync-engine`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+
+### Next Step (ASCII update)
+
+- The next implementation step in `implementation-plan.md` is Stage 8 Step 61: generate local sync events.
+- Preserve the current boundary split:
+- `packages/shared-types/src/sync.ts` owns cross-platform sync DTO names, field-boundary constants, and service-side minimal entity contracts; it does not generate events or implement transport.
+- `crates/sync-engine/src/lib.rs` owns sync classification rules only; it does not read SQLite, write `SyncEvent`, call a server, or replay remote batches yet.
+- `crates/core-domain/src/model/automation.rs` still owns the durable local `SyncEvent` domain shape that maps to SQLite; Step 60 did not change the local database schema.
+- `Feed.health_status`, fetch validators, fetch errors, `Attachment.local_cache_path`, FTS/search rows, rule audit details, and Step 59 task-status rows remain local-only facts.
+- `Article.content_raw`, `Article.content_extracted`, and attachment bytes must not be inlined into ordinary event payloads; future sync should reference encrypted blob records and lazy-load content when needed.
+- Step 61 should consume the classifier when wiring state/tag/annotation/subscription writes to local event-log creation, instead of deriving event semantics from React Query mutation state or reader-shell task rows.

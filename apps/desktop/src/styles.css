@@ -64,6 +64,12 @@ body {
   align-items: stretch;
 }
 
+.desktop-shell__sidecar {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+
 .desktop-shell__title-block {
   display: grid;
   gap: 14px;
@@ -132,6 +138,130 @@ body {
   color: var(--fr-text-muted);
   font-size: 0.94rem;
   line-height: 1.6;
+}
+
+.desktop-task-status {
+  display: grid;
+  gap: 16px;
+}
+
+.desktop-task-status__header {
+  display: grid;
+  gap: 8px;
+}
+
+.desktop-task-status__header h2 {
+  margin: 0;
+  font-family: var(--fr-font-display);
+  font-size: 1.2rem;
+}
+
+.desktop-task-status__header strong {
+  color: var(--fr-text);
+  font-size: 0.98rem;
+  line-height: 1.45;
+}
+
+.desktop-task-status__summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.desktop-task-status__summary > div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--fr-border);
+  border-radius: 14px;
+  background: var(--fr-panel-soft);
+}
+
+.desktop-task-status__summary strong {
+  font-family: var(--fr-font-display);
+  font-size: 1.25rem;
+}
+
+.desktop-task-status__list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.desktop-task-status__item {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--fr-border);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.desktop-task-status__item--running {
+  border-color: rgba(142, 182, 255, 0.34);
+  background: rgba(142, 182, 255, 0.08);
+}
+
+.desktop-task-status__item--failed {
+  border-color: rgba(243, 139, 168, 0.34);
+  background: rgba(243, 139, 168, 0.09);
+}
+
+.desktop-task-status__item--completed {
+  border-color: rgba(127, 226, 192, 0.3);
+  background: rgba(127, 226, 192, 0.07);
+}
+
+.desktop-task-status__item-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+}
+
+.desktop-task-status__item-header > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.desktop-task-status__item-header strong,
+.desktop-task-status__item p,
+.desktop-task-status__footer span {
+  overflow-wrap: anywhere;
+}
+
+.desktop-task-status__item-header strong {
+  color: var(--fr-text);
+  font-size: 0.95rem;
+}
+
+.desktop-task-status__badge {
+  padding: 5px 8px;
+  border: 1px solid var(--fr-border);
+  border-radius: 999px;
+  color: var(--fr-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.desktop-task-status__item p {
+  color: var(--fr-text-muted);
+  line-height: 1.55;
+}
+
+.desktop-task-status__footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  color: var(--fr-text-faint);
+  font-size: 0.82rem;
+  line-height: 1.45;
 }
 
 .desktop-route-state {
@@ -602,6 +732,37 @@ body {
   -webkit-box-orient: vertical;
 }
 
+.desktop-article-row-shell {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+.desktop-virtual-list__item--selected .fr-list-row {
+  border-color: rgba(127, 226, 192, 0.38);
+  background: linear-gradient(180deg, rgba(127, 226, 192, 0.1), rgba(127, 226, 192, 0.04));
+}
+
+.desktop-queue__selection-control {
+  display: grid;
+  place-items: start center;
+  padding-top: 14px;
+}
+
+.desktop-queue__selection-checkbox {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--fr-success);
+  cursor: pointer;
+}
+
+.desktop-queue__selection-checkbox:focus-visible {
+  outline: 2px solid var(--fr-accent-strong);
+  outline-offset: 3px;
+}
+
 .desktop-queue__search-snippet {
   color: var(--fr-text-muted);
 }
@@ -677,6 +838,28 @@ body {
 
 .desktop-view-state {
   gap: 14px;
+}
+
+.desktop-batch {
+  display: grid;
+  gap: 14px;
+}
+
+.desktop-batch__summary,
+.desktop-batch__result {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+}
+
+.desktop-batch__summary > div,
+.desktop-batch__result > div {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--fr-border);
+  border-radius: 16px;
+  background: var(--fr-panel-soft);
 }
 
 .desktop-shortcuts {
@@ -1300,6 +1483,8 @@ body {
 
   .desktop-editor__summary,
   .desktop-editor__facts,
+  .desktop-batch__result,
+  .desktop-batch__summary,
   .desktop-export__summary,
   .desktop-import__summary,
   .desktop-reader__attachment-facts,
@@ -1327,8 +1512,11 @@ body {
 
   .desktop-editor__summary,
   .desktop-editor__facts,
+  .desktop-batch__result,
+  .desktop-batch__summary,
   .desktop-export__summary,
   .desktop-import__summary,
+  .desktop-task-status__summary,
   .desktop-summary__metrics,
   .desktop-reader__body-meta,
   .desktop-reader__attachment-facts,

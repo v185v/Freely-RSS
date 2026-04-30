@@ -9,6 +9,7 @@ import type {
   FolderDto,
   SmartFolderDto,
   SubscriptionTreeNodeDto,
+  TagDto,
 } from "@freelyrss/shared-types"
 
 export const DEFAULT_SOURCE_ID = "view-unread"
@@ -184,6 +185,73 @@ export interface ReaderDocumentExportResult {
   report: ReaderDocumentExportReport
 }
 
+export type ReaderBatchOperationAction = "add-read-later" | "add-tag" | "delete-cache" | "mark-read"
+
+export type ReaderBatchOperationCommand =
+  | {
+      action: "add-read-later"
+    }
+  | {
+      action: "add-tag"
+      tagId: TagDto["id"]
+    }
+  | {
+      action: "delete-cache"
+    }
+  | {
+      action: "mark-read"
+    }
+
+export type ReaderBatchOperationInput = ReaderBatchOperationCommand & {
+  articleIds: ArticleListItemDto["id"][]
+}
+
+export interface ReaderBatchOperationReport {
+  action: ReaderBatchOperationAction
+  changedArticleCount: number
+  completedAt: string
+  evictedBytes: number
+  evictedEntryCount: number
+  selectedArticleCount: number
+  skippedArticleCount: number
+  tagName: string | null
+}
+
+export interface ReaderBatchOperationResult {
+  articleIds: ArticleListItemDto["id"][]
+  report: ReaderBatchOperationReport
+}
+
+export type ReaderTaskStatusKind =
+  | "batch-operation"
+  | "cache-cleanup"
+  | "document-export"
+  | "markdown-export"
+  | "opml-export"
+  | "opml-import"
+  | "source-refresh"
+
+export type ReaderTaskStatusState = "completed" | "failed" | "idle" | "running"
+
+export interface ReaderTaskStatusEntry {
+  detail: string
+  id: ReaderTaskStatusKind
+  recovery: string
+  retryLabel: string | null
+  scope: string
+  status: ReaderTaskStatusState
+  title: string
+  updatedAt: string | null
+}
+
+export interface ReaderTaskStatusSummary {
+  completedCount: number
+  failedCount: number
+  headline: string
+  idleCount: number
+  runningCount: number
+}
+
 export interface ReaderShellData {
   articleDetails: Record<string, ArticleDetailDto>
   articles: ArticleListItemDto[]
@@ -196,6 +264,7 @@ export interface ReaderShellData {
   quickViewSection: SourceSection
   smartFolders: SmartFolderDto[]
   subscriptionTree: SubscriptionTreeNodeDto[]
+  tags: TagDto[]
   stats: {
     feedCount: number
     readingCount: number

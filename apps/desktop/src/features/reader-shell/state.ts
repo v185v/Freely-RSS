@@ -1,5 +1,7 @@
 import { create } from "zustand"
 
+import type { ArticleListItemDto } from "@freelyrss/shared-types"
+
 import type {
   ReaderBaseThemeTone,
   ReaderContentMode,
@@ -167,7 +169,10 @@ function clearPersistedReaderPresentationSettings() {
 
 type ReaderViewStore = {
   baseThemeTone: ReaderBaseThemeTone
+  batchSelectedArticleIds: ArticleListItemDto["id"][]
   collapsedFolderIds: string[]
+  clearBatchSelectedArticleIds: () => void
+  pruneBatchSelectedArticleIds: (visibleArticleIds: ArticleListItemDto["id"][]) => void
   readerFontFamily: ReaderFontFamily
   readerFontScale: ReaderFontScale
   readerContentMode: ReaderContentMode
@@ -180,6 +185,7 @@ type ReaderViewStore = {
   setReaderLineHeight: (readerLineHeight: ReaderLineHeight) => void
   setReaderMarginMode: (readerMarginMode: ReaderMarginMode) => void
   setSearchText: (searchText: string) => void
+  setBatchSelectedArticleIds: (articleIds: ArticleListItemDto["id"][]) => void
   setCollapsedFolderIds: (folderIds: string[]) => void
   setSortMode: (sortMode: ReaderSortMode) => void
   setStatusFilter: (statusFilter: ReaderStatusFilter) => void
@@ -187,12 +193,14 @@ type ReaderViewStore = {
   sortMode: ReaderSortMode
   statusFilter: ReaderStatusFilter
   themeTone: ReaderThemeTone
+  toggleBatchSelectedArticleId: (articleId: ArticleListItemDto["id"]) => void
   toggleFolderCollapsed: (folderId: string) => void
   toggleThemeTone: () => void
 }
 
 const readerViewDefaults = {
   baseThemeTone: DEFAULT_BASE_THEME_TONE,
+  batchSelectedArticleIds: [] as ArticleListItemDto["id"][],
   collapsedFolderIds: [] as string[],
   readerFontFamily: DEFAULT_READER_FONT_FAMILY,
   readerFontScale: DEFAULT_READER_FONT_SCALE,
@@ -221,6 +229,19 @@ function persistReaderPresentationSettings(state: {
     marginMode: state.readerMarginMode,
     themeTone: state.themeTone,
   })
+}
+
+function normalizeArticleIds(articleIds: ArticleListItemDto["id"][]) {
+  return Array.from(new Set(articleIds))
+}
+
+function areArticleIdArraysEqual(
+  left: ArticleListItemDto["id"][],
+  right: ArticleListItemDto["id"][],
+) {
+  return (
+    left.length === right.length && left.every((articleId, index) => articleId === right[index])
+  )
 }
 
 const persistedPresentationSettings = readPersistedReaderPresentationSettings()
@@ -275,6 +296,20 @@ export const useReaderViewStore = create<ReaderViewStore>((set) => ({
       return nextState
     }),
   setSearchText: (searchText) => set({ searchText }),
+  setBatchSelectedArticleIds: (articleIds) =>
+    set({ batchSelectedArticleIds: normalizeArticleIds(articleIds) }),
+  clearBatchSelectedArticleIds: () => set({ batchSelectedArticleIds: [] }),
+  pruneBatchSelectedArticleIds: (visibleArticleIds) =>
+    set((state) => {
+      const visibleArticleIdSet = new Set(visibleArticleIds)
+      const nextSelectedArticleIds = state.batchSelectedArticleIds.filter((articleId) =>
+        visibleArticleIdSet.has(articleId),
+      )
+
+      return areArticleIdArraysEqual(state.batchSelectedArticleIds, nextSelectedArticleIds)
+        ? state
+        : { batchSelectedArticleIds: nextSelectedArticleIds }
+    }),
   setCollapsedFolderIds: (collapsedFolderIds) => set({ collapsedFolderIds }),
   setSortMode: (sortMode) => set({ sortMode }),
   setStatusFilter: (statusFilter) => set({ statusFilter }),
@@ -295,6 +330,12 @@ export const useReaderViewStore = create<ReaderViewStore>((set) => ({
 
       return nextState
     }),
+  toggleBatchSelectedArticleId: (articleId) =>
+    set((state) => ({
+      batchSelectedArticleIds: state.batchSelectedArticleIds.includes(articleId)
+        ? state.batchSelectedArticleIds.filter((entry) => entry !== articleId)
+        : [...state.batchSelectedArticleIds, articleId],
+    })),
   toggleFolderCollapsed: (folderId) =>
     set((state) => ({
       collapsedFolderIds: state.collapsedFolderIds.includes(folderId)

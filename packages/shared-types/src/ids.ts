@@ -11,3 +11,5 @@ export type SmartFolderId = EntityId
 export type AIArtifactId = EntityId
 export type SyncEventId = EntityId
 export type DeviceId = EntityId
+export type UserId = EntityId
+export type EncryptedBlobId = EntityId

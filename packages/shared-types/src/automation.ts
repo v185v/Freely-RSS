@@ -1,5 +1,5 @@
 import type { AIArtifactKind } from "./enums"
-import type { AIArtifactId, ArticleId, DeviceId, RuleId, SmartFolderId, SyncEventId } from "./ids"
+import type { AIArtifactId, ArticleId, RuleId, SmartFolderId } from "./ids"
 import type { ISODateTimeString, JsonValue, Nullable } from "./primitives"
 
 export interface RuleDto {
@@ -28,15 +28,5 @@ export interface AIArtifactDto {
   provider: string
   inputHash: string
   result: JsonValue
-  createdAt: ISODateTimeString
-}
-
-export interface SyncEventDto {
-  id: SyncEventId
-  entityType: string
-  entityId: string
-  changeType: string
-  payload: JsonValue
-  deviceId: DeviceId
   createdAt: ISODateTimeString
 }

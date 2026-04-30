@@ -23,8 +23,10 @@ import { NavigationStrip } from "./components/navigation-strip"
 import { QueuePane } from "./components/queue-pane"
 import { ReaderPane } from "./components/reader-pane"
 import { SourcePane } from "./components/source-pane"
+import { TaskStatusPanel } from "./components/task-status-panel"
 import { fetchDurableQueueArticles } from "./desktop-bridge"
 import {
+  type MockBatchOperationResult,
   type MockDocumentExportResult,
   type MockMarkdownExportResult,
   type MockOpmlExportResult,
@@ -37,6 +39,7 @@ import {
   importMockOpml,
   readerShellQueryKey,
   refreshMockFeed,
+  runMockBatchOperation,
   runMockCacheCleanup,
   updateMockArticleState,
   updateMockCacheSettings,
@@ -49,8 +52,9 @@ import {
   resolveSelectedArticleId,
 } from "./selectors"
 import { useReaderViewStore } from "./state"
+import { buildReaderTaskStatuses, summarizeReaderTaskStatuses } from "./task-status"
 import { DEFAULT_SOURCE_ID } from "./types"
-import type { ReaderRouteSearch, ReaderShellData } from "./types"
+import type { ReaderRouteSearch, ReaderShellData, ReaderTaskStatusKind } from "./types"
 
 export function validateReaderSearch(search: Record<string, unknown>): ReaderRouteSearch {
   return {
@@ -76,6 +80,18 @@ function buildReaderSearch(sourceId: string, articleId: string | null) {
   }
 }
 
+function formatTaskBytes(value: number) {
+  if (value < 1024) {
+    return `${value} B`
+  }
+
+  if (value < 1024 * 1024) {
+    return `${(value / 1024).toFixed(1)} KB`
+  }
+
+  return `${Math.round(value / (1024 * 1024))} MB`
+}
+
 export function ReaderShellRoute() {
   const queryClient = useQueryClient()
   const navigate = useNavigate({ from: "/" })
@@ -83,6 +99,17 @@ export function ReaderShellRoute() {
   const searchText = useReaderViewStore((state) => state.searchText)
   const collapsedFolderIds = useReaderViewStore((state) => state.collapsedFolderIds)
   const setSearchText = useReaderViewStore((state) => state.setSearchText)
+  const selectedBatchArticleIds = useReaderViewStore((state) => state.batchSelectedArticleIds)
+  const clearBatchSelectedArticleIds = useReaderViewStore(
+    (state) => state.clearBatchSelectedArticleIds,
+  )
+  const pruneBatchSelectedArticleIds = useReaderViewStore(
+    (state) => state.pruneBatchSelectedArticleIds,
+  )
+  const setBatchSelectedArticleIds = useReaderViewStore((state) => state.setBatchSelectedArticleIds)
+  const toggleBatchSelectedArticleId = useReaderViewStore(
+    (state) => state.toggleBatchSelectedArticleId,
+  )
   const setCollapsedFolderIds = useReaderViewStore((state) => state.setCollapsedFolderIds)
   const setSortMode = useReaderViewStore((state) => state.setSortMode)
   const sortMode = useReaderViewStore((state) => state.sortMode)
@@ -113,6 +140,9 @@ export function ReaderShellRoute() {
   const [documentExportResult, setDocumentExportResult] = useState<MockDocumentExportResult | null>(
     null,
   )
+  const [batchOperationResult, setBatchOperationResult] = useState<
+    MockBatchOperationResult["batchResult"] | null
+  >(null)
   const navigationRef = useRef<HTMLElement | null>(null)
   const sourcePaneRef = useRef<HTMLElement | null>(null)
   const queuePaneRef = useRef<HTMLElement | null>(null)
@@ -150,6 +180,13 @@ export function ReaderShellRoute() {
     mutationFn: updateMockArticleState,
     onSuccess: (nextShellData) => {
       queryClient.setQueryData(readerShellQueryKey, nextShellData)
+    },
+  })
+  const runBatchOperationMutation = useMutation({
+    mutationFn: runMockBatchOperation,
+    onSuccess: (result) => {
+      setBatchOperationResult(result.batchResult)
+      queryClient.setQueryData(readerShellQueryKey, result.shellData)
     },
   })
   const createAnnotationMutation = useMutation({
@@ -418,6 +455,8 @@ export function ReaderShellRoute() {
   }, [activeSource, deferredSearchText, shellData, sortMode, statusFilter])
 
   const visibleArticles = durableVisibleArticles ?? articleQuery?.visibleArticles ?? []
+  const visibleArticleIds = visibleArticles.map((article) => article.id)
+  const visibleArticleIdsKey = visibleArticleIds.join("\u0000")
   const activeArticleId = shellData
     ? resolveSelectedArticleId(visibleArticles, routeState.articleId)
     : null
@@ -443,6 +482,10 @@ export function ReaderShellRoute() {
     updateArticleStateMutation.error instanceof Error
       ? updateArticleStateMutation.error.message
       : null
+  const batchOperationErrorMessage =
+    runBatchOperationMutation.error instanceof Error
+      ? runBatchOperationMutation.error.message
+      : null
   const annotationErrorMessage =
     createAnnotationMutation.error instanceof Error ? createAnnotationMutation.error.message : null
   const markdownExportErrorMessage =
@@ -457,6 +500,12 @@ export function ReaderShellRoute() {
   }, [activeArticleId, reconcileArticleSelection, routeState.articleId, shellData])
 
   useEffect(() => {
+    pruneBatchSelectedArticleIds(
+      visibleArticleIdsKey.length > 0 ? visibleArticleIdsKey.split("\u0000") : [],
+    )
+  }, [pruneBatchSelectedArticleIds, visibleArticleIdsKey])
+
+  useEffect(() => {
     window.addEventListener("keydown", handleGlobalShortcut)
 
     return () => {
@@ -468,8 +517,8 @@ export function ReaderShellRoute() {
     return (
       <main className="desktop-shell">
         <div className="desktop-loading">
-          <p className="desktop-shell__eyebrow">Stage 7 / Step 57</p>
-          <h1>Loading document export controls for the desktop reader shell.</h1>
+          <p className="desktop-shell__eyebrow">Stage 7 / Step 59</p>
+          <h1>Loading task status boundaries for the desktop reader shell.</h1>
         </div>
       </main>
     )
@@ -492,9 +541,126 @@ export function ReaderShellRoute() {
   }
 
   const resolvedShellData = shellData
+  const resolvedActiveSource = activeSource
   const resolvedArticleQuery =
     articleQuery ?? buildReaderArticleQuery(shellData, activeSource.id, filters)
   const highContrastEnabled = themeTone === "high-contrast"
+  const latestCleanup = resolvedShellData.cacheStatus.latestCleanup
+  const taskStatusEntries = buildReaderTaskStatuses([
+    {
+      id: "source-refresh",
+      title: "Source refresh",
+      scope: activeFeed ? activeFeed.title : activeSource.title,
+      isRunning: refreshFeedMutation.isPending,
+      error: refreshFeedMutation.error,
+      completedDetail:
+        refreshFeedMutation.isSuccess && activeFeed
+          ? `${activeFeed.title} refreshed and source health is current.`
+          : null,
+      idleDetail: activeFeed
+        ? "Ready to refresh the selected feed."
+        : "Select a feed source before running a refresh.",
+      runningDetail: activeFeed ? `Refreshing ${activeFeed.title}.` : "Refreshing selected source.",
+      recovery:
+        "Check the feed URL, keep intentionally empty feeds paused, or retry after the source responds.",
+      retryLabel: activeFeed ? "Retry refresh" : null,
+      updatedAt: activeFeed?.lastCheckedAt ?? null,
+    },
+    {
+      id: "cache-cleanup",
+      title: "Cache cleanup",
+      scope: "Local cache",
+      isRunning: runCacheCleanupMutation.isPending,
+      error: runCacheCleanupMutation.error,
+      completedDetail: latestCleanup
+        ? `Freed ${formatTaskBytes(latestCleanup.evictedBytes)} across ${latestCleanup.evictedEntryCount} entries.`
+        : null,
+      idleDetail:
+        resolvedShellData.cacheStatus.cleanupCandidates.length > 0
+          ? "Cleanup candidates are available for the current cache budget."
+          : "Cache cleanup is ready and no required eviction is pending.",
+      runningDetail: "Applying the current cache cleanup plan.",
+      recovery:
+        "Retry cleanup after lowering the cache budget or review protected articles if space remains tight.",
+      retryLabel: "Retry cleanup",
+      updatedAt: latestCleanup?.completedAt ?? null,
+    },
+    {
+      id: "markdown-export",
+      title: "Markdown export",
+      scope: "Reader export",
+      isRunning: exportMarkdownMutation.isPending,
+      error: exportMarkdownMutation.error,
+      completedDetail: markdownExportResult
+        ? `Generated ${markdownExportResult.fileName} for ${markdownExportResult.report.exportedArticleCount} article(s).`
+        : null,
+      idleDetail: "Ready to generate Markdown from the selected article or visible queue.",
+      runningDetail: "Generating Markdown export payload.",
+      recovery: "Select an article or switch to a non-empty queue before retrying Markdown export.",
+      retryLabel: activeDetail || visibleArticles.length > 0 ? "Retry Markdown export" : null,
+      updatedAt: markdownExportResult?.report.generatedAt ?? null,
+    },
+    {
+      id: "document-export",
+      title: "HTML/PDF export",
+      scope: "Reader export",
+      isRunning: exportDocumentMutation.isPending,
+      error: exportDocumentMutation.error,
+      completedDetail: documentExportResult
+        ? `Generated ${documentExportResult.fileName} as ${documentExportResult.report.format.toUpperCase()} output.`
+        : null,
+      idleDetail: "Ready to prepare HTML or PDF print-source output from the reader.",
+      runningDetail: "Preparing document export source.",
+      recovery: "Keep a readable article selected or use a non-empty queue before retrying.",
+      retryLabel: activeDetail || visibleArticles.length > 0 ? "Retry HTML export" : null,
+      updatedAt: documentExportResult?.report.generatedAt ?? null,
+    },
+    {
+      id: "batch-operation",
+      title: "Batch operation",
+      scope: "Visible queue",
+      isRunning: runBatchOperationMutation.isPending,
+      error: runBatchOperationMutation.error,
+      completedDetail: batchOperationResult
+        ? `Changed ${batchOperationResult.report.changedArticleCount} selected article(s).`
+        : null,
+      idleDetail: "Select visible articles before running a batch command.",
+      runningDetail: "Applying the selected queue batch operation.",
+      recovery: "Select at least one visible queue row, then retry the batch command.",
+      retryLabel: null,
+      updatedAt: batchOperationResult?.report.completedAt ?? null,
+    },
+    {
+      id: "opml-import",
+      title: "OPML import",
+      scope: "Subscriptions",
+      isRunning: importOpmlMutation.isPending,
+      error: importOpmlMutation.error,
+      completedDetail: opmlImportReport
+        ? `Imported ${opmlImportReport.createdFeedCount} feed(s), created ${opmlImportReport.createdFolderCount} folder(s), and skipped ${opmlImportReport.duplicateFeedCount} duplicate(s).`
+        : null,
+      idleDetail: "Ready to import an OPML subscription payload.",
+      runningDetail: "Importing OPML subscription payload.",
+      recovery: "Check that the OPML payload has feed outline nodes with xmlUrl attributes.",
+      retryLabel: null,
+    },
+    {
+      id: "opml-export",
+      title: "OPML export",
+      scope: "Subscriptions",
+      isRunning: exportOpmlMutation.isPending,
+      error: exportOpmlMutation.error,
+      completedDetail: opmlExportResult
+        ? `Generated OPML for ${opmlExportResult.report.exportedFeedCount} feed(s).`
+        : null,
+      idleDetail: "Ready to generate an OPML copy of the subscription tree.",
+      runningDetail: "Generating OPML subscription export.",
+      recovery: "Retry after subscription tree data reloads.",
+      retryLabel: "Retry OPML export",
+      updatedAt: opmlExportResult?.report.generatedAt ?? null,
+    },
+  ])
+  const taskStatusSummary = summarizeReaderTaskStatuses(taskStatusEntries)
 
   function selectSource(sourceId: string) {
     startTransition(() => {
@@ -516,6 +682,78 @@ export function ReaderShellRoute() {
 
   function focusTarget(target: Exclude<ReaderShortcutTarget, "theme">) {
     focusShortcutTarget(target)
+  }
+
+  function retryTask(taskId: ReaderTaskStatusKind) {
+    switch (taskId) {
+      case "source-refresh":
+        if (activeFeed) {
+          refreshFeedMutation.reset()
+          refreshFeedMutation.mutate(activeFeed.id)
+        }
+        break
+      case "cache-cleanup":
+        runCacheCleanupMutation.reset()
+        runCacheCleanupMutation.mutate()
+        break
+      case "markdown-export":
+        exportMarkdownMutation.reset()
+        setMarkdownExportResult(null)
+        if (activeDetail) {
+          exportMarkdownMutation.mutate({
+            articleIds: [activeDetail.article.id],
+            mode: "single",
+          })
+        } else if (visibleArticles.length > 0) {
+          exportMarkdownMutation.mutate({
+            articleIds: visibleArticles.map((article) => article.id),
+            mode: "batch",
+            title: `${resolvedActiveSource.title} Markdown export`,
+          })
+        }
+        break
+      case "document-export":
+        exportDocumentMutation.reset()
+        setDocumentExportResult(null)
+        if (activeDetail) {
+          exportDocumentMutation.mutate({
+            articleIds: [activeDetail.article.id],
+            format: "html",
+            mode: "single",
+            presentation: {
+              contentMode: readerContentMode,
+              fontFamily: readerFontFamily,
+              fontScale: readerFontScale,
+              lineHeight: readerLineHeight,
+              marginMode: readerMarginMode,
+              themeTone,
+            },
+          })
+        } else if (visibleArticles.length > 0) {
+          exportDocumentMutation.mutate({
+            articleIds: visibleArticles.map((article) => article.id),
+            format: "html",
+            mode: "batch",
+            presentation: {
+              contentMode: readerContentMode,
+              fontFamily: readerFontFamily,
+              fontScale: readerFontScale,
+              lineHeight: readerLineHeight,
+              marginMode: readerMarginMode,
+              themeTone,
+            },
+            title: `${resolvedActiveSource.title} HTML export`,
+          })
+        }
+        break
+      case "opml-export":
+        exportOpmlMutation.reset()
+        exportOpmlMutation.mutate()
+        break
+      case "batch-operation":
+      case "opml-import":
+        break
+    }
   }
 
   return (
@@ -575,85 +813,92 @@ export function ReaderShellRoute() {
 
       <header className="desktop-shell__header">
         <div className="desktop-shell__title-block">
-          <p className="desktop-shell__eyebrow">Stage 7 / Step 57</p>
-          <h1>The desktop shell now exports reader documents.</h1>
+          <p className="desktop-shell__eyebrow">Stage 7 / Step 59</p>
+          <h1>The desktop shell now exposes task status and recovery.</h1>
           <p className="desktop-shell__lead">
-            Route state still owns the active source and article, the shell store still owns only
-            local queue controls and presentation preferences, and the mock repository remains the
-            shell-side snapshot source. Step 57 keeps Markdown intact and adds HTML plus PDF print
-            document generation beside it, so format rules stay in export modules instead of the
-            reader component.
+            Route state still owns the active source and article, feature modules still own their
+            own mutation rules, and Step 59 adds a task-status boundary that watches refresh,
+            export, cache cleanup, and batch results without turning any feature card into a general
+            background task center.
           </p>
         </div>
 
-        <Surface className="desktop-summary" compact>
-          <div className="desktop-summary__metrics">
-            <div>
-              <span className="desktop-summary__label">Sources</span>
-              <strong>{resolvedShellData.stats.feedCount}</strong>
-            </div>
-            <div>
-              <span className="desktop-summary__label">Visible</span>
-              <strong>{visibleArticles.length}</strong>
-            </div>
-            <div>
-              <span className="desktop-summary__label">Reading</span>
-              <strong>{resolvedShellData.stats.readingCount}</strong>
-            </div>
-          </div>
-
-          <div className="desktop-route-state">
-            <div>
-              <span className="desktop-summary__label">Route Source</span>
-              <strong>{routeState.sourceId}</strong>
-            </div>
-            <div>
-              <span className="desktop-summary__label">Selected Article</span>
-              <strong>{activeArticleId ?? "none"}</strong>
-            </div>
-          </div>
-
-          <p className="desktop-summary__note">
-            The queue still consumes one route-backed article query while cache configuration,
-            source editing, OPML portability, document export, and tree expansion remain separate
-            concerns. Step 57 reuses the same article selection contract for Markdown, HTML, and PDF
-            print output while leaving each formatter in its own module.
-          </p>
-
-          <div className="desktop-shortcuts">
-            <div className="desktop-shortcuts__summary">
-              <span className="desktop-summary__label">Keyboard workflow</span>
-              <strong>
-                Landmarks and reading commands now share one shell-level shortcut source.
-              </strong>
+        <div className="desktop-shell__sidecar">
+          <Surface className="desktop-summary" compact>
+            <div className="desktop-summary__metrics">
+              <div>
+                <span className="desktop-summary__label">Sources</span>
+                <strong>{resolvedShellData.stats.feedCount}</strong>
+              </div>
+              <div>
+                <span className="desktop-summary__label">Visible</span>
+                <strong>{visibleArticles.length}</strong>
+              </div>
+              <div>
+                <span className="desktop-summary__label">Reading</span>
+                <strong>{resolvedShellData.stats.readingCount}</strong>
+              </div>
             </div>
 
-            <ul className="desktop-shortcuts__list">
-              {READER_SHORTCUTS.map((shortcut) => (
-                <li className="desktop-shortcuts__item" key={shortcut.key}>
-                  <span>{shortcut.key}</span>
-                  <span>{shortcut.description}</span>
-                </li>
-              ))}
-            </ul>
+            <div className="desktop-route-state">
+              <div>
+                <span className="desktop-summary__label">Route Source</span>
+                <strong>{routeState.sourceId}</strong>
+              </div>
+              <div>
+                <span className="desktop-summary__label">Selected Article</span>
+                <strong>{activeArticleId ?? "none"}</strong>
+              </div>
+            </div>
 
-            <Button
-              aria-describedby={READER_SHORTCUT_HINT_ID}
-              aria-keyshortcuts="Alt+Shift+H"
-              aria-pressed={highContrastEnabled}
-              className={
-                highContrastEnabled
-                  ? "desktop-shortcuts__toggle desktop-shortcuts__toggle--active"
-                  : "desktop-shortcuts__toggle"
-              }
-              onClick={toggleThemeTone}
-              size="sm"
-              tone={highContrastEnabled ? "neutral" : "ghost"}
-            >
-              High contrast: {highContrastEnabled ? "on" : "off"}
-            </Button>
-          </div>
-        </Surface>
+            <p className="desktop-summary__note">
+              The queue still consumes one route-backed article query while cache configuration,
+              source editing, OPML portability, document export, batch operations, and task
+              reporting remain separate concerns. Step 59 observes those task results from a
+              dedicated status surface instead of moving execution rules into the header.
+            </p>
+
+            <div className="desktop-shortcuts">
+              <div className="desktop-shortcuts__summary">
+                <span className="desktop-summary__label">Keyboard workflow</span>
+                <strong>
+                  Landmarks and reading commands now share one shell-level shortcut source.
+                </strong>
+              </div>
+
+              <ul className="desktop-shortcuts__list">
+                {READER_SHORTCUTS.map((shortcut) => (
+                  <li className="desktop-shortcuts__item" key={shortcut.key}>
+                    <span>{shortcut.key}</span>
+                    <span>{shortcut.description}</span>
+                  </li>
+                ))}
+              </ul>
+
+              <Button
+                aria-describedby={READER_SHORTCUT_HINT_ID}
+                aria-keyshortcuts="Alt+Shift+H"
+                aria-pressed={highContrastEnabled}
+                className={
+                  highContrastEnabled
+                    ? "desktop-shortcuts__toggle desktop-shortcuts__toggle--active"
+                    : "desktop-shortcuts__toggle"
+                }
+                onClick={toggleThemeTone}
+                size="sm"
+                tone={highContrastEnabled ? "neutral" : "ghost"}
+              >
+                High contrast: {highContrastEnabled ? "on" : "off"}
+              </Button>
+            </div>
+          </Surface>
+
+          <TaskStatusPanel
+            entries={taskStatusEntries}
+            onRetryTask={retryTask}
+            summary={taskStatusSummary}
+          />
+        </div>
       </header>
 
       <NavigationStrip
@@ -771,17 +1016,33 @@ export function ReaderShellRoute() {
           <QueuePane
             activeArticleId={activeArticleId}
             activeSource={activeSource}
+            availableBatchTags={resolvedShellData.tags}
+            batchOperationErrorMessage={batchOperationErrorMessage}
+            batchOperationResult={batchOperationResult}
             describedBy={READER_SHORTCUT_HINT_ID}
             headingId={READER_LANDMARK_IDS.queueHeading}
+            isRunningBatchOperation={runBatchOperationMutation.isPending}
+            onClearBatchSelection={clearBatchSelectedArticleIds}
+            onRunBatchOperation={(command) => {
+              runBatchOperationMutation.reset()
+              setBatchOperationResult(null)
+              runBatchOperationMutation.mutate({
+                ...command,
+                articleIds: selectedBatchArticleIds,
+              })
+            }}
             onSearchTextChange={setSearchText}
             onSelectArticle={selectArticle}
+            onSelectAllVisibleBatchArticles={() => setBatchSelectedArticleIds(visibleArticleIds)}
             onSetSortMode={setSortMode}
             onSetStatusFilter={setStatusFilter}
+            onToggleBatchArticleSelection={toggleBatchSelectedArticleId}
             paneId={READER_LANDMARK_IDS.queue}
             paneRef={queuePaneRef}
             queryResetKey={resolvedArticleQuery.summary.jsonPreview}
             querySummary={resolvedArticleQuery.summary}
             searchText={searchText}
+            selectedBatchArticleIds={selectedBatchArticleIds}
             sortMode={sortMode}
             statusFilter={statusFilter}
             visibleArticles={visibleArticles}

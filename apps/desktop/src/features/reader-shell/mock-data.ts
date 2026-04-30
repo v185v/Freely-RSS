@@ -17,6 +17,7 @@ import type {
   UserStateDto,
 } from "@freelyrss/shared-types"
 
+import { applyReaderBatchOperation } from "./batch-operations"
 import {
   type ReaderCacheInventoryEntry,
   planReaderCacheCleanup,
@@ -28,6 +29,8 @@ import type {
   CreateReaderAnnotationInput,
   OpmlExportReport,
   OpmlImportReport,
+  ReaderBatchOperationInput,
+  ReaderBatchOperationResult,
   ReaderCacheCleanupReport,
   ReaderCacheSettings,
   ReaderDocumentExportFormat,
@@ -720,6 +723,11 @@ export type MockOpmlExportResult = {
 export type MockMarkdownExportResult = ReaderMarkdownExportResult
 
 export type MockDocumentExportResult = ReaderDocumentExportResult
+
+export type MockBatchOperationResult = {
+  batchResult: ReaderBatchOperationResult
+  shellData: ReaderShellData
+}
 
 const ROOT_SORT_KEY = "__root__"
 
@@ -1447,6 +1455,7 @@ function buildReaderShellSnapshot(state: MockReaderState): ReaderShellData {
     quickViewSection,
     smartFolders,
     subscriptionTree,
+    tags: cloneValue(tags),
     stats: {
       feedCount: feeds.length,
       readingCount: state.articles.filter((article) => article.state.readState === "reading")
@@ -1708,6 +1717,12 @@ export async function refreshMockFeed(feedId: FeedDto["id"]): Promise<ReaderShel
   const currentFeed = findFeedOrThrow(feedId)
   const now = new Date().toISOString()
 
+  if (currentFeed.id === "feed-empty-holding") {
+    throw new Error(
+      "Archive holding pen refresh failed because the source returned no feed items. Check the feed URL or keep the source paused before retrying.",
+    )
+  }
+
   const nextFeed: FeedDto = {
     ...currentFeed,
     healthStatus: "healthy",
@@ -1741,6 +1756,29 @@ export async function updateMockArticleState(input: {
   replaceArticleState(nextState)
 
   return buildReaderShellSnapshot(mockReaderState)
+}
+
+export async function runMockBatchOperation(
+  input: ReaderBatchOperationInput,
+): Promise<MockBatchOperationResult> {
+  const update = applyReaderBatchOperation(
+    {
+      articleDetails: mockReaderState.articleDetails,
+      articles: mockReaderState.articles,
+      cacheEntries: mockReaderState.cacheEntries,
+      tags,
+    },
+    input,
+  )
+
+  mockReaderState.articles = update.articles
+  mockReaderState.articleDetails = update.articleDetails
+  mockReaderState.cacheEntries = update.cacheEntries
+
+  return {
+    batchResult: update.result,
+    shellData: buildReaderShellSnapshot(mockReaderState),
+  }
 }
 
 export async function createMockAnnotation(
