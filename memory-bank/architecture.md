@@ -2289,3 +2289,33 @@ Step 60 已将 `SyncEvent` 限定为用户可携带状态、订阅组织和自�
 - `SyncEventDto` JSON uses camelCase at the HTTP boundary, while existing local SQLite payload field names may remain snake_case until a dedicated mapper translates field vocabulary.
 - Duplicate upload handling is idempotent by event id. This is a transport safety rule and should not be confused with conflict resolution.
 - Future PostgreSQL and object-storage adapters should preserve the current route contract and state responsibilities instead of introducing server endpoints for full client business tables.
+
+## 2026-05-10 ASCII Addendum XXVIII
+
+### Step 64 Architecture Insights
+
+- Step 64 makes conflict resolution an explicit sync-domain concern. The rules live in `crates/sync-engine`, not in `apps/sync-server/src/state.rs`, because the server skeleton is only a protocol/event exchange boundary and should not accidentally become the authority for readable business state.
+- `merge.rs` is intentionally separate from `replay.rs`. Replay proves deterministic application and idempotence by event id; merge decides which concurrent values survive when multiple devices edited the same sync-owned facts.
+- User state uses field-level clocks. Each field keeps the value from the newest `SyncEventKey(created_at + event_id)`, except `reading_progress`, which keeps the greatest valid progress in `0..=1` so a newer but lower progress event cannot move the user backward.
+- Annotation merging is append-preserving. Concurrent highlights and notes with distinct annotation ids are retained side by side rather than collapsed into one article-level note.
+- Tag membership is represented as explicit set operations. `FeedTag` and `ArticleTag` attach/detach events maintain relation sets with per-relation versions, so old attach events cannot undo newer detach decisions.
+- Subscription organization remains event-driven instead of list-snapshot-driven. `Feed.folder_id`, `Feed.sort_order`, and other feed fields merge independently, which keeps feed movement and custom naming from overwriting each other.
+- No database schema migration was added. The current merge state is an in-memory acceptance model for sync semantics; a later durable adapter can materialize the same rules into SQLite or a merge journal if product needs require it.
+- Step 65 should layer encryption around event/blob transport without moving key handling into `merge.rs` or turning the sync server into a plaintext resolver.
+
+### Step 64 File Responsibilities
+
+- `crates/sync-engine/src/merge.rs`: owns Step 64 conflict merge primitives. It defines `SyncMergeState`, `MergedEntity`, `SyncMergeOutcome`, and `merge_event_batch`; tracks per-field versions, relation versions, applied event ids, and entity tombstones; validates reading progress; and tests user-state, annotation, tag, subscription-ordering, stale-event, and idempotence behavior.
+- `crates/sync-engine/src/lib.rs`: re-exports the merge API next to batch, replay, and retry primitives so later sync clients can consume conflict rules without deep-linking into module internals.
+- `crates/sync-engine/src/replay.rs`: remains the deterministic replay primitive. Step 64 does not change it because replay must stay useful for batch/idempotence verification without field-level conflict policy.
+- `apps/sync-server/src/state.rs`: remains the temporary in-memory remote store for users, devices, sync events, and encrypted blob metadata. It should delegate event ordering to `package_event_batch` and must not absorb Step 64 conflict semantics.
+- `memory-bank/progress.md`: records the completed Step 64 milestone, verification commands, build warning note, and Step 65 handoff.
+- `memory-bank/architecture.md`: records the Step 64 conflict-resolution boundary and file-level responsibility split for future maintainers.
+
+### Step 64 Boundary Notes
+
+- `SyncMergeState` is not a production database adapter. It is a deterministic policy model that later storage code can use or mirror.
+- Merge rules consume `SyncEventEnvelope` values and payload fields; they do not generate local `SyncEvent` rows, call HTTP routes, encrypt payloads, or persist cursors.
+- Field-level clocks use event timestamps plus event ids because device-local row numbers and array offsets are not stable across devices.
+- `reading_progress` intentionally differs from last-writer-wins fields. Progress should converge to the farthest valid read position rather than the most recently observed lower position.
+- Entity tombstones exist only in merge state for delete ordering. They are not yet a durable cross-device deletion journal.

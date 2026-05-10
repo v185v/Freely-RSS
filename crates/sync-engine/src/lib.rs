@@ -2,11 +2,13 @@
 
 mod batch;
 mod error;
+mod merge;
 mod replay;
 mod retry;
 
 pub use batch::{SyncCursor, SyncEventBatch, SyncEventEnvelope, SyncEventKey, package_event_batch};
 pub use error::SyncEngineError;
+pub use merge::{MergedEntity, SyncMergeOutcome, SyncMergeState, merge_event_batch};
 pub use replay::{SyncReplayOutcome, SyncReplayState, replay_event_batch};
 pub use retry::{
     RetryDisposition, RetryFailureReport, RetryPolicy, RetryState, record_sync_failure,

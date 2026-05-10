@@ -2,11 +2,17 @@
 
 ## 当前状态
 
-- 阶段：阶段 8 Step 62 已完成，`crates/sync-engine` 已拥有事件 envelope、批次打包、游标跟踪、失败重试和本地重放基础；`crates/core-domain` 的同步事件写入回归已验证现有 `SyncEvent` 行可被新批次/重放边界消费。
+- 阶段：阶段 8 Step 64 已完成，`crates/sync-engine` 已拥有独立冲突合并层，可以在不依赖同步服务器临时内存存储的前提下处理字段级时钟、阅读进度最大值、追加式批注、显式标签集合操作和订阅排序事件。
 - 最后更新：2026-05-10
-- 风险状态：已从“Step 61 已把分类器接入本地写入边界；下一步 Step 62 必须消费现有 `SyncEvent` 行做批次、游标、重试和本地重放”推进到“Step 62 已建立纯同步引擎基础；下一步 Step 63 可以开始同步服务器骨架，但必须复用事件批次与游标契约，不能让服务端复制客户端业务 schema 或接管本地状态”
+- 风险状态：已从“Step 63 已建立远程同步 API 骨架；下一步 Step 64 必须避免把冲突语义藏进 `apps/sync-server/src/state.rs`”推进到“Step 64 已把冲突合并语义固定在 `crates/sync-engine/src/merge.rs`；下一步 Step 65 可以开始端到端加密，但必须保持服务端只保存密文、必要索引和设备级元数据”
 
-### 2026-05-10 状态快照
+### 2026-05-10 状态快照（最新）
+
+- 当前完成：阶段 8 Step 64 已完成，`crates/sync-engine/src/merge.rs` 新增 `SyncMergeState`、`MergedEntity`、`SyncMergeOutcome` 与 `merge_event_batch`，把冲突合并与 Step 62 的确定性 replay 分离。合并层按 `SyncEventKey(created_at + event_id)` 做字段级最后写入者胜出，单独对 `UserState.reading_progress` 执行 `0..=1` 合法区间校验和最大进度保留；批注按唯一 `annotation_id` 追加保留；`FeedTag` / `ArticleTag` 通过 attach/detach 事件维护集合；`Feed.folder_id` 与 `Feed.sort_order` 继续作为订阅组织字段级事件合并。
+- 当前验证：`cargo fmt --all --check`、`cargo test -p freelyrss-sync-engine`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace`、`corepack pnpm run verify` 与 `corepack pnpm run desktop:build` 全部通过。`desktop:build` 仍出现 Vite 大 chunk 提示，但构建成功且不是本步骤引入的失败。
+- 当前下一步：进入阶段 8 Step 65“实现端到端加密”，应在客户端持有主密钥、服务端只保存密文与必要索引的约束下继续推进；不要把加密、密钥恢复、对象存储上传或远程调度塞进 Step 64 的纯合并模块，也不要让 `apps/sync-server/src/state.rs` 变成业务冲突解析器。
+
+### 2026-05-10 状态快照（历史：Step 62）
 
 - 当前完成：阶段 8 Step 62 已完成，`crates/sync-engine` 新增 `batch.rs`、`replay.rs`、`retry.rs` 与 `error.rs`，把事件批次、游标推进、重放副本状态、重复事件跳过、重试耗尽判断和同步错误建模从分类器中拆出。`crates/core-domain/src/sqlite/sync_event_store.rs` 的回归现在会把本地生成的 `SyncEvent` 行转换为 `SyncEventEnvelope`，打包后重放到空同步副本状态并确认用户状态、批注和订阅源移动均能收敛。
 - 当前验证：`cargo test -p freelyrss-sync-engine`、`cargo test -p freelyrss-core-domain sync_event`、`cargo fmt --all --check`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace`、`corepack pnpm run verify`、`corepack pnpm run desktop:build`、`cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --bins --features tauri/custom-protocol --config "source.crates-io.replace-with='rsproxy'" --config "source.rsproxy.registry='sparse+https://rsproxy.cn/index/'"` 与 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle` 全部通过。
@@ -50,7 +56,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 8 Step 61 需要在本地写入路径生成 `SyncEvent`，同时复用 Step 60 的分类器，避免把正文缓存物化、抓取诊断、搜索索引或 reader-shell 任务状态误写成跨设备事件。
+- 当前无阻塞；下一步风险点是阶段 8 Step 65 需要建立端到端加密边界，同时保持 Step 64 的冲突合并模块只消费事件语义，不直接持有密钥、密文对象上传逻辑或服务端持久化细节。
 
 ## 本次执行记录
 
@@ -1590,3 +1596,38 @@
 - `apps/sync-server/src/state.rs` is an in-memory skeleton store only. Step 64 should not hide conflict semantics inside this temporary map-backed storage.
 - `crates/sync-engine/src/replay.rs` still provides deterministic replay and duplicate-event skipping, not field-level conflict resolution.
 - Step 64 should define conflict merge rules around the sync event contract: field-level timestamps for user state, max valid reading progress, append-only annotations, explicit tag set operations, and subscription ordering events.
+
+## 2026-05-10 ASCII Addendum XXVIII
+
+### Stage 8 Step 64 Completed: conflict merge rules
+
+- Completed `implementation-plan.md` Stage 8 Step 64 by adding an explicit sync-engine conflict merge layer instead of hiding conflict behavior inside the sync server's temporary in-memory store.
+- Added `crates/sync-engine/src/merge.rs` with `SyncMergeState`, `MergedEntity`, `SyncMergeOutcome`, and `merge_event_batch`.
+- Kept Step 64 separate from Step 62 replay. `replay.rs` remains a deterministic application/idempotence primitive, while `merge.rs` owns conflict semantics for concurrent events.
+- Implemented field-level clocks using `SyncEventKey(created_at + event_id)`. Normal entity fields use last-writer-wins by field, while `UserState.reading_progress` validates `0..=1` and keeps the maximum progress even if a lower value arrives later.
+- Implemented append-preserving annotation behavior by merging annotations by unique annotation id instead of collapsing multiple notes/highlights for the same article into one record.
+- Implemented explicit relationship set operations for `FeedTag` and `ArticleTag`; attach/detach events update relation sets with per-relation event versions, so stale attach events cannot re-add a tag after a newer detach.
+- Treated subscription organization as normal sync-owned fields. `Feed.folder_id`, `Feed.sort_order`, and related feed fields merge independently by field clock, so a later reorder does not wipe out an older custom name.
+- No database schema migration was required. Step 64 is a pure sync-engine behavior layer and does not add durable conflict tables, encrypted blob storage, key material, or server persistence.
+
+### Step 64 Verification
+
+- Passed `cargo fmt --all --check`
+- Passed `cargo test -p freelyrss-sync-engine`
+- Passed `cargo clippy --workspace --all-targets -- -D warnings`
+- Passed `cargo test --workspace`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm run desktop:build`
+
+### Environment Notes
+
+- `corepack pnpm run desktop:build` completed successfully and emitted the existing Vite chunk-size warning for the generated desktop bundle. This warning did not fail the build and no Step 64 code changed the desktop bundle path.
+
+### Next Step (ASCII update)
+
+- The next implementation step in `implementation-plan.md` is Stage 8 Step 65: end-to-end encryption.
+- Preserve the current boundary split:
+- `crates/sync-engine/src/merge.rs` owns conflict merge rules only. It should not hold encryption keys, upload blobs, schedule retries, or write SQLite rows.
+- `crates/sync-engine/src/replay.rs` remains deterministic replay/idempotence, not a conflict resolver.
+- `apps/sync-server` remains a remote protocol skeleton. Step 65 may add ciphertext-oriented boundaries, but it should not expose readable client business tables or plaintext user state.
+- Step 65 should make the client key boundary explicit and keep the server limited to ciphertext, necessary indexes, encrypted object metadata, and device-level metadata.
