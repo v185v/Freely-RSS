@@ -1,5 +1,18 @@
 //! Sync engine primitives for FreelyRSS.
 
+mod batch;
+mod error;
+mod replay;
+mod retry;
+
+pub use batch::{SyncCursor, SyncEventBatch, SyncEventEnvelope, SyncEventKey, package_event_batch};
+pub use error::SyncEngineError;
+pub use replay::{SyncReplayOutcome, SyncReplayState, replay_event_batch};
+pub use retry::{
+    RetryDisposition, RetryFailureReport, RetryPolicy, RetryState, record_sync_failure,
+    record_sync_success,
+};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum SyncEventEntityType {
     Feed,

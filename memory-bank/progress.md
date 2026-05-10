@@ -2,9 +2,15 @@
 
 ## 当前状态
 
-- 阶段：阶段 8 Step 61 已完成，本地 `SyncEvent` 生成已落到 `crates/core-domain/src/sqlite/sync_event_store.rs`，用户状态写入、批注创建、订阅源移动与标签关系写入可在同一 SQLite 事务中生成对应事件日志。
-- 最后更新：2026-05-09
-- 风险状态：已从“Step 60 已固定同步分类规则；下一步 Step 61 生成本地事件日志时，必须消费当前分类边界”推进到“Step 61 已把分类器接入本地写入边界；下一步 Step 62 必须消费现有 `SyncEvent` 行做批次、游标、重试和本地重放，不能重新发明事件语义”
+- 阶段：阶段 8 Step 62 已完成，`crates/sync-engine` 已拥有事件 envelope、批次打包、游标跟踪、失败重试和本地重放基础；`crates/core-domain` 的同步事件写入回归已验证现有 `SyncEvent` 行可被新批次/重放边界消费。
+- 最后更新：2026-05-10
+- 风险状态：已从“Step 61 已把分类器接入本地写入边界；下一步 Step 62 必须消费现有 `SyncEvent` 行做批次、游标、重试和本地重放”推进到“Step 62 已建立纯同步引擎基础；下一步 Step 63 可以开始同步服务器骨架，但必须复用事件批次与游标契约，不能让服务端复制客户端业务 schema 或接管本地状态”
+
+### 2026-05-10 状态快照
+
+- 当前完成：阶段 8 Step 62 已完成，`crates/sync-engine` 新增 `batch.rs`、`replay.rs`、`retry.rs` 与 `error.rs`，把事件批次、游标推进、重放副本状态、重复事件跳过、重试耗尽判断和同步错误建模从分类器中拆出。`crates/core-domain/src/sqlite/sync_event_store.rs` 的回归现在会把本地生成的 `SyncEvent` 行转换为 `SyncEventEnvelope`，打包后重放到空同步副本状态并确认用户状态、批注和订阅源移动均能收敛。
+- 当前验证：`cargo test -p freelyrss-sync-engine`、`cargo test -p freelyrss-core-domain sync_event`、`cargo fmt --all --check`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace`、`corepack pnpm run verify`、`corepack pnpm run desktop:build`、`cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --bins --features tauri/custom-protocol --config "source.crates-io.replace-with='rsproxy'" --config "source.rsproxy.registry='sparse+https://rsproxy.cn/index/'"` 与 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle` 全部通过。
+- 当前下一步：进入阶段 8 Step 63“实现同步服务器骨架”，应在 `apps/sync-server` 建立最小远程同步 API，复用 Step 62 的事件批次、游标和重试语义，只暴露加密后的同步事件、密文对象索引与设备元数据，不直接暴露或复制 `Article`、`Feed`、`Annotation`、`UserState` 等客户端业务读取主表。
 
 ### 2026-05-09 状态快照
 
@@ -1503,3 +1509,84 @@
 - `crates/core-domain/src/model/automation.rs` still owns the durable local `SyncEvent` shape, and no schema migration was required for Step 61.
 - `Feed.health_status`, fetch validators, fetch errors, FTS rows, rule audit internals, local cache paths, and Step 59 task-status rows remain local-only facts.
 - Step 62 should consume `SyncEvent` rows for event batches, cursors, retry handling, and local replay while keeping sync transport and service APIs for later steps.
+
+## 2026-05-10 ASCII Addendum XXVI
+
+### Stage 8 Step 62 Completed: sync engine foundation
+
+- Completed `implementation-plan.md` Stage 8 Step 62 by adding pure sync-engine primitives for event batch packaging, cursor tracking, retry state, and local replay.
+- Added `crates/sync-engine/src/batch.rs` with `SyncEventEnvelope`, `SyncCursor`, `SyncEventKey`, `SyncEventBatch`, and `package_event_batch`. Batches are sorted by `created_at + id`, advance cursors deterministically, and report `has_more` without owning storage.
+- Added `crates/sync-engine/src/replay.rs` with `SyncReplayState` and `replay_event_batch`. Replay applies create/update/snapshot/delete events for sync-owned entities, attach/detach events for relationship tables, skips duplicate event ids, and updates an in-memory replay cursor.
+- Added `crates/sync-engine/src/retry.rs` with `RetryPolicy`, `RetryState`, and failure/success helpers for bounded retry decisions.
+- Added `crates/sync-engine/src/error.rs` so batch, replay, and retry callers share one explicit error vocabulary instead of stringly typed failures.
+- Updated `crates/sync-engine/src/lib.rs` to expose the new modules while keeping the existing Step 60/61 classifier API stable.
+- Updated `crates/core-domain/src/sqlite/sync_event_store.rs` tests so Step 61-generated SQLite `SyncEvent` rows are converted to `SyncEventEnvelope`, packaged, and replayed into an empty sync replica state. This proves the local event writer can feed Step 62 without changing the stored payload contract.
+- Added `serde_json` as an explicit `freelyrss-sync-engine` dependency because replay needs to inspect `SyncEvent.payload` values directly.
+- No database schema migration was required. Step 62 consumes the existing `SyncEvent` table and does not add durable cursor, retry, or remote task tables.
+
+### Step 62 Verification
+
+- Passed `cargo test -p freelyrss-sync-engine`
+- Passed `cargo test -p freelyrss-core-domain sync_event`
+- Passed `cargo fmt --all --check`
+- Passed `cargo clippy --workspace --all-targets -- -D warnings`
+- Passed `cargo test --workspace`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm run desktop:build`
+- Passed `cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --bins --features tauri/custom-protocol --config "source.crates-io.replace-with='rsproxy'" --config "source.rsproxy.registry='sparse+https://rsproxy.cn/index/'"`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+
+### Environment Notes
+
+- Direct `crates.io` access timed out while validating the desktop Tauri host dependency graph, specifically while fetching registry entries such as `cairo-rs`.
+- The successful desktop host check and Tauri no-bundle build used a temporary Cargo registry override under `target/codex-cargo-home` pointing to `sparse+https://rsproxy.cn/index/`. No repository Cargo config was written.
+
+### Next Step (ASCII update)
+
+- The next implementation step in `implementation-plan.md` is Stage 8 Step 63: sync server skeleton.
+- Preserve the current boundary split:
+- `crates/sync-engine/src/batch.rs` owns packaging and cursor movement only; it should not query SQLite, call remote APIs, encrypt payloads, or persist retry state.
+- `crates/sync-engine/src/replay.rs` owns local replay primitives and idempotence by event id. It is not a conflict resolver and should not silently invent business entities outside the event payload.
+- `crates/sync-engine/src/retry.rs` owns bounded retry state transitions only; durable scheduling, backoff timing, and task display belong to later adapters.
+- `crates/core-domain/src/sqlite/sync_event_store.rs` remains the local event writer. It should continue producing the Step 61 payload contract and should not absorb server upload/download logic.
+- Step 63 should create the remote service skeleton around event upload, event pull, device identity, and encrypted object listing while keeping the service-side model smaller than the client SQLite schema.
+
+## 2026-05-10 ASCII Addendum XXVII
+
+### Stage 8 Step 63 Completed: sync server skeleton
+
+- Completed `implementation-plan.md` Stage 8 Step 63 by adding a minimal Rust/Axum sync server under `apps/sync-server`.
+- Added account login, bearer-token authentication, device registration/listing, sync event upload, sync event pull, and encrypted blob metadata listing/registration routes.
+- Reused the Step 62 `SyncEventEnvelope`, `SyncCursor`, and `package_event_batch` contract for remote event pull responses instead of inventing a server-only event shape.
+- Kept the service-side model intentionally smaller than the local SQLite schema. The server stores only users, devices, sync event envelopes, and encrypted blob metadata in its current in-memory skeleton.
+- Added a boundary regression proving the remote API rejects client business entities such as `article` as uploaded sync events. Local `Article`, `Feed`, `Annotation`, and `UserState` tables remain client-side read/write models, not server REST resources.
+- Added the sync server as a root Cargo workspace member so `cargo test --workspace`, Clippy, and the repository `verify` chain include it.
+- Fixed the root `Cargo.lock` duplicate `dependencies` key left under the `freelyrss-sync-engine` package entry before regenerating the lockfile for the new server dependencies.
+
+### Step 63 Verification
+
+- Passed `cargo test -p freelyrss-sync-server`
+- Passed `cargo fmt --all --check`
+- Passed `cargo test -p freelyrss-sync-engine`
+- Passed `cargo test -p freelyrss-core-domain sync_event`
+- Passed `cargo clippy --workspace --all-targets -- -D warnings`
+- Passed `cargo test --workspace`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm run desktop:build`
+- Passed `cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --bins --features tauri/custom-protocol --config "source.crates-io.replace-with='rsproxy'" --config "source.rsproxy.registry='sparse+https://rsproxy.cn/index/'"`
+- Passed `cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml --bins --features tauri/custom-protocol --config "source.crates-io.replace-with='rsproxy'" --config "source.rsproxy.registry='sparse+https://rsproxy.cn/index/'"`
+
+### Environment Notes
+
+- `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle` was attempted repeatedly and timed out with no stdout after long waits in this environment. The leftover cargo child processes were stopped after each timeout.
+- The desktop frontend build and the desktop Tauri host `cargo check` plus `cargo build` both passed, so the actual frontend and Rust host compile/link paths were verified even though the Tauri CLI wrapper did not return.
+- Desktop host cargo validation used the same temporary rsproxy registry override style recorded in Step 62. No repository Cargo config was written.
+
+### Next Step (ASCII update)
+
+- The next implementation step in `implementation-plan.md` is Stage 8 Step 64: conflict merge rules.
+- Preserve the current boundary split:
+- `apps/sync-server` is a remote protocol skeleton and should not become a conflict resolver, durable scheduler, local SQLite mirror, or article-reading API.
+- `apps/sync-server/src/state.rs` is an in-memory skeleton store only. Step 64 should not hide conflict semantics inside this temporary map-backed storage.
+- `crates/sync-engine/src/replay.rs` still provides deterministic replay and duplicate-event skipping, not field-level conflict resolution.
+- Step 64 should define conflict merge rules around the sync event contract: field-level timestamps for user state, max valid reading progress, append-only annotations, explicit tag set operations, and subscription ordering events.

@@ -2218,3 +2218,74 @@ Step 60 已将 `SyncEvent` 限定为用户可携带状态、订阅组织和自�
 - `SyncEventWriteContext` supplies event id, device id, and timestamp from the caller. This keeps deterministic tests simple and leaves production id/time generation policy outside the storage helper.
 - Feed diagnostics, fetch validators, FTS projections, rule audit internals, local cache paths, and task-status observations remain outside this event store.
 - Stage 8 Step 62 should build on the generated `SyncEvent` rows by adding event batch packaging, cursor tracking, failure retry, and local replay primitives without changing the local event payload contract.
+
+## 2026-05-10 ASCII Addendum XXVI
+
+### Step 62 Architecture Insights
+
+- Step 62 turns the generated `SyncEvent` row into a transport-neutral envelope, but it still does not start remote synchronization. The new sync-engine primitives can package, cursor, retry, and replay events without knowing whether those events came from SQLite, an HTTP API, WebDAV object storage, or a future encrypted batch file.
+- The sync cursor is a high-water mark over `created_at + event id`. This keeps batching deterministic even when multiple events share the same timestamp, and it avoids using array offsets or local row numbers that would not survive across devices.
+- Replay is deliberately idempotent by event id. Applying the same batch twice skips already-applied events, which is required before remote retries and at-least-once upload/download semantics can be safe.
+- Retry state is pure policy state, not a scheduler. Step 62 records attempts, last error, and exhaustion, but it does not persist retry rows, calculate wall-clock backoff, or render task status.
+- The replay state is a local convergence primitive, not the production SQLite writer. It proves event semantics and batch behavior before a later adapter materializes remote events into durable tables with conflict handling.
+- No schema migration was required. Durable cursors, remote batch receipts, conflict records, encrypted blobs, and server-side upload/download tables remain later Stage 8 work.
+- Step 63 should reuse the batch/cursor envelope shape for the sync server API instead of inventing a server-only event shape. The service still must not mirror the full local SQLite business schema.
+
+### Step 62 File Responsibilities
+
+- `crates/sync-engine/src/lib.rs`: remains the public sync-engine entrypoint. It now re-exports batch, replay, retry, and error primitives while preserving the existing field-boundary classifier and event classification API.
+- `crates/sync-engine/src/batch.rs`: owns `SyncEventEnvelope`, `SyncEventKey`, `SyncCursor`, `SyncEventBatch`, and `package_event_batch`. It sorts events by `created_at + id`, filters after the provided cursor, caps batch size, advances `next_cursor`, and reports `has_more`. It does not read SQLite, upload events, or encrypt payloads.
+- `crates/sync-engine/src/replay.rs`: owns `SyncReplayState`, `SyncReplayOutcome`, and `replay_event_batch`. It applies sync-event payloads into an in-memory replica state, handles entity upserts/deletes, relationship attach/detach, duplicate-event skipping, and replay cursor advancement. It is not a conflict resolver or a durable database adapter.
+- `crates/sync-engine/src/retry.rs`: owns `RetryPolicy`, `RetryState`, `RetryDisposition`, `RetryFailureReport`, `record_sync_failure`, and `record_sync_success`. It models bounded retry decisions without storing jobs, sleeping, scheduling timers, or surfacing UI task rows.
+- `crates/sync-engine/src/error.rs`: owns `SyncEngineError`, the shared error vocabulary for invalid batch sizes, invalid cursors, invalid payloads, missing relation fields, and unsupported replay events.
+- `crates/sync-engine/Cargo.toml`: now declares `serde_json` because replay inspects `SyncEvent.payload.value` directly while staying independent from `freelyrss-core-domain`.
+- `crates/core-domain/src/sqlite/sync_event_store.rs`: remains the SQLite local mutation plus event-log insertion boundary. Step 62 only extends its regression coverage so locally generated `SyncEvent` rows can be converted into `SyncEventEnvelope`, packaged, and replayed through the sync engine.
+- `crates/core-domain/src/model/automation.rs`: still owns the durable local `SyncEvent` domain shape. Step 62 does not move storage-specific ids, JSON blobs, or SQLite record conversion into `crates/sync-engine`.
+- `Cargo.lock`: records that the root Rust workspace's `freelyrss-sync-engine` package now explicitly depends on `serde_json`.
+- `apps/desktop/src-tauri/Cargo.lock`: records the same sync-engine dependency edge for the desktop host dependency graph.
+- `memory-bank/progress.md`: records the completed Step 62 milestone, verification commands, environment notes, and the Step 63 handoff.
+- `memory-bank/architecture.md`: records the Step 62 batch/cursor/retry/replay boundaries and file-level responsibility split for future maintainers.
+
+### Step 62 Boundary Notes
+
+- `SyncEventEnvelope` is a sync transport envelope, not the local domain model. `core-domain` still owns validated local ids, `JsonBlob`, SQLite rows, and transactional writes.
+- `package_event_batch` expects callers to provide events; it does not query storage and should stay reusable by SQLite, HTTP, and object-storage adapters.
+- `SyncCursor` is not yet a durable remote cursor table. Step 63 can put the cursor in API DTOs; durable local/remote cursor persistence should be added only when the service/client exchange path exists.
+- `replay_event_batch` currently proves deterministic convergence for sync-owned entities and relationship events. Conflict resolution, field-level timestamps, tombstones, encrypted blob download, and SQLite materialization remain separate later steps.
+- Retry state must remain separate from Step 59 task status. Task panels observe user-facing operations; retry state belongs to sync transport attempts.
+- The sync server in Step 63 should expose event upload/pull and encrypted object listing around this contract, not endpoint-level access to client tables such as `Article`, `UserState`, `Annotation`, or `Feed`.
+
+## 2026-05-10 ASCII Addendum XXVII
+
+### Step 63 Architecture Insights
+
+- Step 63 introduces the remote sync server as a protocol boundary, not as a remote copy of the desktop database. The server accepts account/device metadata, sync event envelopes, cursors, and encrypted blob metadata only.
+- The server API deliberately exposes `/v1/sync/events`, `/v1/sync/events/pull`, `/v1/sync/blobs`, and `/v1/devices`; it does not expose table-shaped routes such as `/v1/articles`, `/v1/feeds`, `/v1/annotations`, or `/v1/user-states`.
+- Event pull uses the Step 62 `package_event_batch` high-water cursor semantics. The server stores events by user, converts API DTOs to `SyncEventEnvelope`, and delegates ordering/cursor movement to `crates/sync-engine`.
+- Authentication is intentionally skeletal. The current login route issues in-memory bearer tokens for API validation and tests; later production auth can replace the backing implementation without changing the sync event route contract.
+- Device registration is the first server-side identity boundary. Uploads must name a registered device owned by the authenticated user, and individual event envelopes must match the request device id.
+- Encrypted blob handling is metadata-only. The server can list/register `EncryptedBlob` records, but it does not upload raw article bodies, attachment bytes, or local cache file paths.
+- No server database schema migration was added. The current `SyncServerState` is an in-memory acceptance skeleton; PostgreSQL tables, S3-compatible object storage, durable cursors, and auth persistence belong to later sync-server hardening work.
+- Step 64 should add conflict merge rules outside the temporary in-memory store. Conflict semantics need to be explicit sync-domain logic, not incidental behavior of map insertion order.
+
+### Step 63 File Responsibilities
+
+- `Cargo.toml`: adds `apps/sync-server` to the root Cargo workspace so repository Rust verification includes the remote sync API skeleton.
+- `apps/sync-server/Cargo.toml`: declares the Rust/Axum sync server package, binary target, library target, and dependencies on Axum, Tokio, serde, chrono, thiserror, and `freelyrss-sync-engine`.
+- `apps/sync-server/src/lib.rs`: exposes the server library entrypoint and keeps route construction reusable for tests and the binary.
+- `apps/sync-server/src/main.rs`: provides the executable wrapper, reads `FREELYRSS_SYNC_BIND_ADDR`, binds the listener, and serves the Axum router with default in-memory state.
+- `apps/sync-server/src/error.rs`: owns the API error vocabulary and HTTP/JSON error mapping for unauthorized, forbidden, bad request, conflict, and internal failures.
+- `apps/sync-server/src/model.rs`: owns server API DTOs for login, users, devices, sync cursors, sync events, event upload/pull responses, encrypted blobs, and health responses. It also converts between API event DTOs and `SyncEventEnvelope`.
+- `apps/sync-server/src/state.rs`: owns the current in-memory server state, token lookup, user/device maps, per-user event storage, per-user encrypted blob indexes, event entity validation, and delegation to `package_event_batch`.
+- `apps/sync-server/src/routes.rs`: owns Axum route registration, bearer-token extraction, HTTP handlers, and Step 63 route tests covering login, device registration, empty pull, upload, pull, encrypted blob listing, missing business table routes, and rejection of business entities as sync events.
+- `Cargo.lock`: records the root workspace dependency graph after adding the sync server and removes the duplicate `freelyrss-sync-engine` dependency block that prevented Cargo from parsing the lockfile.
+- `memory-bank/progress.md`: records the completed Step 63 milestone, verification commands, Tauri CLI timeout note, and the Step 64 handoff.
+- `memory-bank/architecture.md`: records the Step 63 remote protocol boundary and file-level responsibility split for future maintainers.
+
+### Step 63 Boundary Notes
+
+- `apps/sync-server` is not a local reader backend. Desktop, Web, and mobile clients should still materialize readable article state from their own local/client-side models.
+- The sync server must not accept local-only facts as sync events. Feed diagnostics, fetch validators, FTS rows, rule audit internals, local cache paths, and task-status observations remain outside the remote event API.
+- `SyncEventDto` JSON uses camelCase at the HTTP boundary, while existing local SQLite payload field names may remain snake_case until a dedicated mapper translates field vocabulary.
+- Duplicate upload handling is idempotent by event id. This is a transport safety rule and should not be confused with conflict resolution.
+- Future PostgreSQL and object-storage adapters should preserve the current route contract and state responsibilities instead of introducing server endpoints for full client business tables.

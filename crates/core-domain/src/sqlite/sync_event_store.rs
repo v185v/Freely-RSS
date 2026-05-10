@@ -428,6 +428,9 @@ fn encode_bool_flag(value: bool) -> i64 {
 #[cfg(test)]
 mod tests {
     use freelyrss_sync_engine::UserStateSyncField;
+    use freelyrss_sync_engine::{
+        SyncCursor, SyncEventEnvelope, SyncReplayState, package_event_batch, replay_event_batch,
+    };
     use rusqlite::{Connection, params};
     use serde_json::json;
     use tempfile::tempdir;
@@ -563,6 +566,36 @@ mod tests {
             )
             .expect("feed folder id");
         assert_eq!(persisted_folder_id, "folder-reading");
+
+        let envelopes = events.iter().map(sync_event_envelope).collect::<Vec<_>>();
+        let batch = package_event_batch(&envelopes, &SyncCursor::start(), 10)
+            .expect("package generated sync events");
+        let mut replay_state = SyncReplayState::default();
+
+        replay_event_batch(&mut replay_state, &batch).expect("replay generated sync events");
+
+        assert_eq!(
+            replay_state
+                .user_states
+                .get("article-sync")
+                .and_then(|user_state| user_state.get("read_state")),
+            Some(&json!("read"))
+        );
+        assert_eq!(
+            replay_state
+                .annotations
+                .get("annotation-note")
+                .and_then(|annotation| annotation.get("note")),
+            Some(&json!("Keep sync writes adjacent to domain writes."))
+        );
+        assert_eq!(
+            replay_state
+                .feeds
+                .get("feed-sync")
+                .and_then(|feed| feed.get("folder_id")),
+            Some(&json!("folder-reading"))
+        );
+        assert_eq!(replay_state.cursor, batch.next_cursor);
     }
 
     fn sync_context(
@@ -601,5 +634,17 @@ mod tests {
                 params!["article-sync", "feed-sync", "Sync article"],
             )
             .expect("insert article");
+    }
+
+    fn sync_event_envelope(event: &crate::SyncEvent) -> SyncEventEnvelope {
+        SyncEventEnvelope::new(
+            event.id.as_str(),
+            event.entity_type.as_str(),
+            event.entity_id.as_str(),
+            event.change_type.as_str(),
+            event.payload.as_value().clone(),
+            event.device_id.as_str(),
+            event.created_at.as_str(),
+        )
     }
 }

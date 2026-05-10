@@ -857,6 +857,9 @@ dependencies = [
 [[package]]
 name = "freelyrss-sync-engine"
 version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
 
 [[package]]
 name = "futf"
