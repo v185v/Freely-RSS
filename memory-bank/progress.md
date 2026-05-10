@@ -2,9 +2,15 @@
 
 ## 当前状态
 
-- 阶段：阶段 8 Step 60 已完成，同步实体与事件边界已落到 `packages/shared-types/src/sync.ts` 与 `crates/sync-engine/src/lib.rs`，明确 `SyncEvent` 同步字段、本地字段、懒加载密文 blob 字段，以及服务端最小实体 `User`、`Device`、`SyncEvent`、`EncryptedBlob`、`UserSettings`。
-- 最后更新：2026-04-30
-- 风险状态：已从“不能把 Step 59 的 UI 状态面板误当成同步事件日志或后台任务持久化模型”推进到“Step 60 已固定同步分类规则；下一步 Step 61 生成本地事件日志时，必须消费当前分类边界，而不是让桌面 UI mutation 状态直接写入 `SyncEvent`”
+- 阶段：阶段 8 Step 61 已完成，本地 `SyncEvent` 生成已落到 `crates/core-domain/src/sqlite/sync_event_store.rs`，用户状态写入、批注创建、订阅源移动与标签关系写入可在同一 SQLite 事务中生成对应事件日志。
+- 最后更新：2026-05-09
+- 风险状态：已从“Step 60 已固定同步分类规则；下一步 Step 61 生成本地事件日志时，必须消费当前分类边界”推进到“Step 61 已把分类器接入本地写入边界；下一步 Step 62 必须消费现有 `SyncEvent` 行做批次、游标、重试和本地重放，不能重新发明事件语义”
+
+### 2026-05-09 状态快照
+
+- 当前完成：阶段 8 Step 61 已完成，`crates/sync-engine` 已补齐订阅源字段更新、FeedTag attach/detach 与 ArticleTag attach/detach 的事件分类；`crates/core-domain` 新增 `LocalSyncEventStore`，可以把标记已读、创建笔记/批注、移动订阅源和标签归属写入与 `SyncEvent` 记录写入绑定为同一事务。
+- 当前验证：`cargo test -p freelyrss-sync-engine`、`cargo test -p freelyrss-core-domain sync_event`、`cargo fmt --all --check`、`cargo clippy --workspace --all-targets -- -D warnings`、`corepack pnpm run verify`、`corepack pnpm run desktop:build` 与 `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle` 全部通过。
+- 当前下一步：进入阶段 8 Step 62“建立同步引擎基础”，应在 `crates/sync-engine` 中围绕现有 `SyncEvent` 行实现事件批次打包、游标跟踪、失败重试和本地重放逻辑，继续避免把 SQLite 文件、FTS 行、规则审计内部载荷、正文缓存路径或 Step 59 task status 当作同步对象。
 
 ### 2026-04-30 状态快照
 
@@ -1460,3 +1466,40 @@
 - `Feed.health_status`, fetch validators, fetch errors, `Attachment.local_cache_path`, FTS/search rows, rule audit details, and Step 59 task-status rows remain local-only facts.
 - `Article.content_raw`, `Article.content_extracted`, and attachment bytes must not be inlined into ordinary event payloads; future sync should reference encrypted blob records and lazy-load content when needed.
 - Step 61 should consume the classifier when wiring state/tag/annotation/subscription writes to local event-log creation, instead of deriving event semantics from React Query mutation state or reader-shell task rows.
+
+## 2026-05-09 ASCII Addendum XXV
+
+### Stage 8 Step 61 Completed: local sync-event generation
+
+- Completed `implementation-plan.md` Stage 8 Step 61 by wiring local mutation paths to durable `SyncEvent` rows without starting remote transport or event replay.
+- Extended `crates/sync-engine/src/lib.rs` so the Step 60 classifier now covers `Feed.folder_id` updates and FeedTag attach/detach events in addition to user-state, annotation, ArticleTag, lazy blob, and local-only decisions.
+- Added `crates/core-domain/src/sqlite/sync_event_store.rs` as the local event-log write boundary. It updates `UserState`, inserts `Annotation`, moves `Feed.folder_id`, attaches article/feed tags, and inserts the corresponding `SyncEvent` in the same SQLite transaction.
+- Kept event payloads aligned with the shared sync DTO shape by writing `changedFields` and `value` JSON payloads while still using the local schema's snake_case field vocabulary.
+- Added a focused Step 61 regression that executes one mark-read write, one note creation, and one feed move, then verifies the event log contains `user-state/update`, `annotation/create`, and `feed/update` records with the expected payloads.
+- Updated the Cargo lockfiles so the new `freelyrss-core-domain -> freelyrss-sync-engine` dependency is reflected both in the root Rust workspace and the desktop Tauri workspace.
+- Fixed a Rust 1.95 Clippy-only issue in `crates/feed-engine/src/parser/rss.rs` by collapsing a guarded `thumbnail` branch; this preserves parser behavior and keeps the full repository verification chain green.
+
+### Step 61 Verification
+
+- Passed `cargo test -p freelyrss-sync-engine`
+- Passed `cargo test -p freelyrss-core-domain sync_event`
+- Passed `cargo fmt --all --check`
+- Passed `cargo clippy --workspace --all-targets -- -D warnings`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+
+### Environment Notes
+
+- `corepack pnpm install` had to be rerun because `node_modules` was missing `@biomejs/biome`; hook installation still cannot run because `git` is not available in PATH, so the successful dependency sync used `corepack pnpm install --ignore-scripts`.
+- Cargo validation used a temporary `CARGO_HOME` under `target/codex-cargo-home` with an rsproxy sparse registry override. No repository Cargo config was written.
+
+### Next Step (ASCII update)
+
+- The next implementation step in `implementation-plan.md` is Stage 8 Step 62: sync engine foundation.
+- Preserve the current boundary split:
+- `crates/sync-engine/src/lib.rs` owns classification rules and should next add batch/replay abstractions on top of already-generated events, not duplicate SQLite write semantics.
+- `crates/core-domain/src/sqlite/sync_event_store.rs` owns atomic local mutation plus event-log insertion. It should not call remote services, manage cursors, encrypt blobs, or replay remote batches.
+- `crates/core-domain/src/model/automation.rs` still owns the durable local `SyncEvent` shape, and no schema migration was required for Step 61.
+- `Feed.health_status`, fetch validators, fetch errors, FTS rows, rule audit internals, local cache paths, and Step 59 task-status rows remain local-only facts.
+- Step 62 should consume `SyncEvent` rows for event batches, cursors, retry handling, and local replay while keeping sync transport and service APIs for later steps.

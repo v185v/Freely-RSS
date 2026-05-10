@@ -8,6 +8,7 @@ mod records;
 mod rule_audit_store;
 mod smart_folder_store;
 mod store;
+mod sync_event_store;
 
 use std::{
     fs,
@@ -27,6 +28,7 @@ pub use migrations::{EmbeddedMigration, embedded_migrations, latest_schema_versi
 pub use rule_audit_store::RuleAuditStore;
 pub use smart_folder_store::SmartFolderStore;
 pub use store::{FeedGraphPersistReport, FeedStore};
+pub use sync_event_store::{LocalSyncEventStore, SyncEventWriteContext};
 
 use self::{
     backup::create_backup,

@@ -97,6 +97,37 @@ pub enum SyncDataEntityType {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum FeedSyncField {
+    Title,
+    SiteUrl,
+    FeedUrl,
+    Format,
+    Icon,
+    FolderId,
+    CustomName,
+    SortOrder,
+    UpdateInterval,
+    CachePolicy,
+}
+
+impl FeedSyncField {
+    pub const fn as_payload_field(self) -> &'static str {
+        match self {
+            Self::Title => "title",
+            Self::SiteUrl => "site_url",
+            Self::FeedUrl => "feed_url",
+            Self::Format => "format",
+            Self::Icon => "icon",
+            Self::FolderId => "folder_id",
+            Self::CustomName => "custom_name",
+            Self::SortOrder => "sort_order",
+            Self::UpdateInterval => "update_interval",
+            Self::CachePolicy => "cache_policy",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum UserStateSyncField {
     ReadState,
     Starred,
@@ -176,6 +207,10 @@ pub enum SyncBoundaryDecision {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SyncChange {
+    UpdateFeed {
+        feed_id: String,
+        fields: Vec<FeedSyncField>,
+    },
     UpdateUserState {
         article_id: String,
         fields: Vec<UserStateSyncField>,
@@ -196,6 +231,14 @@ pub enum SyncChange {
     },
     DetachArticleTag {
         article_id: String,
+        tag_id: String,
+    },
+    AttachFeedTag {
+        feed_id: String,
+        tag_id: String,
+    },
+    DetachFeedTag {
+        feed_id: String,
         tag_id: String,
     },
     UpdateArticleContentBlob {
@@ -224,6 +267,17 @@ pub fn classify_field(entity_type: SyncDataEntityType, field_name: &str) -> Sync
 
 pub fn classify_change(change: SyncChange) -> SyncBoundaryDecision {
     match change {
+        SyncChange::UpdateFeed { feed_id, fields } => {
+            SyncBoundaryDecision::Event(SyncEventBoundary {
+                entity_type: SyncEventEntityType::Feed,
+                entity_id: feed_id,
+                change_type: SyncEventChangeType::Update,
+                payload_fields: fields
+                    .into_iter()
+                    .map(FeedSyncField::as_payload_field)
+                    .collect(),
+            })
+        }
         SyncChange::UpdateUserState { article_id, fields } => {
             SyncBoundaryDecision::Event(SyncEventBoundary {
                 entity_type: SyncEventEntityType::UserState,
@@ -277,6 +331,22 @@ pub fn classify_change(change: SyncChange) -> SyncBoundaryDecision {
                 entity_id: relation_entity_id(&article_id, &tag_id),
                 change_type: SyncEventChangeType::Detach,
                 payload_fields: vec!["article_id", "tag_id"],
+            })
+        }
+        SyncChange::AttachFeedTag { feed_id, tag_id } => {
+            SyncBoundaryDecision::Event(SyncEventBoundary {
+                entity_type: SyncEventEntityType::FeedTag,
+                entity_id: relation_entity_id(&feed_id, &tag_id),
+                change_type: SyncEventChangeType::Attach,
+                payload_fields: vec!["feed_id", "tag_id"],
+            })
+        }
+        SyncChange::DetachFeedTag { feed_id, tag_id } => {
+            SyncBoundaryDecision::Event(SyncEventBoundary {
+                entity_type: SyncEventEntityType::FeedTag,
+                entity_id: relation_entity_id(&feed_id, &tag_id),
+                change_type: SyncEventChangeType::Detach,
+                payload_fields: vec!["feed_id", "tag_id"],
             })
         }
         SyncChange::UpdateArticleContentBlob { article_id } => {
@@ -425,10 +495,27 @@ fn relation_entity_id(left_id: &str, right_id: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        AnnotationSyncField, EncryptedBlobKind, SyncBoundaryDecision, SyncChange,
+        AnnotationSyncField, EncryptedBlobKind, FeedSyncField, SyncBoundaryDecision, SyncChange,
         SyncDataEntityType, SyncEventChangeType, SyncEventEntityType, SyncFieldBoundary,
         UserStateSyncField, classify_change, classify_field,
     };
+
+    #[test]
+    fn feed_folder_change_is_sync_event_payload() {
+        let decision = classify_change(SyncChange::UpdateFeed {
+            feed_id: "feed-rust".to_owned(),
+            fields: vec![FeedSyncField::FolderId],
+        });
+
+        let SyncBoundaryDecision::Event(event) = decision else {
+            panic!("feed folder changes must become sync events");
+        };
+
+        assert_eq!(event.entity_type, SyncEventEntityType::Feed);
+        assert_eq!(event.entity_id, "feed-rust");
+        assert_eq!(event.change_type, SyncEventChangeType::Update);
+        assert_eq!(event.payload_fields, ["folder_id"]);
+    }
 
     #[test]
     fn article_state_change_is_sync_event_payload() {

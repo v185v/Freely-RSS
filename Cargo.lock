@@ -273,6 +273,7 @@ dependencies = [
 name = "freelyrss-core-domain"
 version = "0.1.0"
 dependencies = [
+ "freelyrss-sync-engine",
  "rusqlite",
  "serde",
  "serde_json",

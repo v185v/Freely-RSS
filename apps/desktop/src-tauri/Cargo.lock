@@ -835,6 +835,7 @@ dependencies = [
 name = "freelyrss-core-domain"
 version = "0.1.0"
 dependencies = [
+ "freelyrss-sync-engine",
  "rusqlite",
  "serde",
  "serde_json",
@@ -852,6 +853,10 @@ dependencies = [
  "tauri-build",
  "tempfile",
 ]
+
+[[package]]
+name = "freelyrss-sync-engine"
+version = "0.1.0"
 
 [[package]]
 name = "futf"

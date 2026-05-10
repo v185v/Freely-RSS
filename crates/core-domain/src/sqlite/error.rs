@@ -31,4 +31,6 @@ pub enum StoreError {
     Sqlite(#[from] rusqlite::Error),
     #[error("invalid stored model data: {0}")]
     Model(#[from] ModelError),
+    #[error("sync classifier returned a non-event boundary for {operation}")]
+    NonEventSyncBoundary { operation: &'static str },
 }

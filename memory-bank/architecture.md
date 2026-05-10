@@ -2184,3 +2184,37 @@ Step 60 已将 `SyncEvent` 限定为用户可携带状态、订阅组织和自�
 - `Article.content_raw` and `Article.content_extracted` should be lazy encrypted blobs in future sync work. Local body cache materialization or eviction is a device-local cache fact, not a cross-device state change.
 - `Attachment.local_cache_path` remains local-only because it points at a device filesystem path. Attachment content can later be represented by encrypted blobs without syncing that path.
 - Step 61 should begin with user state, annotation, tag relationship, and subscription structure writes. It should not start by syncing SQLite files, FTS rows, rule audit internals, or Step 59 task monitor data.
+
+## 2026-05-09 ASCII Addendum XXV
+
+### Step 61 Architecture Insights
+
+- Step 61 turns the Step 60 synchronization classifier into a local persistence boundary. Classification still lives in `crates/sync-engine`, while durable event creation now happens in `crates/core-domain` beside the SQLite mutation that caused the event.
+- The key rule is atomicity: a local user-state update, annotation creation, feed move, or tag relationship insert must commit with its `SyncEvent` row, or neither side should commit. This prevents later sync batches from seeing an event that does not match local state.
+- `SyncEvent.payload` now uses the shared DTO shape of `changedFields` plus `value`, but the local Rust/SQLite boundary deliberately keeps snake_case field names because those are the schema and classifier terms. A later service/client DTO mapper can translate to camelCase if needed.
+- Moving a subscription is modeled as `feed/update` with `folder_id` in `changedFields`, not as a special UI command. This keeps subscription organization changes in the same entity-level event vocabulary as future custom-name, sort-order, and cache-policy changes.
+- Tag relationship changes are explicit attach/detach-style events. Article and feed tags should not be represented as ad hoc arrays inside unrelated article/feed payloads because relationship tables have their own identity and conflict behavior.
+- No schema migration was required. The existing `SyncEvent` table already supplies the generic local event slot, and Step 61 only adds the code path that writes rows to it.
+- Step 61 still does not implement sync batching, cursors, remote transport, encryption, lazy blob upload, or conflict resolution. Those belong to later Stage 8 steps that should consume generated `SyncEvent` rows.
+
+### Step 61 File Responsibilities
+
+- `crates/sync-engine/src/lib.rs`: owns the pure synchronization classifier. Step 61 extends it with feed update fields plus FeedTag attach/detach classification while preserving its no-SQLite, no-transport responsibility.
+- `crates/core-domain/Cargo.toml`: adds the path dependency on `freelyrss-sync-engine` so core-domain storage code can consume classifier decisions instead of duplicating sync field lists.
+- `crates/core-domain/src/sqlite/sync_event_store.rs`: owns local SQLite mutation plus event-log insertion for Step 61. It upserts `UserState`, inserts `Annotation`, moves `Feed.folder_id`, attaches article/feed tags, constructs `SyncEvent.payload`, inserts `SyncEvent`, and lists local events for verification.
+- `crates/core-domain/src/sqlite/mod.rs`: exports `LocalSyncEventStore` and `SyncEventWriteContext` as part of the SQLite storage boundary, keeping callers away from the module's private helper functions.
+- `crates/core-domain/src/sqlite/error.rs`: adds a `NonEventSyncBoundary` store error for the defensive case where a local write path accidentally asks the classifier for an operation that is not a sync event.
+- `crates/core-domain/src/model/automation.rs`: continues to own the durable local `SyncEvent` domain shape. Step 61 did not move payload interpretation or event classification into this model file.
+- `Cargo.lock`: records the root Rust workspace dependency graph after `freelyrss-core-domain` began depending on `freelyrss-sync-engine`.
+- `apps/desktop/src-tauri/Cargo.lock`: records the desktop Tauri workspace dependency graph after the core-domain dependency change reached the desktop host build.
+- `crates/feed-engine/src/parser/rss.rs`: remains the RSS parser for `channel/item`, `enclosure`, and `media:*` parsing. Step 61 only changed a guarded thumbnail branch to satisfy Rust 1.95 Clippy; no RSS behavior was intentionally changed.
+- `memory-bank/progress.md`: records the completed Step 61 milestone, verification commands, environment notes, and the Step 62 handoff.
+- `memory-bank/architecture.md`: records the Step 61 atomic local-event boundary and file-level responsibility split for future maintainers.
+
+### Step 61 Boundary Notes
+
+- `LocalSyncEventStore` is not a remote sync engine. It must not upload events, maintain remote cursors, encrypt blobs, or resolve conflicts.
+- `crates/sync-engine` remains the correct place for event vocabulary and field-boundary decisions. New local write paths should add classifier variants first, then consume those decisions in storage code.
+- `SyncEventWriteContext` supplies event id, device id, and timestamp from the caller. This keeps deterministic tests simple and leaves production id/time generation policy outside the storage helper.
+- Feed diagnostics, fetch validators, FTS projections, rule audit internals, local cache paths, and task-status observations remain outside this event store.
+- Stage 8 Step 62 should build on the generated `SyncEvent` rows by adding event batch packaging, cursor tracking, failure retry, and local replay primitives without changing the local event payload contract.

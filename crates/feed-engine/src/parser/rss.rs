@@ -86,10 +86,8 @@ fn parse_media(
         .filter(|child| child.is_element() && child.tag_name().namespace() == Some(MEDIA_NAMESPACE))
     {
         match child.tag_name().name() {
-            "thumbnail" => {
-                if thumbnail.is_none() {
-                    thumbnail = parse_url(attribute_text(child, "url", None));
-                }
+            "thumbnail" if thumbnail.is_none() => {
+                thumbnail = parse_url(attribute_text(child, "url", None));
             }
             "content" => {
                 if let Some(url) = parse_url(attribute_text(child, "url", None)) {
