@@ -4,7 +4,7 @@ use std::{
 };
 
 use chrono::{SecondsFormat, Utc};
-use freelyrss_sync_engine::{SyncCursor, SyncEventEnvelope};
+use freelyrss_sync_engine::{EncryptedSyncEventEnvelope, SYNC_ENCRYPTION_ALGORITHM, SyncCursor};
 
 use crate::{
     error::SyncServerError,
@@ -32,7 +32,7 @@ struct SyncServerStore {
     user_ids_by_email_hash: BTreeMap<String, String>,
     tokens: BTreeMap<String, String>,
     devices: BTreeMap<String, SyncDeviceRecord>,
-    events_by_user: BTreeMap<String, BTreeMap<String, SyncEventEnvelope>>,
+    events_by_user: BTreeMap<String, BTreeMap<String, EncryptedSyncEventEnvelope>>,
     blobs_by_user: BTreeMap<String, BTreeMap<String, EncryptedBlobRecord>>,
 }
 
@@ -167,7 +167,8 @@ impl SyncServerState {
                 continue;
             }
 
-            let envelope = SyncEventEnvelope::from(event);
+            ensure_event_payload_is_encrypted(&event)?;
+            let envelope = EncryptedSyncEventEnvelope::from(event);
             accepted_event_ids.push(envelope.id.clone());
             events_by_id.insert(envelope.id.clone(), envelope);
         }
@@ -313,10 +314,12 @@ impl SyncServerStore {
     }
 }
 
-fn latest_cursor<'events>(events: impl Iterator<Item = &'events SyncEventEnvelope>) -> SyncCursor {
+fn latest_cursor<'events>(
+    events: impl Iterator<Item = &'events EncryptedSyncEventEnvelope>,
+) -> SyncCursor {
     events
         .max_by_key(|event| event.key())
-        .map(SyncCursor::from_event)
+        .map(|event| SyncCursor::new(event.created_at.clone(), event.id.clone()))
         .unwrap_or_default()
 }
 
@@ -332,6 +335,35 @@ fn ensure_event_is_remote_sync_entity(event: &SyncEventDto) -> Result<(), SyncSe
         return Err(SyncServerError::BadRequest(format!(
             "remote sync API does not support change type {}",
             event.change_type
+        )));
+    }
+
+    Ok(())
+}
+
+fn ensure_event_payload_is_encrypted(event: &SyncEventDto) -> Result<(), SyncServerError> {
+    if event.encrypted_payload.algorithm != SYNC_ENCRYPTION_ALGORITHM {
+        return Err(SyncServerError::BadRequest(format!(
+            "sync event {} uses unsupported encryption algorithm {}",
+            event.id, event.encrypted_payload.algorithm
+        )));
+    }
+    if event.encrypted_payload.key_id.trim().is_empty() {
+        return Err(SyncServerError::BadRequest(format!(
+            "sync event {} must include encryptedPayload.keyId",
+            event.id
+        )));
+    }
+    if event.encrypted_payload.nonce.trim().is_empty() {
+        return Err(SyncServerError::BadRequest(format!(
+            "sync event {} must include encryptedPayload.nonce",
+            event.id
+        )));
+    }
+    if event.encrypted_payload.ciphertext.trim().is_empty() {
+        return Err(SyncServerError::BadRequest(format!(
+            "sync event {} must include encryptedPayload.ciphertext",
+            event.id
         )));
     }
 

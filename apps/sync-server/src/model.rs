@@ -1,6 +1,8 @@
-use freelyrss_sync_engine::{SyncCursor, SyncEventBatch, SyncEventEnvelope, package_event_batch};
+use freelyrss_sync_engine::{
+    EncryptedSyncEventBatch, EncryptedSyncEventEnvelope, EncryptedSyncPayload, SyncCursor,
+    package_encrypted_event_batch,
+};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 use crate::error::SyncServerError;
 
@@ -78,43 +80,74 @@ impl From<SyncCursor> for SyncCursorDto {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EncryptedSyncPayloadDto {
+    pub algorithm: String,
+    pub key_id: String,
+    pub nonce: String,
+    pub ciphertext: String,
+}
+
+impl From<EncryptedSyncPayload> for EncryptedSyncPayloadDto {
+    fn from(payload: EncryptedSyncPayload) -> Self {
+        Self {
+            algorithm: payload.algorithm,
+            key_id: payload.key_id,
+            nonce: payload.nonce,
+            ciphertext: payload.ciphertext,
+        }
+    }
+}
+
+impl From<EncryptedSyncPayloadDto> for EncryptedSyncPayload {
+    fn from(payload: EncryptedSyncPayloadDto) -> Self {
+        Self {
+            algorithm: payload.algorithm,
+            key_id: payload.key_id,
+            nonce: payload.nonce,
+            ciphertext: payload.ciphertext,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncEventDto {
     pub id: String,
     pub entity_type: String,
     pub entity_id: String,
     pub change_type: String,
-    pub payload: Value,
+    pub encrypted_payload: EncryptedSyncPayloadDto,
     pub device_id: String,
     pub created_at: String,
 }
 
-impl From<SyncEventEnvelope> for SyncEventDto {
-    fn from(event: SyncEventEnvelope) -> Self {
+impl From<EncryptedSyncEventEnvelope> for SyncEventDto {
+    fn from(event: EncryptedSyncEventEnvelope) -> Self {
         Self {
             id: event.id,
             entity_type: event.entity_type,
             entity_id: event.entity_id,
             change_type: event.change_type,
-            payload: event.payload,
+            encrypted_payload: event.encrypted_payload.into(),
             device_id: event.device_id,
             created_at: event.created_at,
         }
     }
 }
 
-impl From<SyncEventDto> for SyncEventEnvelope {
+impl From<SyncEventDto> for EncryptedSyncEventEnvelope {
     fn from(event: SyncEventDto) -> Self {
-        Self::new(
-            event.id,
-            event.entity_type,
-            event.entity_id,
-            event.change_type,
-            event.payload,
-            event.device_id,
-            event.created_at,
-        )
+        Self {
+            id: event.id,
+            entity_type: event.entity_type,
+            entity_id: event.entity_id,
+            change_type: event.change_type,
+            encrypted_payload: event.encrypted_payload.into(),
+            device_id: event.device_id,
+            created_at: event.created_at,
+        }
     }
 }
 
@@ -151,10 +184,10 @@ pub struct PullEventsResponse {
     pub has_more: bool,
 }
 
-impl TryFrom<SyncEventBatch> for PullEventsResponse {
+impl TryFrom<EncryptedSyncEventBatch> for PullEventsResponse {
     type Error = SyncServerError;
 
-    fn try_from(batch: SyncEventBatch) -> Result<Self, Self::Error> {
+    fn try_from(batch: EncryptedSyncEventBatch) -> Result<Self, Self::Error> {
         Ok(Self {
             previous_cursor: batch.previous_cursor.into(),
             next_cursor: batch.next_cursor.into(),
@@ -214,11 +247,11 @@ pub struct HealthResponse {
 }
 
 pub fn batch_response(
-    events: &[SyncEventEnvelope],
+    events: &[EncryptedSyncEventEnvelope],
     cursor: SyncCursor,
     limit: usize,
 ) -> Result<PullEventsResponse, SyncServerError> {
-    package_event_batch(events, &cursor, limit)?.try_into()
+    package_encrypted_event_batch(events, &cursor, limit)?.try_into()
 }
 
 fn default_event_limit() -> usize {

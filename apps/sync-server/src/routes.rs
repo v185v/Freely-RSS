@@ -111,6 +111,9 @@ mod tests {
         body::{Body, to_bytes},
         http::{Method, Request, StatusCode, header},
     };
+    use freelyrss_sync_engine::{
+        ClientMasterKey, EncryptionNonce, SyncEventEnvelope, encrypt_sync_event,
+    };
     use serde_json::{Value, json};
     use tower::ServiceExt;
 
@@ -173,17 +176,18 @@ mod tests {
             .expect("device id")
             .to_owned();
 
-        let event = json!({
-            "id": "event-state-1",
-            "entityType": "user-state",
-            "entityId": "article-1",
-            "changeType": "update",
-            "payload": {
+        let event = encrypted_event(EncryptedEventFixture {
+            id: "event-state-1",
+            entity_type: "user-state",
+            entity_id: "article-1",
+            change_type: "update",
+            payload: json!({
                 "changedFields": ["read_state"],
                 "value": { "read_state": "read" }
-            },
-            "deviceId": device_id,
-            "createdAt": "2026-05-10T00:00:00Z"
+            }),
+            device_id: &device_id,
+            created_at: "2026-05-10T00:00:00Z",
+            nonce_byte: 1,
         });
         let (upload_status, upload_body) = request_json(
             app.clone(),
@@ -211,6 +215,10 @@ mod tests {
         assert_eq!(pull_status, StatusCode::OK);
         assert_eq!(pull_body["events"][0]["id"], "event-state-1");
         assert_eq!(pull_body["events"][0]["entityType"], "user-state");
+        assert!(pull_body["events"][0]["encryptedPayload"]["ciphertext"].is_string());
+        let pulled_event_json = pull_body["events"][0].to_string();
+        assert!(!pulled_event_json.contains("read_state"));
+        assert!(!pulled_event_json.contains("\"read\""));
         assert_eq!(pull_body["nextCursor"]["lastEventId"], "event-state-1");
 
         let (final_pull_status, final_pull_body) = request_json(
@@ -271,18 +279,19 @@ mod tests {
             Some(&token),
             json!({
                 "deviceId": device_id,
-                "events": [{
-                    "id": "event-article-1",
-                    "entityType": "article",
-                    "entityId": "article-1",
-                    "changeType": "update",
-                    "payload": {
+                "events": [encrypted_event(EncryptedEventFixture {
+                    id: "event-article-1",
+                    entity_type: "article",
+                    entity_id: "article-1",
+                    change_type: "update",
+                    payload: json!({
                         "changedFields": ["title"],
                         "value": { "title": "Server must not mirror Article" }
-                    },
-                    "deviceId": device_id,
-                    "createdAt": "2026-05-10T00:00:00Z"
-                }]
+                    }),
+                    device_id: &device_id,
+                    created_at: "2026-05-10T00:00:00Z",
+                    nonce_byte: 2,
+                })]
             }),
         )
         .await;
@@ -294,6 +303,63 @@ mod tests {
                 .expect("error message")
                 .contains("not a sync-event entity")
         );
+    }
+
+    #[tokio::test]
+    async fn rejects_plaintext_sync_payloads_at_remote_boundary() {
+        let app = app(SyncServerState::default());
+        let (_, login_body) = request_json(
+            app.clone(),
+            Method::POST,
+            "/v1/auth/login",
+            None,
+            json!({ "primaryEmailHash": "sha256:plaintext@example.test" }),
+        )
+        .await;
+        let token = login_body["accessToken"]
+            .as_str()
+            .expect("token")
+            .to_owned();
+        let (_, device_body) = request_json(
+            app.clone(),
+            Method::POST,
+            "/v1/devices",
+            Some(&token),
+            json!({
+                "displayName": "Desktop",
+                "publicKey": "test-public-key"
+            }),
+        )
+        .await;
+        let device_id = device_body["device"]["id"]
+            .as_str()
+            .expect("device")
+            .to_owned();
+
+        let (status, _) = request_json(
+            app,
+            Method::POST,
+            "/v1/sync/events",
+            Some(&token),
+            json!({
+                "deviceId": device_id,
+                "events": [{
+                    "id": "event-plaintext",
+                    "entityType": "user-state",
+                    "entityId": "article-1",
+                    "changeType": "update",
+                    "payload": {
+                        "changedFields": ["read_state"],
+                        "value": { "read_state": "read" }
+                    },
+                    "deviceId": device_id,
+                    "createdAt": "2026-05-10T00:00:00Z"
+                }]
+            }),
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     }
 
     async fn request_json(
@@ -346,5 +412,50 @@ mod tests {
         };
 
         (status, body)
+    }
+
+    struct EncryptedEventFixture<'a> {
+        id: &'a str,
+        entity_type: &'a str,
+        entity_id: &'a str,
+        change_type: &'a str,
+        payload: Value,
+        device_id: &'a str,
+        created_at: &'a str,
+        nonce_byte: u8,
+    }
+
+    fn encrypted_event(fixture: EncryptedEventFixture<'_>) -> Value {
+        let master_key = ClientMasterKey::from_bytes([42; 32]);
+        let event = SyncEventEnvelope::new(
+            fixture.id,
+            fixture.entity_type,
+            fixture.entity_id,
+            fixture.change_type,
+            fixture.payload,
+            fixture.device_id,
+            fixture.created_at,
+        );
+        let encrypted = encrypt_sync_event(
+            &event,
+            &master_key,
+            EncryptionNonce::from_bytes([fixture.nonce_byte; 12]),
+        )
+        .expect("encrypt sync event");
+
+        json!({
+            "id": encrypted.id,
+            "entityType": encrypted.entity_type,
+            "entityId": encrypted.entity_id,
+            "changeType": encrypted.change_type,
+            "encryptedPayload": {
+                "algorithm": encrypted.encrypted_payload.algorithm,
+                "keyId": encrypted.encrypted_payload.key_id,
+                "nonce": encrypted.encrypted_payload.nonce,
+                "ciphertext": encrypted.encrypted_payload.ciphertext,
+            },
+            "deviceId": encrypted.device_id,
+            "createdAt": encrypted.created_at,
+        })
     }
 }

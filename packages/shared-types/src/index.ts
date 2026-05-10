@@ -89,6 +89,9 @@ export {
 export type {
   EncryptedBlobDto,
   EncryptedBlobKind,
+  EncryptedSyncEventDto,
+  EncryptedSyncPayloadDto,
+  MasterKeyRecoveryKitDto,
   SyncDeviceDto,
   SyncEventChangeType,
   SyncEventDto,

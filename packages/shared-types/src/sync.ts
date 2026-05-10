@@ -42,12 +42,29 @@ export interface SyncEventPayloadDto {
   value?: JsonValue
 }
 
+export interface EncryptedSyncPayloadDto {
+  algorithm: "AES-256-GCM"
+  keyId: string
+  nonce: string
+  ciphertext: string
+}
+
 export interface SyncEventDto {
   id: SyncEventId
   entityType: SyncEventEntityType
   entityId: string
   changeType: SyncEventChangeType
   payload: SyncEventPayloadDto
+  deviceId: DeviceId
+  createdAt: ISODateTimeString
+}
+
+export interface EncryptedSyncEventDto {
+  id: SyncEventId
+  entityType: SyncEventEntityType
+  entityId: string
+  changeType: SyncEventChangeType
+  encryptedPayload: EncryptedSyncPayloadDto
   deviceId: DeviceId
   createdAt: ISODateTimeString
 }
@@ -91,6 +108,15 @@ export interface UserSettingsDto {
   settings: JsonValue
   version: number
   updatedAt: ISODateTimeString
+}
+
+export interface MasterKeyRecoveryKitDto {
+  algorithm: "AES-256-GCM"
+  keyDerivation: "PBKDF2-HMAC-SHA256:210000"
+  salt: string
+  nonce: string
+  wrappedMasterKey: string
+  masterKeyId: string
 }
 
 export const SYNC_EVENT_FIELD_BOUNDARIES = {

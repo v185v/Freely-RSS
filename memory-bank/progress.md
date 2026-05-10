@@ -2,15 +2,15 @@
 
 ## 当前状态
 
-- 阶段：阶段 8 Step 64 已完成，`crates/sync-engine` 已拥有独立冲突合并层，可以在不依赖同步服务器临时内存存储的前提下处理字段级时钟、阅读进度最大值、追加式批注、显式标签集合操作和订阅排序事件。
+- 阶段：阶段 8 Step 65 已完成，`crates/sync-engine` 已拥有客户端主密钥、AES-256-GCM 事件 payload 加密、密文事件批次和主密钥恢复包；`apps/sync-server` 远程事件 API 现在只接受和返回 `encryptedPayload`，不再持久化明文 `payload`。
 - 最后更新：2026-05-10
-- 风险状态：已从“Step 63 已建立远程同步 API 骨架；下一步 Step 64 必须避免把冲突语义藏进 `apps/sync-server/src/state.rs`”推进到“Step 64 已把冲突合并语义固定在 `crates/sync-engine/src/merge.rs`；下一步 Step 65 可以开始端到端加密，但必须保持服务端只保存密文、必要索引和设备级元数据”
+- 风险状态：已从“Step 64 已把冲突合并语义固定在 `crates/sync-engine/src/merge.rs`；下一步 Step 65 可以开始端到端加密”推进到“Step 65 已把远程同步事件 payload 切换为密文包络；下一步 Step 66 可以开始桌面端同步设置界面，但不得把密钥、密文上传调度或账号配置混进 reader shell 现有运行时任务状态”
 
 ### 2026-05-10 状态快照（最新）
 
-- 当前完成：阶段 8 Step 64 已完成，`crates/sync-engine/src/merge.rs` 新增 `SyncMergeState`、`MergedEntity`、`SyncMergeOutcome` 与 `merge_event_batch`，把冲突合并与 Step 62 的确定性 replay 分离。合并层按 `SyncEventKey(created_at + event_id)` 做字段级最后写入者胜出，单独对 `UserState.reading_progress` 执行 `0..=1` 合法区间校验和最大进度保留；批注按唯一 `annotation_id` 追加保留；`FeedTag` / `ArticleTag` 通过 attach/detach 事件维护集合；`Feed.folder_id` 与 `Feed.sort_order` 继续作为订阅组织字段级事件合并。
-- 当前验证：`cargo fmt --all --check`、`cargo test -p freelyrss-sync-engine`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace`、`corepack pnpm run verify` 与 `corepack pnpm run desktop:build` 全部通过。`desktop:build` 仍出现 Vite 大 chunk 提示，但构建成功且不是本步骤引入的失败。
-- 当前下一步：进入阶段 8 Step 65“实现端到端加密”，应在客户端持有主密钥、服务端只保存密文与必要索引的约束下继续推进；不要把加密、密钥恢复、对象存储上传或远程调度塞进 Step 64 的纯合并模块，也不要让 `apps/sync-server/src/state.rs` 变成业务冲突解析器。
+- 当前完成：阶段 8 Step 65 已完成，`crates/sync-engine/src/encryption.rs` 新增客户端主密钥、AES-256-GCM 加密包络、密文事件批次和 PBKDF2-HMAC-SHA256 主密钥恢复包。`apps/sync-server` 的远程事件 DTO 和内存存储已从明文 `payload` 切换为 `encryptedPayload`，上传、拉取和测试路径均不再暴露 `read_state`、笔记正文等明文用户状态。`packages/shared-types/src/sync.ts` 同步补齐密文事件和恢复包 DTO。
+- 当前验证：`cargo test -p freelyrss-sync-engine`、`cargo test -p freelyrss-sync-server`、`corepack pnpm --filter @freelyrss/shared-types check`、`cargo fmt --all --check`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace`、`corepack pnpm run verify` 与 `corepack pnpm run desktop:build` 全部通过。`desktop:build` 仍出现既有 Vite 大 chunk 提示，但构建成功。
+- 当前下一步：进入阶段 8 Step 66“实现桌面端同步设置界面”。应只建立同步开关、账号/服务器配置、设备列表、最近同步时间和错误提示 UI，不要在 Step 66 里实现 WebDAV 适配、对象存储上传、后台调度或把客户端主密钥暴露给同步服务器。
 
 ### 2026-05-10 状态快照（历史：Step 62）
 
@@ -56,7 +56,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 8 Step 65 需要建立端到端加密边界，同时保持 Step 64 的冲突合并模块只消费事件语义，不直接持有密钥、密文对象上传逻辑或服务端持久化细节。
+- 当前无阻塞；下一步风险点是阶段 8 Step 66 需要建立桌面同步设置界面，同时保持客户端主密钥不进入同步服务器、reader shell 任务状态或普通 UI 配置快照。
 
 ## 本次执行记录
 
@@ -1631,3 +1631,40 @@
 - `crates/sync-engine/src/replay.rs` remains deterministic replay/idempotence, not a conflict resolver.
 - `apps/sync-server` remains a remote protocol skeleton. Step 65 may add ciphertext-oriented boundaries, but it should not expose readable client business tables or plaintext user state.
 - Step 65 should make the client key boundary explicit and keep the server limited to ciphertext, necessary indexes, encrypted object metadata, and device-level metadata.
+
+## 2026-05-10 ASCII Addendum XXIX
+
+### Stage 8 Step 65 Completed: end-to-end encryption boundary
+
+- Completed `implementation-plan.md` Stage 8 Step 65 by introducing a client-held encryption boundary for remote sync events.
+- Added `crates/sync-engine/src/encryption.rs` with `ClientMasterKey`, `EncryptionNonce`, `EncryptedSyncPayload`, `EncryptedSyncEventEnvelope`, `EncryptedSyncEventBatch`, `MasterKeyRecoveryKit`, `encrypt_sync_event`, `decrypt_sync_event`, `package_encrypted_event_batch`, `export_master_key_recovery_kit`, and `restore_master_key_from_recovery_kit`.
+- Event payload encryption uses AES-256-GCM. Event metadata is authenticated as AAD so ciphertext cannot be replayed under a different event id, entity id, device id, or timestamp without decryption failure.
+- Master key recovery is modeled as a client-side export/import flow: PBKDF2-HMAC-SHA256 derives a wrapping key from the recovery secret and salt, then wraps the 32-byte client master key. The server never receives the recovery secret or plaintext master key.
+- Updated `apps/sync-server` so upload and pull routes now use `encryptedPayload`; the in-memory server store holds `EncryptedSyncEventEnvelope` values and rejects plaintext sync payloads at the remote boundary.
+- Updated `packages/shared-types/src/sync.ts` and `packages/shared-types/src/index.ts` with encrypted event DTOs and recovery kit DTOs so future desktop/Web/mobile clients share the same sync API shape.
+- No database schema migration was required. Step 65 changes the remote sync API and sync-engine transport boundary, not the local SQLite `SyncEvent` table or merge/replay semantics.
+
+### Step 65 Verification
+
+- Passed `cargo test -p freelyrss-sync-engine`
+- Passed `cargo test -p freelyrss-sync-server`
+- Passed `corepack pnpm --filter @freelyrss/shared-types check`
+- Passed `cargo fmt --all --check`
+- Passed `cargo clippy --workspace --all-targets -- -D warnings`
+- Passed `cargo test --workspace`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm run desktop:build`
+
+### Environment Notes
+
+- `corepack pnpm run desktop:build` completed successfully and emitted the existing Vite chunk-size warning for the generated desktop bundle. The warning did not fail the build.
+
+### Next Step (ASCII update)
+
+- The next implementation step in `implementation-plan.md` is Stage 8 Step 66: desktop synchronization settings UI.
+- Preserve the current boundary split:
+- `crates/sync-engine/src/encryption.rs` owns client-side key material, event payload encryption/decryption, encrypted event batching, and recovery kit construction. It does not upload blobs, store keys in the OS keychain, own account settings, or write SQLite rows.
+- `crates/sync-engine/src/merge.rs` remains the conflict-merge policy layer. It consumes decrypted `SyncEventEnvelope` values and must not learn about ciphertext, recovery secrets, or server storage.
+- `apps/sync-server` remains a ciphertext protocol boundary. It may validate event metadata and encrypted payload envelope shape, but it must not decrypt payloads or expose plaintext `Article`, `Annotation`, or `UserState` resources.
+- `packages/shared-types/src/sync.ts` owns cross-platform DTO names only. It should not generate keys or implement encryption.
+- Step 66 should build the desktop configuration surface around sync enablement, account/server/device status, and user-visible sync errors without adding WebDAV transport, object-storage upload scheduling, or keychain persistence yet.

@@ -390,6 +390,8 @@ version = "0.1.0"
 name = "freelyrss-sync-engine"
 version = "0.1.0"
 dependencies = [
+ "base64",
+ "ring",
  "serde_json",
 ]
 

@@ -1,12 +1,19 @@
 //! Sync engine primitives for FreelyRSS.
 
 mod batch;
+mod encryption;
 mod error;
 mod merge;
 mod replay;
 mod retry;
 
 pub use batch::{SyncCursor, SyncEventBatch, SyncEventEnvelope, SyncEventKey, package_event_batch};
+pub use encryption::{
+    ClientMasterKey, EncryptedSyncEventBatch, EncryptedSyncEventEnvelope, EncryptedSyncPayload,
+    EncryptionNonce, MasterKeyRecoveryKit, RecoverySalt, SYNC_ENCRYPTION_ALGORITHM,
+    SYNC_RECOVERY_KDF, decrypt_sync_event, encrypt_sync_event, export_master_key_recovery_kit,
+    package_encrypted_event_batch, restore_master_key_from_recovery_kit,
+};
 pub use error::SyncEngineError;
 pub use merge::{MergedEntity, SyncMergeOutcome, SyncMergeState, merge_event_batch};
 pub use replay::{SyncReplayOutcome, SyncReplayState, replay_event_batch};

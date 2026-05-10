@@ -31,6 +31,12 @@ struct ErrorResponse {
 impl From<SyncEngineError> for SyncServerError {
     fn from(error: SyncEngineError) -> Self {
         match error {
+            SyncEngineError::DecryptionFailed { .. }
+            | SyncEngineError::EncryptionFailed { .. }
+            | SyncEngineError::InvalidCryptoKey { .. }
+            | SyncEngineError::InvalidEncryptedPayload { .. } => {
+                Self::BadRequest(error.to_string())
+            }
             SyncEngineError::InvalidBatchSize | SyncEngineError::InvalidCursor => {
                 Self::BadRequest(error.to_string())
             }

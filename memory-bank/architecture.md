@@ -2319,3 +2319,40 @@ Step 60 已将 `SyncEvent` 限定为用户可携带状态、订阅组织和自�
 - Field-level clocks use event timestamps plus event ids because device-local row numbers and array offsets are not stable across devices.
 - `reading_progress` intentionally differs from last-writer-wins fields. Progress should converge to the farthest valid read position rather than the most recently observed lower position.
 - Entity tombstones exist only in merge state for delete ordering. They are not yet a durable cross-device deletion journal.
+
+## 2026-05-10 ASCII Addendum XXIX
+
+### Step 65 Architecture Insights
+
+- Step 65 introduces encryption as a transport boundary around remote sync events, not as a replacement for local domain events. Local SQLite can still store clear `SyncEvent.payload` because the local database is the client-side authority; the remote API now only accepts ciphertext payload envelopes.
+- Client-held key material lives in `crates/sync-engine`, not in the sync server. The server can validate event metadata, device ownership, entity type, change type, and encrypted envelope shape, but it cannot decrypt `read_state`, note text, annotation anchors, or rule payload values.
+- AES-256-GCM authenticates event metadata as AAD. This means an attacker or buggy transport cannot move a ciphertext from one event/entity/device/timestamp to another without causing decryption failure on the client.
+- Recovery is modeled as a client-side export/import kit. PBKDF2-HMAC-SHA256 derives a wrapping key from a recovery secret and salt, then wraps the 32-byte master key. The recovery secret and plaintext master key do not become server fields.
+- The remote server now stores `EncryptedSyncEventEnvelope` values for events and existing `EncryptedBlobRecord` metadata for large objects. These are separate concerns: event payload ciphertext protects sync operations, while blob metadata indexes encrypted article bodies, attachments, event batches, and snapshots.
+- Step 65 does not add keychain integration, object upload scheduling, WebDAV/Nextcloud storage, server-side durable persistence, or desktop settings UI. Those remain later adapters around the cryptographic and protocol boundary.
+- No local database schema migration was required. The local `SyncEvent` table remains the source of generated event semantics; encryption is applied when preparing remote upload and reversed after remote download before replay/merge.
+
+### Step 65 File Responsibilities
+
+- `crates/sync-engine/Cargo.toml`: declares direct dependencies on `base64` and `ring` because the sync engine now owns event-payload encryption, authenticated decryption, key wrapping, and base64 transport encoding.
+- `crates/sync-engine/src/encryption.rs`: owns Step 65 cryptographic primitives and tests. It defines client master keys, nonces, recovery salts, encrypted payload/event/batch structs, AES-256-GCM event encryption/decryption, encrypted event batching, PBKDF2 recovery-kit export, and recovery-kit restoration.
+- `crates/sync-engine/src/error.rs`: extends the sync-engine error vocabulary with encryption, decryption, invalid crypto key, and invalid encrypted payload errors so callers do not fall back to stringly typed crypto failures.
+- `crates/sync-engine/src/lib.rs`: re-exports the Step 65 encryption API next to batch, replay, retry, and merge primitives so sync clients can depend on one sync-engine public surface.
+- `apps/sync-server/src/model.rs`: changes the remote event DTO from plaintext `payload` to `encryptedPayload`, adds the encrypted payload DTO, and converts between HTTP DTOs and `EncryptedSyncEventEnvelope`.
+- `apps/sync-server/src/state.rs`: changes the in-memory event store from `SyncEventEnvelope` to `EncryptedSyncEventEnvelope`, validates encrypted payload envelope fields, keeps cursor movement over encrypted event metadata, and still rejects unsupported business entity types.
+- `apps/sync-server/src/routes.rs`: updates route tests and fixtures to upload encrypted events, verify pulled server content does not include plaintext `read_state` or `read` values, and reject old plaintext payload submissions.
+- `apps/sync-server/src/error.rs`: maps new sync-engine crypto errors to bad-request API responses where callers supplied invalid ciphertext, unsupported algorithms, or mismatched key metadata.
+- `packages/shared-types/src/sync.ts`: adds `EncryptedSyncPayloadDto`, `EncryptedSyncEventDto`, and `MasterKeyRecoveryKitDto` so frontend clients share the same encrypted remote sync contract.
+- `packages/shared-types/src/index.ts`: exports the new encrypted sync DTOs and recovery kit DTO from the shared type package.
+- `Cargo.lock`: records the direct sync-engine dependency edge to `base64` and `ring` after Step 65.
+- `memory-bank/progress.md`: records the completed Step 65 milestone, verification commands, environment note, and Step 66 handoff.
+- `memory-bank/architecture.md`: records the Step 65 encryption boundary and file-level responsibility split for future maintainers.
+
+### Step 65 Boundary Notes
+
+- `EncryptedSyncEventEnvelope` is the remote transport shape. It is not accepted by replay or merge until a client with the master key decrypts it back into a `SyncEventEnvelope`.
+- The sync server must not gain a decrypt endpoint, plaintext event store, recovery-secret field, or business-table routes as part of this phase.
+- Key generation, secure random nonce generation, OS keychain storage, and account/server configuration are not implemented yet. Future client adapters must supply unique nonces and store master keys outside server-visible state.
+- `package_encrypted_event_batch` batches ciphertext using the same `created_at + event id` cursor semantics as plaintext batching, but it deliberately avoids inspecting or decrypting payload content.
+- `MasterKeyRecoveryKit` is a client-held/exported recovery artifact. Server persistence of recovery kits should be evaluated separately and, if added, must treat the kit as opaque ciphertext metadata rather than account credentials.
+- Step 66 should focus on desktop sync settings UI and status surfaces. It should not dilute the Step 65 boundary by putting key material in React state that is shared with unrelated reader-shell task monitoring.
