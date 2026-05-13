@@ -1,4 +1,4 @@
-import { type CSSProperties, type Ref, useRef } from "react"
+import { type CSSProperties, type ReactNode, type Ref, useRef } from "react"
 
 import type { FeedDto } from "@freelyrss/shared-types"
 import { Button, ListRow, ListSection, SplitPane, Surface } from "@freelyrss/ui"
@@ -67,6 +67,7 @@ type SourcePaneProps = {
     rows: SourceRow[]
     title: string
   }
+  syncSettingsSlot?: ReactNode
   subscriptionRows: SubscriptionTreeRow[]
 }
 
@@ -105,6 +106,7 @@ export function SourcePane({
   paneRef,
   quickViewSection,
   smartFolderSection,
+  syncSettingsSlot,
   subscriptionRows,
 }: SourcePaneProps) {
   const importTextareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -244,6 +246,8 @@ export function SourcePane({
             onRunCleanup={onRunCacheCleanup}
             status={cacheStatus}
           />
+
+          {syncSettingsSlot}
 
           <OpmlImportCard
             errorMessage={importErrorMessage}

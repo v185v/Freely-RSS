@@ -69,7 +69,8 @@ pub fn load_reader_queue_articles(
     app: AppHandle,
     request: LoadReaderQueueRequest,
 ) -> Result<Vec<ReaderQueueArticleDto>, String> {
-    load_reader_queue_articles_at(resolve_database_path(&app)?, request).map_err(|error| error.to_string())
+    load_reader_queue_articles_at(resolve_database_path(&app)?, request)
+        .map_err(|error| error.to_string())
 }
 
 fn load_reader_queue_articles_at(
@@ -84,7 +85,11 @@ fn load_reader_queue_articles_at(
     prepare_database_connection(&connection)?;
 
     let mut store = ArticleSearchStore::new(&mut connection);
-    let feed_ids = request.feed_ids.iter().map(String::as_str).collect::<Vec<_>>();
+    let feed_ids = request
+        .feed_ids
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>();
     let items = store.list_articles(
         Some(request.search_text.as_str()).filter(|value| !value.trim().is_empty()),
         &feed_ids,
@@ -171,14 +176,18 @@ fn resolve_database_path(app: &AppHandle) -> Result<PathBuf, String> {
         .app_local_data_dir()
         .map_err(|error| error.to_string())?;
 
-    Ok(app_local_data_dir.join("database").join("freelyrss.sqlite3"))
+    Ok(app_local_data_dir
+        .join("database")
+        .join("freelyrss.sqlite3"))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{LoadReaderQueueRequest, ReaderSortMode, ReaderStatusFilter, load_reader_queue_articles_at};
-    use freelyrss_core_domain::sqlite::{DatabaseInitializationOptions, initialize_database};
-    use rusqlite::{Connection, params};
+    use super::{
+        load_reader_queue_articles_at, LoadReaderQueueRequest, ReaderSortMode, ReaderStatusFilter,
+    };
+    use freelyrss_core_domain::sqlite::{initialize_database, DatabaseInitializationOptions};
+    use rusqlite::{params, Connection};
     use tempfile::tempdir;
 
     #[test]
@@ -193,7 +202,12 @@ mod tests {
         connection
             .execute(
                 "INSERT INTO Feed (id, title, feed_url, format) VALUES (?1, ?2, ?3, ?4)",
-                params!["feed-search", "Search Lab", "https://example.com/feed.xml", "rss"],
+                params![
+                    "feed-search",
+                    "Search Lab",
+                    "https://example.com/feed.xml",
+                    "rss"
+                ],
             )
             .expect("insert feed");
         connection

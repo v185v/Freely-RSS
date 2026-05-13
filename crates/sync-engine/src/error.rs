@@ -22,6 +22,10 @@ pub enum SyncEngineError {
         event_id: String,
         reason: &'static str,
     },
+    InvalidWebDavObject {
+        key: Option<String>,
+        reason: &'static str,
+    },
     MissingRelationField {
         event_id: String,
         field: &'static str,
@@ -66,6 +70,10 @@ impl fmt::Display for SyncEngineError {
             Self::InvalidEventPayload { event_id, reason } => {
                 write!(f, "sync event {event_id} has an invalid payload: {reason}")
             }
+            Self::InvalidWebDavObject { key, reason } => match key {
+                Some(key) => write!(f, "WebDAV sync object {key} is invalid: {reason}"),
+                None => write!(f, "WebDAV sync object is invalid: {reason}"),
+            },
             Self::MissingRelationField { event_id, field } => {
                 write!(f, "sync event {event_id} is missing relation field {field}")
             }

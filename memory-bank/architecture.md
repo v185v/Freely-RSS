@@ -2356,3 +2356,157 @@ Step 60 已将 `SyncEvent` 限定为用户可携带状态、订阅组织和自�
 - `package_encrypted_event_batch` batches ciphertext using the same `created_at + event id` cursor semantics as plaintext batching, but it deliberately avoids inspecting or decrypting payload content.
 - `MasterKeyRecoveryKit` is a client-held/exported recovery artifact. Server persistence of recovery kits should be evaluated separately and, if added, must treat the kit as opaque ciphertext metadata rather than account credentials.
 - Step 66 should focus on desktop sync settings UI and status surfaces. It should not dilute the Step 65 boundary by putting key material in React state that is shared with unrelated reader-shell task monitoring.
+
+## 2026-05-11 ASCII Addendum XXX
+
+### Step 66 Architecture Insights
+
+- Step 66 introduces desktop synchronization settings as a presentation and configuration boundary, not as sync transport. The UI collects enablement, server URL, account email, device list, last-sync time, and user-visible error state only.
+- The sync settings feature is intentionally separate from the Step 59 task monitor. Task status still observes reader operations such as refresh, cache cleanup, export, OPML, and batch operations; sync account/server configuration does not become a generic background task row.
+- The current server probe is a deterministic mock acceptance model. It proves the desktop shell can distinguish `Not configured`, `Syncing`, `Sync failed`, and `Sync successful` before real HTTP clients, durable cursors, upload queues, or WebDAV adapters exist.
+- Client key material remains outside the React settings state. Step 66 does not generate master keys, store recovery secrets, decrypt events, show ciphertext, or upload encrypted batches.
+- Device rows are status metadata for the settings surface. They are not durable server `Device` rows yet and do not replace the server-side device registration contract added in Step 63.
+- No database schema migration was required. Durable account settings, keychain references, cursor persistence, retry jobs, WebDAV object manifests, and upload/download history remain later adapter work.
+- Step 67 should add the WebDAV / Nextcloud transport as an object-storage-style adapter around the encrypted event/blob contract, not by expanding this card into a scheduler or by sharing SQLite files.
+
+### Step 66 File Responsibilities
+
+- `apps/desktop/src/features/sync-settings/sync-settings.ts`: owns the desktop-only sync settings state model, mock validation rules, status labels, device labels, disabled-state transition, syncing-state transition, and tested-state transition. It does not call HTTP, read key material, write local storage, schedule uploads, or import sync-engine crypto primitives.
+- `apps/desktop/src/features/sync-settings/components/sync-settings-card.tsx`: renders the Step 66 settings card with sync enablement, server URL, account email, status badge, last-sync summary, device list, save/test action, disable action, and visible error message. It owns only local component state for the mock UI flow and does not persist secrets or transport work.
+- `apps/desktop/src/features/reader-shell/components/source-pane.tsx`: exposes a `syncSettingsSlot` composition point and renders the sync settings card beside source/cache/OPML tools. It does not import sync validation rules or absorb account state into source selection.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`: composes `SyncSettingsCard` into the desktop shell and updates the Step 66 header copy. It keeps route-backed source/article state, reader mutations, and task status separate from synchronization settings.
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`: adds a Step 66 regression covering not-configured, syncing, failed, and successful UI states, verifies the device list appears after success, and confirms Task Status does not absorb sync configuration state.
+- `apps/desktop/src/styles.css`: owns the desktop sync settings visual treatment, including the status badge colors, settings summary grid, enablement row, device list, and action layout.
+- `memory-bank/progress.md`: records the completed Step 66 milestone, validation commands, environment note, and Step 67 handoff.
+- `memory-bank/architecture.md`: records the Step 66 desktop sync settings boundary and file-level responsibility split for future maintainers.
+
+### Step 66 Boundary Notes
+
+- The settings card is not the sync adapter. Future upload, pull, cursor, retry, and WebDAV work must live behind adapter boundaries rather than in this React component.
+- The settings card is not the keychain boundary. Future OS keychain integration should store key references outside this UI state and should never expose plaintext master keys to the sync server.
+- The success path is a mock validation path. It proves UI state transitions, not remote availability, authentication, encryption, or server persistence.
+- Sync status should remain a user-facing configuration/status surface. It should not reuse Step 59 task-status entries unless a later explicit scheduler produces transport task observations.
+- WebDAV / Nextcloud support must preserve Step 65 ciphertext semantics and must not introduce plaintext article, annotation, user-state, or SQLite-file endpoints.
+
+## 2026-05-11 ASCII Addendum XXXI
+
+### Step 67 Architecture Insights
+
+- Step 67 treats WebDAV / Nextcloud as an object-storage-style transport adapter, not as a shared filesystem for the local database. The sync unit remains encrypted event envelopes, encrypted blob metadata, cursors, and manifests.
+- The adapter lives in `crates/sync-engine` because it must reuse the established sync contract: `EncryptedSyncEventEnvelope`, `EncryptedSyncEventBatch`, `SyncCursor`, and `package_encrypted_event_batch`. It does not belong in the reader UI or desktop settings card.
+- WebDAV event objects are serialized ciphertext envelopes under stable relative object keys. Pulling from WebDAV reconstructs encrypted envelopes and then delegates ordering, cursor movement, and `has_more` behavior to the same encrypted batch function used by the official sync-server path.
+- Blob support is metadata-only at this step. `WebDavEncryptedBlobMetadata` describes encrypted object identity, kind, storage key, byte size, checksum, creation time, and optional event reference; it does not contain plaintext article bodies, attachment bytes, local cache paths, or SQLite backup files.
+- The adapter includes a `WebDavObjectStore` trait rather than a concrete HTTP client. This keeps Step 67 focused on the protocol/object layout and allows a future Nextcloud/WebDAV HTTP implementation to plug in without changing sync event semantics.
+- The in-memory WebDAV store is a deterministic test adapter. It proves idempotent PUT/list behavior and cursor-compatible pulls without introducing credentials, network retries, background scheduling, or UI state.
+- WebDAV validation rejects unsupported sync entity types and SQLite-like blob storage keys. That keeps self-hosted sync aligned with the same boundary already enforced by the official server: no `/articles`-style remote table mirror and no database-file sharing.
+- No database schema migration was added. Durable WebDAV account settings, credentials, per-adapter cursors, retry jobs, upload/download history, and keychain references remain later client-adapter work.
+
+### Step 67 File Responsibilities
+
+- `crates/sync-engine/src/webdav.rs`: owns the Step 67 WebDAV / Nextcloud object adapter boundary. It defines WebDAV namespace/path layout, object content types, sync manifest shape, object-store trait, in-memory test store, encrypted event object serialization, encrypted event pulls, encrypted blob metadata manifest writes/reads, key validation, checksum generation, and Step 67 regression tests.
+- `crates/sync-engine/src/lib.rs`: re-exports the WebDAV adapter API from the sync-engine public surface so future desktop/Web/mobile sync clients can consume it without deep-linking into module internals.
+- `crates/sync-engine/src/error.rs`: adds `InvalidWebDavObject` to the sync-engine error vocabulary so WebDAV object-key, manifest, event, and blob metadata validation failures are explicit and testable.
+- `crates/sync-engine/Cargo.toml`: adds `serde` as a direct sync-engine dependency because WebDAV manifests and object payload DTOs are serialized/deserialized at the transport boundary.
+- `apps/sync-server/src/error.rs`: maps the new sync-engine WebDAV validation error to bad-request API responses to keep the server's exhaustive error conversion valid, even though the server does not execute WebDAV transport work itself.
+- `Cargo.lock`: records the updated root workspace dependency graph after `freelyrss-sync-engine` gained a direct `serde` dependency.
+- `memory-bank/progress.md`: records the completed Step 67 milestone, verification commands, environment note, and Stage 9 Step 68 handoff.
+- `memory-bank/architecture.md`: records the Step 67 WebDAV adapter boundary and file-level responsibility split for future maintainers.
+
+### Step 67 Boundary Notes
+
+- `WebDavObjectStore` is a storage adapter contract, not a scheduler. Retry timing, background jobs, user-visible task status, and credential refresh should be added behind later client orchestration boundaries.
+- `pull_webdav_event_batch` must not decrypt events. A client with the master key must decrypt pulled `EncryptedSyncEventEnvelope` values before replay or merge.
+- WebDAV object keys are relative paths under a configured namespace. Absolute paths, parent-directory segments, and backslash paths are rejected to avoid treating WebDAV as a host filesystem.
+- The WebDAV adapter must continue to reject client business table entity types such as `article`. User-readable state is materialized after decryption/replay/merge on the client, not served as WebDAV table objects.
+- Future Nextcloud-specific HTTP behavior should implement `WebDavObjectStore` or a thin equivalent adapter while preserving the current object content types and cursor-compatible event batch semantics.
+
+## 2026-05-11 ASCII Addendum XXXII
+
+### Step 68 Architecture Insights
+
+- Step 68 establishes `crates/integration-engine` as the provider-neutral boundary for external integrations. Bridge services, later-read services, knowledge-base/export connectors, and automation endpoints now share one adapter vocabulary instead of being modeled in reader UI or sync transport code.
+- The first-class split is `IntegrationKind` plus `IntegrationCapability`. This lets UI and future orchestration code discover that an adapter can bridge a source, save an article for later, export articles, or dispatch automation events without learning provider-specific APIs.
+- `IntegrationRequest` and `IntegrationResponse` are generic boundary DTOs. They carry article snapshots, source URLs, export targets, automation event names, and string properties only; they do not expose SQLite records, sync events, encrypted WebDAV objects, or concrete service SDK types.
+- `IntegrationRegistry` is the current system wiring point. It centralizes adapter registration, manifest discovery, operation support checks, and invocation dispatch so provider details do not leak upward into shell components.
+- `NoopIntegrationAdapter` is the Step 68 empty adapter required by the implementation plan. It proves the system can wire all four integration classes without real credentials, network IO, background scheduling, or provider-specific code.
+- No database schema migration was required. External integration configuration, credential storage, webhook delivery history, retry queues, and provider-specific account tables remain later adapter/client work.
+
+### Step 68 File Responsibilities
+
+- `crates/integration-engine/src/lib.rs`: owns the crate public surface and Step 68 regression tests. It re-exports the adapter trait, error type, model DTOs, no-op adapter, and registry so callers do not deep-link into module internals.
+- `crates/integration-engine/src/adapter.rs`: owns the provider-neutral `IntegrationAdapter` trait. Adapters expose a manifest and accept `IntegrationRequest` values through one invocation method.
+- `crates/integration-engine/src/model.rs`: owns the shared integration vocabulary: `IntegrationKind`, `IntegrationCapability`, `IntegrationManifest`, request structs, response structs, article snapshots, run status, and small key/value properties.
+- `crates/integration-engine/src/error.rs`: owns explicit integration-engine failures for duplicate registration, missing adapters, invalid manifests, invalid requests, and unsupported operations.
+- `crates/integration-engine/src/registry.rs`: owns `IntegrationRegistry`, adapter registration, manifest lookup by kind, support checks, and provider-neutral invocation dispatch.
+- `crates/integration-engine/src/noop.rs`: owns `NoopIntegrationAdapter`, the deterministic empty adapter used to prove bridge, later-read, export, and automation wiring without real external services.
+- `crates/integration-engine/Cargo.toml`: remains dependency-free for this step because the adapter boundary does not yet need HTTP, async runtime, serialization, or provider SDK crates.
+- `memory-bank/progress.md`: records the completed Step 68 milestone, verification commands, and Step 69 handoff.
+- `memory-bank/architecture.md`: records the Step 68 integration adapter boundary and file-level responsibility split for future maintainers.
+
+### Step 68 Boundary Notes
+
+- `crates/integration-engine` is not a sync engine. It must not package `SyncEvent` batches, decrypt sync payloads, write WebDAV objects, or decide cross-device conflict policy.
+- `crates/integration-engine` is not the local business schema. It consumes generic article snapshots and requests; it should not require callers to hand over SQLite rows or storage-layer record structs.
+- Reader UI should discover and invoke integrations through adapter manifests and generic requests. It should not directly import provider modules such as a future Webhook, Pocket, RSSHub, Notion, or Obsidian adapter.
+- Step 69 should add outbound Webhook behavior as an automation adapter behind this boundary. HTTP client configuration, retry policy, signing, and delivery history should stay inside adapter/orchestration code rather than becoming reader-shell state.
+
+## 2026-05-12 ASCII Addendum XXXIII
+
+### Step 69 Architecture Insights
+
+- Step 69 makes Webhook a concrete automation adapter inside `crates/integration-engine`, not a reader-shell button handler or a sync transport feature. Reader UI and rule/export workflows should still invoke integrations through generic automation requests and adapter manifests.
+- Webhook delivery is intentionally outbound-only. It converts an `AutomationEventRequest` into an HTTP JSON POST; it does not create inbound Webhook endpoints, expose a REST API, mirror local business tables, or accept remote commands.
+- `AutomationEventRequest` now carries optional article snapshots as generic integration DTOs. This is the right boundary for provider metadata because it includes only article id, title, URL, summary, and tags, not SQLite records, sync event payloads, encrypted blobs, local cache paths, or rule audit internals.
+- `WebhookPayload` is a provider-facing transport DTO. It includes `eventName`, `articleIds`, `articles`, and string properties so article share, rule-hit, and export-complete events can be delivered consistently without inventing a provider-specific model in UI code.
+- Delivery failure is modeled as an integration-engine error. This keeps HTTP status and transport failures observable to future orchestration code without adding durable retry queues, background schedulers, signing, delivery history, or credential storage in this step.
+- No database schema migration was required. Webhook endpoint configuration, credentials, signing secrets, retry policy, delivery audit history, and user-facing integration settings remain later adapter/orchestration work.
+
+### Step 69 File Responsibilities
+
+- `crates/integration-engine/src/webhook.rs`: owns the Step 69 Webhook automation adapter. It defines `WebhookEndpoint`, `WebhookAutomationAdapter`, `WebhookPayload`, endpoint URL/header validation, HTTP JSON POST delivery, non-2xx failure handling, and local HTTP receiver regression tests proving article metadata reaches an external endpoint.
+- `crates/integration-engine/src/model.rs`: extends the provider-neutral automation request so automation events can include `ArticleIntegrationSnapshot` values. It also derives serialization for article snapshots and integration properties because Webhook payload construction needs those generic DTOs at the transport boundary.
+- `crates/integration-engine/src/error.rs`: adds `WebhookDeliveryFailed` so HTTP client construction, transport failures, serialization failures, and rejected endpoint statuses are explicit integration errors instead of string-only side channels.
+- `crates/integration-engine/src/lib.rs`: re-exports the Webhook adapter, endpoint, payload, and adapter id from the crate public surface so future desktop/Web/mobile callers can register the adapter without deep-linking into module internals.
+- `crates/integration-engine/Cargo.toml`: adds direct dependencies on `reqwest`, `serde`, and `serde_json` because Step 69 is the first real integration transport and needs HTTP delivery plus JSON serialization.
+- `Cargo.lock`: records the updated dependency graph after `freelyrss-integration-engine` gained direct HTTP and JSON serialization dependencies.
+- `memory-bank/progress.md`: records the completed Step 69 milestone, verification commands, environment note, and Step 70 handoff.
+- `memory-bank/architecture.md`: records the Step 69 Webhook adapter boundary and file-level responsibility split for future maintainers.
+
+### Step 69 Boundary Notes
+
+- The Webhook adapter must not become a provider registry. Multiple concrete providers should still be registered through `IntegrationRegistry` as adapters or adapter instances with manifests.
+- The Webhook adapter must not own durable scheduling. Retries, backoff, delivery history, and user-visible task status should be added behind later orchestration boundaries.
+- The Webhook adapter must not expose inbound HTTP routes. Step 70 is a separate local desktop REST API step and should remain localhost-only with explicit permissioning.
+- The Webhook adapter must not consume sync events or encrypted WebDAV objects directly. Automation callers should prepare provider-neutral requests from already-authorized reader, rule, or export workflows.
+- Future signing or secret headers should be treated as credential/configuration work and should avoid leaking secrets into generic article snapshots or provider-visible properties.
+
+## 2026-05-13 ASCII Addendum XXXIV
+
+### Step 70 Architecture Insights
+
+- Step 70 adds a local desktop REST API as a Tauri host capability, not as a remote service. It binds only to `127.0.0.1`, uses an ephemeral per-process bearer token, and exposes the connection details only through the running desktop shell.
+- The API is intentionally read-mostly. Current routes provide health, feed summaries, article lists, article detail, search results, and export entry-point discovery. Mutation methods are rejected until a desktop user-confirmation flow exists.
+- The local REST API reads the same SQLite-backed reader model used by the desktop shell, but it does not expose raw tables. Responses are DTOs that omit local cache paths, sync events, encrypted blobs, WebDAV object keys, and provider-specific integration payloads.
+- `GET /exports` is a capability-discovery surface, not an exporter. It returns confirmation route hints for Markdown, HTML, and PDF export flows without writing files from the HTTP request.
+- The boundary is separate from `apps/sync-server`. The sync server remains a remote ciphertext sync protocol and must not become a plaintext reader API or reuse desktop-local bearer tokens.
+- The boundary is also separate from `crates/integration-engine`. Webhook delivery and future knowledge-base connectors stay behind integration/export adapters; local REST routes should not import provider SDKs or Webhook endpoint logic.
+- No database schema migration was required. Durable local API settings, user-managed token rotation, permission grants, mutation confirmation, audit logs, and stable port preferences remain later desktop host work.
+
+### Step 70 File Responsibilities
+
+- `apps/desktop/src-tauri/src/local_api.rs`: owns the Step 70 local desktop REST API server. It defines startup config, loopback bind validation, ephemeral bearer-token generation, Tauri status DTOs, a small local HTTP request/response layer, read-only route handling, SQLite read DTO mapping, export entry-point discovery, shutdown handling, and regression tests for loopback access, authorization, read-only mutation blocking, article/search/detail responses, and export descriptors.
+- `apps/desktop/src-tauri/src/lib.rs`: wires local storage initialization and local API startup into the Tauri builder setup, then exposes `get_local_api_status` alongside the existing reader queue command. It does not define REST route behavior or SQLite DTO mapping.
+- `apps/desktop/src-tauri/src/storage.rs`: exposes `DesktopDatabasePaths::from_app_local_data_dir` and `DesktopStoragePaths::from_app_local_data_dir` so the local API can reuse the same managed database and export directory layout as the desktop shell.
+- `apps/desktop/src-tauri/src/reader_queue.rs`: received rustfmt-only formatting changes while validating the desktop Tauri crate. Its responsibility remains the existing Tauri command for loading reader queue articles; it is not the REST API router.
+- `apps/desktop/src-tauri/Cargo.toml`: adds direct `getrandom` and `serde_json` dependencies for the desktop host because Step 70 generates bearer tokens and serializes local REST JSON responses.
+- `apps/desktop/src-tauri/Cargo.lock`: records the desktop Tauri host dependency graph after adding the local API dependencies.
+- `memory-bank/progress.md`: records the completed Step 70 milestone, verification commands, environment note, and Step 71 handoff.
+- `memory-bank/architecture.md`: records the Step 70 local REST API boundary and file-level responsibility split for future maintainers.
+
+### Step 70 Boundary Notes
+
+- The local API must stay loopback-only. Binding to `0.0.0.0`, LAN addresses, or a public interface is outside the Step 70 security model.
+- The bearer token is process-local bootstrap authorization, not an account credential. It should not be reused for remote sync, Webhook signing, provider credentials, or persistent user identity.
+- Article detail routes may expose reader-facing article content and metadata, but they must not expose local cache filesystem paths, raw SQLite rows, sync event payloads, encryption key material, or WebDAV object internals.
+- Future write routes must require an explicit desktop confirmation/permission flow before changing read state, starred state, tags, annotations, or export outputs.
+- Step 71 should build knowledge-base export connectors through export/integration boundaries and can use local API discovery only as a read-only integration point, not as an unrestricted filesystem-writing API.

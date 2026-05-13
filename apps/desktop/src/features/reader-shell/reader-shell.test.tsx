@@ -1334,6 +1334,60 @@ describe("reader shell navigation", () => {
     })
   })
 
+  test("surfaces desktop sync settings without mixing them into reader task status", async () => {
+    window.scrollTo = () => {}
+    const user = userEvent.setup()
+
+    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+
+    const sourcePane = await screen.findByRole("region", { name: "Sources" })
+    const taskPanel = screen.getByRole("region", { name: "Task status" })
+    const syncSection = within(sourcePane)
+      .getByRole("heading", {
+        name: "Sync settings",
+      })
+      .closest("section")
+
+    expect(syncSection).not.toBeNull()
+    expect(taskPanel.textContent).not.toContain("Sync settings")
+
+    const syncScope = within(syncSection as HTMLElement)
+
+    expect(syncScope.getAllByText("Not configured").length).toBeGreaterThan(0)
+    expect(syncScope.getAllByText("Never synced").length).toBeGreaterThan(0)
+
+    await user.click(syncScope.getByLabelText("Enable desktop synchronization"))
+    await user.type(syncScope.getByLabelText("Sync server URL"), "https://invalid.example")
+    await user.type(syncScope.getByLabelText("Sync account email"), "reader@example.com")
+    await user.click(syncScope.getByRole("button", { name: "Save and test sync" }))
+
+    await waitFor(() => {
+      expect(syncScope.getAllByText("Syncing").length).toBeGreaterThan(0)
+    })
+
+    await waitFor(() => {
+      expect(syncScope.getAllByText("Sync failed").length).toBeGreaterThan(0)
+      expect(syncScope.getByRole("alert").textContent ?? "").toContain(
+        "only accepts https://sync.freelyrss.dev",
+      )
+    })
+
+    await user.clear(syncScope.getByLabelText("Sync server URL"))
+    await user.type(syncScope.getByLabelText("Sync server URL"), "https://sync.freelyrss.dev")
+    await user.click(syncScope.getByRole("button", { name: "Save and test sync" }))
+
+    await waitFor(() => {
+      expect(syncScope.getAllByText("Syncing").length).toBeGreaterThan(0)
+    })
+
+    await waitFor(() => {
+      expect(syncScope.getAllByText("Sync successful").length).toBeGreaterThan(0)
+      expect(syncScope.queryByRole("alert")).toBeNull()
+      expect(syncScope.getByText("Mobile reader prototype")).toBeTruthy()
+      expect(syncScope.queryByText("Never synced")).toBeNull()
+    })
+  })
+
   test("surfaces task status completion, failure details, recovery, and retry entry", async () => {
     window.scrollTo = () => {}
     const user = userEvent.setup()

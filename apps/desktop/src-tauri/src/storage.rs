@@ -26,7 +26,7 @@ pub struct DesktopDatabasePaths {
 }
 
 impl DesktopDatabasePaths {
-    fn from_app_local_data_dir(app_local_data_dir: PathBuf) -> Self {
+    pub fn from_app_local_data_dir(app_local_data_dir: PathBuf) -> Self {
         let root_dir = app_local_data_dir.join(DATABASE_DIRECTORY_NAME);
         let database_path = root_dir.join(DATABASE_FILE_NAME);
         let backup_dir = root_dir.join(DATABASE_BACKUP_DIRECTORY_NAME);
@@ -51,7 +51,7 @@ pub struct DesktopStoragePaths {
 }
 
 impl DesktopStoragePaths {
-    fn from_app_local_data_dir(app_local_data_dir: PathBuf) -> Self {
+    pub fn from_app_local_data_dir(app_local_data_dir: PathBuf) -> Self {
         let database = DesktopDatabasePaths::from_app_local_data_dir(app_local_data_dir.clone());
         let cache_root_dir = app_local_data_dir.join(CACHE_DIRECTORY_NAME);
         let content_cache_dir = cache_root_dir.join(CONTENT_CACHE_DIRECTORY_NAME);

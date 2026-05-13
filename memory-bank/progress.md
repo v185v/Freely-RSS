@@ -2,11 +2,29 @@
 
 ## 当前状态
 
-- 阶段：阶段 8 Step 65 已完成，`crates/sync-engine` 已拥有客户端主密钥、AES-256-GCM 事件 payload 加密、密文事件批次和主密钥恢复包；`apps/sync-server` 远程事件 API 现在只接受和返回 `encryptedPayload`，不再持久化明文 `payload`。
-- 最后更新：2026-05-10
-- 风险状态：已从“Step 64 已把冲突合并语义固定在 `crates/sync-engine/src/merge.rs`；下一步 Step 65 可以开始端到端加密”推进到“Step 65 已把远程同步事件 payload 切换为密文包络；下一步 Step 66 可以开始桌面端同步设置界面，但不得把密钥、密文上传调度或账号配置混进 reader shell 现有运行时任务状态”
+- 阶段：阶段 9 Step 69 已完成，`crates/integration-engine` 现已拥有 Webhook 出站自动化适配器；Webhook 通过 `IntegrationKind::Automation` / `DispatchAutomationEvent` 接入，可发送包含文章元数据的 JSON POST，并继续不触碰 reader UI、sync-engine、WebDAV 对象存储或本地数据库 schema。
+- 最后更新：2026-05-12
+- 风险状态：已从“Step 68 已建立集成适配器合同；下一步 Step 69 可以实现 Webhook 出站能力，但必须通过 integration-engine 的自动化适配器入口接入，不要让 reader UI 直接认识 Webhook 服务商或 HTTP 细节”推进到“Step 69 已建立 Webhook 出站适配器；下一步 Step 70 可以实现本地桌面 REST API，但必须限定在桌面本机边界，不得把远程同步 API、Webhook provider 逻辑或客户端业务主表暴露成无保护的网络服务”
 
-### 2026-05-10 状态快照（最新）
+### 2026-05-12 状态快照（最新）
+
+- 当前完成：阶段 9 Step 69 已完成，`crates/integration-engine` 新增 `WebhookAutomationAdapter`、`WebhookEndpoint` 和 `WebhookPayload`，把文章分享、规则命中或导出完成一类自动化事件映射为 Webhook JSON POST。自动化请求现在可以携带文章快照，使测试端能收到文章 id、标题、URL、摘要、标签和触发属性等元数据。
+- 当前验证：`cargo test -p freelyrss-integration-engine webhook`、`cargo test -p freelyrss-integration-engine`、`cargo fmt --all --check`、`cargo clippy -p freelyrss-integration-engine --all-targets -- -D warnings`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace`、`corepack pnpm run desktop:build` 与 `corepack pnpm run verify` 全部通过。`desktop:build` 仍出现既有 Vite 大 chunk 提示，但构建成功。
+- 当前下一步：进入阶段 9 Step 70“实现基础 REST API”。应把它作为本地桌面 API 处理，优先监听 `127.0.0.1`，保持只读为主和显式授权边界；不要复用远程同步 API，不要让 Webhook 适配器或第三方 provider 逻辑进入 reader UI，也不要开放未保护的业务表镜像。
+
+### 2026-05-11 状态快照（历史：Step 68）
+
+- 当前完成：阶段 9 Step 68 已完成，`crates/integration-engine` 从占位 crate 推进为可测试的集成边界，新增 `IntegrationAdapter` trait、`IntegrationManifest`、四类 `IntegrationKind` / `IntegrationCapability`、统一请求/响应模型、`IntegrationRegistry` 和 `NoopIntegrationAdapter`。四类能力分别覆盖桥接源转换、稍后读保存、文章导出和自动化事件分发。
+- 当前验证：`cargo test -p freelyrss-integration-engine`、`cargo fmt --all --check`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace`、`corepack pnpm run desktop:build` 与 `corepack pnpm run verify` 全部通过。`desktop:build` 仍出现既有 Vite 大 chunk 提示，但构建成功。
+- 当前下一步：进入阶段 9 Step 69“实现 Webhook 出站能力”。应把 Webhook 作为 `IntegrationKind::Automation` / `DispatchAutomationEvent` 的具体适配器接入，不要让桌面 reader UI、同步服务器、WebDAV 对象存储或本地 schema 直接承载 Webhook provider 逻辑。
+
+### 2026-05-11 状态快照（历史：Step 67）
+
+- 当前完成：阶段 8 Step 67 已完成，`crates/sync-engine/src/webdav.rs` 新增 WebDAV 对象命名空间、对象存储 trait、内存测试存储、同步 manifest、密文事件对象写入/拉取和密文 blob 元数据清单写入/读取。WebDAV 拉取会复用 `package_encrypted_event_batch` 的游标语义，并有回归证明同一批密文事件经官方批次路径和 WebDAV 路径解密重放后收敛到同一业务状态。
+- 当前验证：`cargo test -p freelyrss-sync-engine webdav`、`cargo test -p freelyrss-sync-engine`、`cargo fmt --all --check`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace`、`corepack pnpm run desktop:build` 与 `corepack pnpm run verify` 全部通过。`desktop:build` 仍出现既有 Vite 大 chunk 提示，但构建成功。
+- 当前下一步：进入阶段 9 Step 68“建立集成适配器边界”。应在 `crates/integration-engine` 中定义第三方桥接、稍后读、导出连接器和自动化入口的统一接口，不要把外部服务商逻辑塞进 reader UI、sync-engine、WebDAV 适配层或本地业务 schema。
+
+### 2026-05-10 状态快照（历史：Step 65）
 
 - 当前完成：阶段 8 Step 65 已完成，`crates/sync-engine/src/encryption.rs` 新增客户端主密钥、AES-256-GCM 加密包络、密文事件批次和 PBKDF2-HMAC-SHA256 主密钥恢复包。`apps/sync-server` 的远程事件 DTO 和内存存储已从明文 `payload` 切换为 `encryptedPayload`，上传、拉取和测试路径均不再暴露 `read_state`、笔记正文等明文用户状态。`packages/shared-types/src/sync.ts` 同步补齐密文事件和恢复包 DTO。
 - 当前验证：`cargo test -p freelyrss-sync-engine`、`cargo test -p freelyrss-sync-server`、`corepack pnpm --filter @freelyrss/shared-types check`、`cargo fmt --all --check`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace`、`corepack pnpm run verify` 与 `corepack pnpm run desktop:build` 全部通过。`desktop:build` 仍出现既有 Vite 大 chunk 提示，但构建成功。
@@ -56,7 +74,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 8 Step 66 需要建立桌面同步设置界面，同时保持客户端主密钥不进入同步服务器、reader shell 任务状态或普通 UI 配置快照。
+- 当前无阻塞；下一步风险点是阶段 9 Step 70 需要实现基础 REST API，同时保持该 API 为本地桌面边界，不反向污染远程同步服务、Webhook 自动化适配器、WebDAV 对象存储或本地业务 schema。
 
 ## 本次执行记录
 
@@ -1668,3 +1686,179 @@
 - `apps/sync-server` remains a ciphertext protocol boundary. It may validate event metadata and encrypted payload envelope shape, but it must not decrypt payloads or expose plaintext `Article`, `Annotation`, or `UserState` resources.
 - `packages/shared-types/src/sync.ts` owns cross-platform DTO names only. It should not generate keys or implement encryption.
 - Step 66 should build the desktop configuration surface around sync enablement, account/server/device status, and user-visible sync errors without adding WebDAV transport, object-storage upload scheduling, or keychain persistence yet.
+
+## 2026-05-11 ASCII Addendum XXX
+
+### Stage 8 Step 66 Completed: desktop synchronization settings UI
+
+- Completed `implementation-plan.md` Stage 8 Step 66 by adding a dedicated desktop synchronization settings surface to the left pane of the reader shell.
+- Added a separate `apps/desktop/src/features/sync-settings` feature slice for the Step 66 UI state and validation rules. The sync settings code models enablement, server URL, account email, device list, last-sync time, and user-visible status only.
+- Implemented explicit UI states for `Not configured`, `Syncing`, `Sync failed`, and `Sync successful`. The current mock validation accepts `https://sync.freelyrss.dev` and local `http://localhost` / `http://127.0.0.1` endpoints, and it rejects unsupported remote URLs with a visible recovery message.
+- Kept the sync settings surface separate from the Step 59 reader task monitor. The new test confirms the Task Status panel does not absorb sync account/configuration state.
+- Kept client key material out of React state. Step 66 does not generate, display, persist, upload, or recover master keys; it only names the boundary where future keychain and transport adapters can connect.
+- No database schema migration was required. The implementation is a desktop UI/status step and does not add durable account tables, cursor persistence, upload queues, WebDAV storage, or object-store scheduling.
+
+### Step 66 Verification
+
+- Passed `corepack pnpm --filter @freelyrss/desktop test -- --run reader-shell.test.tsx`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run verify`
+
+### Environment Notes
+
+- `corepack pnpm run desktop:build` completed successfully and emitted the existing Vite chunk-size warning for the generated desktop bundle. The warning did not fail the build.
+
+### Next Step (ASCII update)
+
+- The next implementation step in `implementation-plan.md` is Stage 8 Step 67: WebDAV / Nextcloud adapter layer.
+- Preserve the current boundary split:
+- `apps/desktop/src/features/sync-settings` owns only desktop configuration and status presentation. It should not become a scheduler, keychain adapter, upload worker, or WebDAV client.
+- `crates/sync-engine/src/encryption.rs` remains the client-side cryptographic boundary for event payload encryption, decryption, encrypted batching, and recovery-kit construction.
+- `apps/sync-server` remains the official ciphertext protocol boundary and should not gain plaintext reader endpoints as part of WebDAV work.
+- Step 67 should add an object-storage-style self-hosted transport adapter around encrypted event batches and encrypted blob metadata while keeping the same sync event protocol.
+
+## 2026-05-11 ASCII Addendum XXXI
+
+### Stage 8 Step 67 Completed: WebDAV / Nextcloud adapter layer
+
+- Completed `implementation-plan.md` Stage 8 Step 67 by adding a WebDAV / Nextcloud self-hosted transport boundary in `crates/sync-engine`.
+- Added `crates/sync-engine/src/webdav.rs` with `WebDavSyncNamespace`, `WebDavSyncManifest`, `WebDavObject`, `WebDavObjectStore`, `InMemoryWebDavObjectStore`, `WebDavEncryptedBlobMetadata`, `put_webdav_manifest`, `put_webdav_event_objects`, `pull_webdav_event_batch`, `put_webdav_blob_manifests`, and `list_webdav_blob_manifests`.
+- The adapter writes encrypted event envelopes as JSON objects under stable relative WebDAV keys and pulls them back through `package_encrypted_event_batch`, so official server pulls and WebDAV pulls share the same cursor semantics.
+- Added encrypted blob manifest support for metadata only: blob id, user id, kind, storage key, byte size, checksum, creation time, and optional referenced event id. The adapter does not upload plaintext article bodies, attachment bytes, local cache paths, or SQLite database files.
+- Added WebDAV boundary regressions proving that a WebDAV event batch matches the official encrypted batch path and converges to the same replay state after client-side decryption, that blob manifests preserve encrypted-object metadata only, and that business table events or SQLite-like blob paths are rejected.
+- Extended `SyncEngineError` with `InvalidWebDavObject` and mapped that error to sync-server bad requests so workspace Clippy remains exhaustive when all sync-engine errors are considered.
+- Added `serde` as a direct `freelyrss-sync-engine` dependency for WebDAV object manifest serialization. `Cargo.lock` now records that direct dependency edge.
+- No database schema migration was required. Step 67 is a transport adapter boundary and does not add durable account settings, cursor tables, upload queues, WebDAV credentials, or keychain persistence.
+
+### Step 67 Verification
+
+- Passed `cargo test -p freelyrss-sync-engine webdav`
+- Passed `cargo test -p freelyrss-sync-engine`
+- Passed `cargo fmt --all --check`
+- Passed `cargo clippy --workspace --all-targets -- -D warnings`
+- Passed `cargo test --workspace`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run verify`
+
+### Environment Notes
+
+- `corepack pnpm run desktop:build` completed successfully and emitted the existing Vite chunk-size warning for the generated desktop bundle. The warning did not fail the build.
+
+### Next Step (ASCII update)
+
+- The next implementation step in `implementation-plan.md` is Stage 9 Step 68: integration adapter boundary.
+- Preserve the current boundary split:
+- `crates/sync-engine/src/webdav.rs` owns object-storage-style self-hosted sync transport mapping only. It should not become an HTTP client scheduler, credential store, keychain adapter, third-party bridge registry, or local SQLite backup system.
+- `crates/sync-engine/src/encryption.rs` remains the client-side cryptographic boundary. WebDAV stores ciphertext envelopes and metadata; it must not decrypt payloads or hold master keys.
+- `apps/sync-server` remains the official ciphertext sync protocol boundary. WebDAV support does not require adding plaintext reader endpoints or server-side conflict resolution.
+- Step 68 should define third-party integration contracts in `crates/integration-engine`, keeping provider-specific bridge, webhook, later-read, and knowledge-base export logic out of reader UI, core-domain schema, and sync transport modules.
+
+## 2026-05-11 ASCII Addendum XXXII
+
+### Stage 9 Step 68 Completed: integration adapter boundary
+
+- Completed `implementation-plan.md` Stage 9 Step 68 by turning `crates/integration-engine` from a placeholder into a tested Rust adapter boundary for external integrations.
+- Added a shared `IntegrationAdapter` trait with a manifest and generic `invoke` entry point. The trait is intentionally provider-neutral so the core reader shell can call an adapter without importing RSSHub, Pocket, Notion, Webhook, or other concrete service concepts.
+- Added `IntegrationManifest`, `IntegrationKind`, `IntegrationCapability`, request DTOs, response DTOs, and article snapshot DTOs for the four Step 68 integration classes: bridge source conversion, later-read saving, export connectors, and automation event dispatch.
+- Added `IntegrationRegistry` so clients can register adapters, list manifests by integration kind, and invoke adapters through a single dispatch path. The registry rejects duplicate adapters, missing adapters, and unsupported operations before provider-specific details leak upward.
+- Added `NoopIntegrationAdapter` as the empty implementation adapter required by Step 68. It supports all four integration kinds by default and is useful for shell wiring, tests, and future UI discovery flows without making real network calls.
+- Kept the step out of `reader-shell`, `sync-engine`, `sync-server`, WebDAV transport, and SQLite schema. No database migration was required.
+
+### Step 68 Verification
+
+- Passed `cargo test -p freelyrss-integration-engine`
+- Passed `cargo fmt --all --check`
+- Passed `cargo clippy --workspace --all-targets -- -D warnings`
+- Passed `cargo test --workspace`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run verify`
+
+### Environment Notes
+
+- `corepack pnpm run desktop:build` completed successfully and emitted the existing Vite chunk-size warning for the generated desktop bundle. The warning did not fail the build.
+
+### Next Step (ASCII update)
+
+- The next implementation step in `implementation-plan.md` is Stage 9 Step 69: outbound Webhook capability.
+- Preserve the current boundary split:
+- `crates/integration-engine/src/adapter.rs` owns the provider-neutral adapter trait and should remain free of concrete HTTP provider logic.
+- `crates/integration-engine/src/model.rs` owns generic Step 68 request/response contracts. Webhook should enter through automation request/response shapes or an adapter-specific implementation behind that boundary.
+- `crates/integration-engine/src/registry.rs` owns registration and dispatch. Reader UI should discover/invoke integrations through manifests and requests, not direct provider modules.
+- `crates/integration-engine/src/noop.rs` remains a deterministic empty adapter for tests and shell wiring. It should not become a real provider client.
+- Step 69 should implement Webhook as an automation adapter behind integration-engine boundaries, not as reader UI HTTP code, sync-engine code, WebDAV object logic, or a local business table.
+
+## 2026-05-12 ASCII Addendum XXXIII
+
+### Stage 9 Step 69 Completed: outbound Webhook capability
+
+- Completed `implementation-plan.md` Stage 9 Step 69 by adding a concrete Webhook automation adapter behind the existing `crates/integration-engine` boundary.
+- Added `WebhookAutomationAdapter`, `WebhookEndpoint`, `WebhookPayload`, and `WEBHOOK_AUTOMATION_ADAPTER_ID`.
+- Extended `AutomationEventRequest` so automation events can carry `ArticleIntegrationSnapshot` values in addition to article ids and string properties. This lets article share, rule-hit, and export-complete flows send article metadata without exposing SQLite records to providers.
+- The Webhook adapter sends an HTTP JSON POST with `eventName`, `articleIds`, `articles`, and `properties`, plus an `X-FreelyRSS-Webhook-Event` header for provider-side routing.
+- Added local endpoint regression coverage proving a test Webhook receiver gets article id, title, URL, tags, and trigger metadata, and a failure regression proving non-2xx endpoint status is surfaced as a `WebhookDeliveryFailed` integration error.
+- Kept Step 69 out of `reader-shell`, `sync-engine`, `sync-server`, WebDAV transport, and local SQLite schema. No database migration was required.
+
+### Step 69 Verification
+
+- Passed `cargo test -p freelyrss-integration-engine webhook`
+- Passed `cargo test -p freelyrss-integration-engine`
+- Passed `cargo fmt --all --check`
+- Passed `cargo clippy -p freelyrss-integration-engine --all-targets -- -D warnings`
+- Passed `cargo clippy --workspace --all-targets -- -D warnings`
+- Passed `cargo test --workspace`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run verify`
+
+### Environment Notes
+
+- `corepack pnpm run desktop:build` completed successfully and emitted the existing Vite chunk-size warning for the generated desktop bundle. The warning did not fail the build.
+
+### Next Step (ASCII update)
+
+- The next implementation step in `implementation-plan.md` is Stage 9 Step 70: basic REST API.
+- Preserve the current boundary split:
+- `crates/integration-engine/src/webhook.rs` owns outbound Webhook delivery only. It should not become reader UI code, a durable retry scheduler, a delivery-history database, a provider registry, or a local REST API server.
+- `crates/integration-engine/src/model.rs` now allows automation events to carry article snapshots for outbound integrations. It should still avoid storage-layer records, sync events, and provider SDK types.
+- `crates/integration-engine/src/registry.rs` remains the dispatch point for integrations. Step 70 should not bypass it for Webhook provider logic.
+- Step 70 should implement the local desktop REST API with a localhost-only, permissioned boundary and should not reuse the remote sync-server API or expose raw local business tables as an unauthenticated network mirror.
+
+## 2026-05-13 ASCII Addendum XXXIV
+
+### Stage 9 Step 70 Completed: basic local REST API
+
+- Completed `implementation-plan.md` Stage 9 Step 70 by adding a desktop-hosted local REST API in `apps/desktop/src-tauri`.
+- Added `apps/desktop/src-tauri/src/local_api.rs` with a loopback-only listener bound to `127.0.0.1:0`, a generated per-process bearer token, local HTTP parsing, JSON responses, and regression tests.
+- Exposed the local API status through the Tauri command `get_local_api_status`, returning the base URL, bearer token, and read-only flag to the desktop shell process.
+- Implemented read-only `GET /health`, `GET /feeds`, `GET /articles`, `GET /articles/{id}`, `GET /search`, and `GET /exports` routes. Article detail responses materialize approved reader data, tags, annotations, and attachment metadata while excluding local cache paths.
+- Mutation-style methods currently return `403 mutationRequiresUserConfirmation`, preserving the Step 70 requirement that marking read/starred or other writes must be gated behind an explicit desktop confirmation flow.
+- The API rejects missing/invalid bearer tokens with `401`, refuses non-loopback bind addresses before startup, and checks loopback peers at request time.
+- Export routes are entry-point descriptors only. They advertise Markdown, HTML, and PDF export confirmation paths without writing files from the API request.
+- Kept Step 70 out of `apps/sync-server`, `crates/integration-engine`, Webhook delivery, WebDAV sync transport, and local SQLite schema migrations. No database schema migration was required.
+- Added `getrandom` and `serde_json` as direct `freelyrss-desktop` Tauri host dependencies for token generation and JSON response serialization.
+
+### Step 70 Verification
+
+- Passed `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml local_api`
+- Passed `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml`
+- Passed `cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --check`
+- Passed `cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings`
+- Passed `corepack pnpm run desktop:build`
+- Passed `cargo fmt --all --check`
+- Passed `cargo clippy --workspace --all-targets -- -D warnings`
+- Passed `cargo test --workspace`
+- Passed `corepack pnpm run verify`
+
+### Environment Notes
+
+- The first `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml local_api` run compiled the desktop Tauri dependency graph and took about 13 minutes in this environment; subsequent desktop Tauri tests and Clippy completed quickly.
+- `corepack pnpm run desktop:build` completed successfully and emitted the existing Vite chunk-size warning for the generated desktop bundle. The warning did not fail the build.
+- During verification, stale Cargo processes from earlier timed-out desktop Tauri compile attempts were stopped before rerunning tests to avoid build-lock interference.
+
+### Next Step (ASCII update)
+
+- The next implementation step in `implementation-plan.md` is Stage 9 Step 71: knowledge-base export connectors.
+- Preserve the current boundary split:
+- `apps/desktop/src-tauri/src/local_api.rs` owns only the local desktop REST API boundary. It should not become the remote sync API, a Webhook provider, a durable scheduler, a credential store, or an unauthenticated network mirror of SQLite tables.
+- `GET /exports` is a read-only discovery surface. Step 71 should implement knowledge-base export connectors behind integration/export boundaries and existing export formatter paths, not by letting REST requests write arbitrary files without desktop confirmation.
+- `apps/sync-server` remains the ciphertext sync protocol boundary and should not absorb desktop-local REST routes.
+- `crates/integration-engine` remains the provider-neutral integration boundary. Knowledge-base connectors should enter through export connector contracts rather than direct reader UI provider code.

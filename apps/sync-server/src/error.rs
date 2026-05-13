@@ -41,6 +41,7 @@ impl From<SyncEngineError> for SyncServerError {
                 Self::BadRequest(error.to_string())
             }
             SyncEngineError::InvalidEventPayload { .. }
+            | SyncEngineError::InvalidWebDavObject { .. }
             | SyncEngineError::MissingRelationField { .. }
             | SyncEngineError::UnsupportedEvent { .. } => Self::BadRequest(error.to_string()),
         }

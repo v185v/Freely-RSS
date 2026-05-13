@@ -11,6 +11,7 @@ import { Button, SplitLayout, Surface } from "@freelyrss/ui"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate, useSearch } from "@tanstack/react-router"
 
+import { SyncSettingsCard } from "../sync-settings/components/sync-settings-card"
 import {
   READER_LANDMARK_IDS,
   READER_SHORTCUTS,
@@ -517,8 +518,8 @@ export function ReaderShellRoute() {
     return (
       <main className="desktop-shell">
         <div className="desktop-loading">
-          <p className="desktop-shell__eyebrow">Stage 7 / Step 59</p>
-          <h1>Loading task status boundaries for the desktop reader shell.</h1>
+          <p className="desktop-shell__eyebrow">Stage 8 / Step 66</p>
+          <h1>Loading desktop synchronization settings and reader shell boundaries.</h1>
         </div>
       </main>
     )
@@ -813,13 +814,13 @@ export function ReaderShellRoute() {
 
       <header className="desktop-shell__header">
         <div className="desktop-shell__title-block">
-          <p className="desktop-shell__eyebrow">Stage 7 / Step 59</p>
-          <h1>The desktop shell now exposes task status and recovery.</h1>
+          <p className="desktop-shell__eyebrow">Stage 8 / Step 66</p>
+          <h1>The desktop shell now exposes synchronization settings.</h1>
           <p className="desktop-shell__lead">
             Route state still owns the active source and article, feature modules still own their
-            own mutation rules, and Step 59 adds a task-status boundary that watches refresh,
-            export, cache cleanup, and batch results without turning any feature card into a general
-            background task center.
+            own mutation rules, and Step 66 adds a dedicated sync settings surface for account,
+            server, device, last-sync, and error status without putting key material or upload
+            scheduling into the reader task monitor.
           </p>
         </div>
 
@@ -854,8 +855,9 @@ export function ReaderShellRoute() {
             <p className="desktop-summary__note">
               The queue still consumes one route-backed article query while cache configuration,
               source editing, OPML portability, document export, batch operations, and task
-              reporting remain separate concerns. Step 59 observes those task results from a
-              dedicated status surface instead of moving execution rules into the header.
+              reporting remain separate concerns. Step 66 keeps synchronization configuration in a
+              dedicated settings card instead of turning task status into account or transport
+              state.
             </p>
 
             <div className="desktop-shortcuts">
@@ -1010,6 +1012,7 @@ export function ReaderShellRoute() {
                 meta: `${folder.unreadCount}/${folder.articleCount} unread`,
               })),
             }}
+            syncSettingsSlot={<SyncSettingsCard />}
             subscriptionRows={subscriptionRows}
           />
 

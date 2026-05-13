@@ -371,6 +371,11 @@ dependencies = [
 [[package]]
 name = "freelyrss-integration-engine"
 version = "0.1.0"
+dependencies = [
+ "reqwest",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "freelyrss-rule-engine"
@@ -392,6 +397,7 @@ version = "0.1.0"
 dependencies = [
  "base64",
  "ring",
+ "serde",
  "serde_json",
 ]
 

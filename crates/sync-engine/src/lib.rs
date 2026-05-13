@@ -6,6 +6,7 @@ mod error;
 mod merge;
 mod replay;
 mod retry;
+mod webdav;
 
 pub use batch::{SyncCursor, SyncEventBatch, SyncEventEnvelope, SyncEventKey, package_event_batch};
 pub use encryption::{
@@ -20,6 +21,13 @@ pub use replay::{SyncReplayOutcome, SyncReplayState, replay_event_batch};
 pub use retry::{
     RetryDisposition, RetryFailureReport, RetryPolicy, RetryState, record_sync_failure,
     record_sync_success,
+};
+pub use webdav::{
+    InMemoryWebDavObjectStore, WEBDAV_BLOB_MANIFEST_CONTENT_TYPE, WEBDAV_SYNC_EVENT_CONTENT_TYPE,
+    WEBDAV_SYNC_MANIFEST_CONTENT_TYPE, WebDavEncryptedBlobMetadata, WebDavObject,
+    WebDavObjectStore, WebDavSyncManifest, WebDavSyncNamespace, list_webdav_blob_manifests,
+    pull_webdav_event_batch, put_webdav_blob_manifests, put_webdav_event_objects,
+    put_webdav_manifest,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

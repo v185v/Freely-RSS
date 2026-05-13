@@ -1,4 +1,4 @@
-# Task Plan
+﻿# Task Plan
 
 ## Goal
 
@@ -28,3 +28,4 @@ Create `memory-bank/implementation-plan.md` as a detailed, no-code implementatio
 - The repository is documentation-first, so the plan must include foundation work before app scaffolding.
 - The architecture document is empty, so the plan must explicitly create and maintain that baseline before implementation proceeds.
 - The scope is broad; plan steps must stay small to avoid vague milestone-level instructions.
+
