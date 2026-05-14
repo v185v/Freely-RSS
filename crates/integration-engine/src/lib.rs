@@ -2,6 +2,7 @@
 
 mod adapter;
 mod error;
+mod knowledge_base;
 mod model;
 mod noop;
 mod registry;
@@ -9,11 +10,16 @@ mod webhook;
 
 pub use adapter::IntegrationAdapter;
 pub use error::IntegrationEngineError;
+pub use knowledge_base::{
+    KNOWLEDGE_BASE_EXPORT_ADAPTER_ID, KnowledgeBaseExportAdapter, KnowledgeBaseExportProfile,
+    KnowledgeBaseExportTarget,
+};
 pub use model::{
     ArticleIntegrationSnapshot, AutomationEventRequest, AutomationEventResponse, BridgeFeedRequest,
-    BridgeFeedResponse, ExportRequest, ExportResponse, IntegrationCapability, IntegrationKind,
-    IntegrationManifest, IntegrationProperty, IntegrationRequest, IntegrationResponse,
-    IntegrationRunStatus, ReadLaterRequest, ReadLaterResponse,
+    BridgeFeedResponse, ExportAnnotationSnapshot, ExportAnnotationType, ExportArticleSnapshot,
+    ExportRequest, ExportResponse, IntegrationCapability, IntegrationKind, IntegrationManifest,
+    IntegrationProperty, IntegrationRequest, IntegrationResponse, IntegrationRunStatus,
+    ReadLaterRequest, ReadLaterResponse,
 };
 pub use noop::{NOOP_INTEGRATION_ADAPTER_ID, NoopIntegrationAdapter};
 pub use registry::IntegrationRegistry;
@@ -24,9 +30,9 @@ pub use webhook::{
 #[cfg(test)]
 mod tests {
     use super::{
-        ArticleIntegrationSnapshot, BridgeFeedRequest, ExportRequest, IntegrationEngineError,
-        IntegrationKind, IntegrationRequest, IntegrationResponse, IntegrationRunStatus,
-        NoopIntegrationAdapter, ReadLaterRequest,
+        ArticleIntegrationSnapshot, BridgeFeedRequest, ExportArticleSnapshot, ExportRequest,
+        IntegrationEngineError, IntegrationKind, IntegrationRequest, IntegrationResponse,
+        IntegrationRunStatus, NoopIntegrationAdapter, ReadLaterRequest,
     };
     use crate::{IntegrationAdapter, IntegrationRegistry};
 
@@ -109,7 +115,7 @@ mod tests {
     }
 
     #[test]
-    fn export_request_uses_generic_article_snapshots() {
+    fn export_request_uses_export_article_snapshots() {
         let mut registry = IntegrationRegistry::default();
         registry
             .register(Box::new(NoopIntegrationAdapter::default()))
@@ -120,7 +126,7 @@ mod tests {
                 "freelyrss.noop",
                 IntegrationRequest::Export(ExportRequest {
                     target: "knowledge-base".to_owned(),
-                    articles: vec![article("article-1"), article("article-2")],
+                    articles: vec![export_article("article-1"), export_article("article-2")],
                     properties: Vec::new(),
                 }),
             )
@@ -140,6 +146,22 @@ mod tests {
             url: Some(format!("https://example.com/{id}")),
             summary: None,
             tags: vec!["rss".to_owned()],
+        }
+    }
+
+    fn export_article(id: &str) -> ExportArticleSnapshot {
+        ExportArticleSnapshot {
+            id: id.to_owned(),
+            title: format!("Article {id}"),
+            source_title: Some("FreelyRSS Engineering".to_owned()),
+            url: Some(format!("https://example.com/{id}")),
+            author: None,
+            summary: None,
+            content: Some(format!("Body for {id}")),
+            published_at: None,
+            fetched_at: None,
+            tags: vec!["rss".to_owned()],
+            annotations: Vec::new(),
         }
     }
 }

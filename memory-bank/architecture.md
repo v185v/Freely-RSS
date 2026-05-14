@@ -2510,3 +2510,35 @@ Step 60 已将 `SyncEvent` 限定为用户可携带状态、订阅组织和自�
 - Article detail routes may expose reader-facing article content and metadata, but they must not expose local cache filesystem paths, raw SQLite rows, sync event payloads, encryption key material, or WebDAV object internals.
 - Future write routes must require an explicit desktop confirmation/permission flow before changing read state, starred state, tags, annotations, or export outputs.
 - Step 71 should build knowledge-base export connectors through export/integration boundaries and can use local API discovery only as a read-only integration point, not as an unrestricted filesystem-writing API.
+
+## 2026-05-14 ASCII Addendum XXXV
+
+### Step 71 Architecture Insights
+
+- Step 71 adds knowledge-base export as an `IntegrationKind::ExportConnector` capability inside `crates/integration-engine`, not as reader UI code, a local REST route, a sync transport, or a provider-specific database table.
+- The export connector consumes export-specific snapshots. `ExportArticleSnapshot` and `ExportAnnotationSnapshot` intentionally carry richer export data than `ArticleIntegrationSnapshot`: source metadata, content, tags, and notes are needed for knowledge-base files, but they should not automatically flow into Webhook automation or read-later requests.
+- The first supported transport is a local Markdown directory under a caller-configured root path. This preserves the desktop confirmation boundary: the adapter writes only after a trusted caller has chosen the target directory and invoked the export connector.
+- Profile mappings are file-layout and metadata mappings. Generic Markdown, Obsidian, Logseq, and Notion Markdown import profiles change paths, frontmatter/properties, links, and tag pages; they do not add remote Notion API calls, OAuth credentials, retry schedulers, or delivery history.
+- The adapter writes index pages, article pages, and tag pages with sanitized filenames and relative artifact references. The integration response reports generated relative artifact paths rather than exposing raw SQLite rows or local cache paths.
+- Knowledge-base export remains separate from `GET /exports` in the local desktop REST API. `GET /exports` is still discovery-only; future file-writing flows need desktop-side confirmation/orchestration before invoking this adapter.
+- No database schema migration was added. Durable connector settings, saved export targets, per-provider credentials, user-facing export history, retry queues, and Notion API integration remain later orchestration/provider work.
+
+### Step 71 File Responsibilities
+
+- `crates/integration-engine/src/knowledge_base/mod.rs`: owns the Step 71 knowledge-base export adapter entry point. It defines `KnowledgeBaseExportAdapter`, the public adapter id, request validation, Markdown artifact planning, safe directory creation, file writing, and integration adapter invocation.
+- `crates/integration-engine/src/knowledge_base/profile.rs`: owns `KnowledgeBaseExportTarget`, `KnowledgeBaseExportProfile`, accepted target aliases, profile-specific article/tag/index paths, relative Markdown artifact refs, and filename slugging.
+- `crates/integration-engine/src/knowledge_base/format.rs`: owns Markdown rendering for the generated index, article pages, tag pages, YAML frontmatter, Logseq properties, Obsidian links, Notion import hints, summaries, content, and notes/highlights.
+- `crates/integration-engine/src/knowledge_base/tests.rs`: owns Step 71 regression coverage for generic Markdown directory export, tagged/note-bearing article content, Obsidian and Logseq profile mapping, and profile mismatch rejection before file writes.
+- `crates/integration-engine/src/model.rs`: owns the export connector DTO expansion. It adds `ExportArticleSnapshot`, `ExportAnnotationSnapshot`, and `ExportAnnotationType`, then changes `ExportRequest` to use export-rich article snapshots rather than the lighter automation/read-later `ArticleIntegrationSnapshot`.
+- `crates/integration-engine/src/error.rs`: adds `KnowledgeBaseExportFailed` so filesystem write and directory creation failures are explicit integration errors instead of being collapsed into generic invalid requests.
+- `crates/integration-engine/src/lib.rs`: wires the new knowledge-base module into the crate public surface and updates the no-op export regression to use export-specific snapshots. Future callers can register the adapter without deep-linking into module internals.
+- `memory-bank/progress.md`: records the completed Step 71 milestone, verification commands, environment note, and Stage 10 Step 72 handoff.
+- `memory-bank/architecture.md`: records the Step 71 connector boundary and file-level responsibility split for future maintainers.
+
+### Step 71 Boundary Notes
+
+- `KnowledgeBaseExportAdapter` is not a provider registry. Multiple provider/profile instances should still be registered and invoked through `IntegrationRegistry`.
+- `KnowledgeBaseExportAdapter` is not a credential store or remote API client. A future Notion API connector should be a separate provider adapter or an adapter mode with explicit credential handling, not an implicit side effect of Markdown export.
+- `KnowledgeBaseExportAdapter` is not a scheduler. Background retries, export history, user-visible task status, and desktop notifications belong in later orchestration work.
+- Export snapshots should be prepared by an authorized caller from approved reader data. The connector should not reach into SQLite, sync events, encrypted WebDAV objects, local cache paths, or REST API request state.
+- Step 72 should introduce AI provider contracts as a separate optional intelligence layer. AI summaries, embeddings, translation, or question answering should not be added to knowledge-base export formatting unless a later explicit export-enrichment step supplies already-approved derived artifacts.

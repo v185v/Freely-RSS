@@ -2,11 +2,17 @@
 
 ## 当前状态
 
-- 阶段：阶段 9 Step 69 已完成，`crates/integration-engine` 现已拥有 Webhook 出站自动化适配器；Webhook 通过 `IntegrationKind::Automation` / `DispatchAutomationEvent` 接入，可发送包含文章元数据的 JSON POST，并继续不触碰 reader UI、sync-engine、WebDAV 对象存储或本地数据库 schema。
-- 最后更新：2026-05-12
-- 风险状态：已从“Step 68 已建立集成适配器合同；下一步 Step 69 可以实现 Webhook 出站能力，但必须通过 integration-engine 的自动化适配器入口接入，不要让 reader UI 直接认识 Webhook 服务商或 HTTP 细节”推进到“Step 69 已建立 Webhook 出站适配器；下一步 Step 70 可以实现本地桌面 REST API，但必须限定在桌面本机边界，不得把远程同步 API、Webhook provider 逻辑或客户端业务主表暴露成无保护的网络服务”
+- 阶段：阶段 9 Step 71 已完成，`crates/integration-engine` 现已拥有知识库导出连接器；知识库导出通过 `IntegrationKind::ExportConnector` / `ExportArticles` 接入，可把带标签、正文和批注的文章快照写入通用 Markdown 目录，并提供 Obsidian、Logseq 与 Notion Markdown 导入 profile 映射。
+- 最后更新：2026-05-14
+- 风险状态：已从“Step 70 已建立本地桌面 REST API；下一步 Step 71 应通过 integration/export 边界实现知识库导出连接器，不要让 REST 请求绕过桌面确认直接写任意文件”推进到“Step 71 已建立知识库导出适配器；下一步 Step 72 可以建立 AI Provider 抽象，但必须保持 AI 为可选增强层，不得让 AI provider、任务队列或模型输出污染核心阅读、同步、Webhook 或本地 REST API 边界”
 
-### 2026-05-12 状态快照（最新）
+### 2026-05-14 状态快照（最新）
+
+- 当前完成：阶段 9 Step 71 已完成，`crates/integration-engine` 新增 `KnowledgeBaseExportAdapter`、`KnowledgeBaseExportTarget`、`KnowledgeBaseExportProfile`、`ExportArticleSnapshot`、`ExportAnnotationSnapshot` 和 `ExportAnnotationType`。导出连接器会在调用方显式配置的根目录下生成相对 Markdown 产物，包括索引、文章页和标签页；通用 Markdown、Obsidian、Logseq 与 Notion Markdown profile 分别拥有独立目录/元数据映射。
+- 当前验证：`cargo test -p freelyrss-integration-engine knowledge_base`、`cargo test -p freelyrss-integration-engine`、`cargo fmt --all --check`、`cargo clippy -p freelyrss-integration-engine --all-targets -- -D warnings`、`cargo clippy --workspace --all-targets -- -D warnings`、`corepack pnpm run desktop:build`、`cargo test --workspace` 与 `corepack pnpm run verify` 全部通过。`desktop:build` 仍出现既有 Vite 大 chunk 提示，但构建成功。
+- 当前下一步：进入阶段 10 Step 72“建立 AI Provider 抽象”。应在新的 AI provider 边界中定义本地/远程模型统一接口、任务提交、超时和重试规则；不要把 AI 调用放进 reader UI、integration-engine 的 Webhook/knowledge-base provider、sync-engine、WebDAV 传输或本地 REST API 路由。
+
+### 2026-05-12 状态快照（历史：Step 69）
 
 - 当前完成：阶段 9 Step 69 已完成，`crates/integration-engine` 新增 `WebhookAutomationAdapter`、`WebhookEndpoint` 和 `WebhookPayload`，把文章分享、规则命中或导出完成一类自动化事件映射为 Webhook JSON POST。自动化请求现在可以携带文章快照，使测试端能收到文章 id、标题、URL、摘要、标签和触发属性等元数据。
 - 当前验证：`cargo test -p freelyrss-integration-engine webhook`、`cargo test -p freelyrss-integration-engine`、`cargo fmt --all --check`、`cargo clippy -p freelyrss-integration-engine --all-targets -- -D warnings`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace`、`corepack pnpm run desktop:build` 与 `corepack pnpm run verify` 全部通过。`desktop:build` 仍出现既有 Vite 大 chunk 提示，但构建成功。
@@ -74,7 +80,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 9 Step 70 需要实现基础 REST API，同时保持该 API 为本地桌面边界，不反向污染远程同步服务、Webhook 自动化适配器、WebDAV 对象存储或本地业务 schema。
+- 当前无阻塞；下一步风险点是阶段 10 Step 72 需要建立 AI Provider 抽象，同时保持 AI 为显式启用的可选增强层，不反向污染核心阅读链路、同步协议、Webhook / 知识库导出适配器、本地 REST API 或本地业务 schema。
 
 ## 本次执行记录
 
@@ -1862,3 +1868,39 @@
 - `GET /exports` is a read-only discovery surface. Step 71 should implement knowledge-base export connectors behind integration/export boundaries and existing export formatter paths, not by letting REST requests write arbitrary files without desktop confirmation.
 - `apps/sync-server` remains the ciphertext sync protocol boundary and should not absorb desktop-local REST routes.
 - `crates/integration-engine` remains the provider-neutral integration boundary. Knowledge-base connectors should enter through export connector contracts rather than direct reader UI provider code.
+
+## 2026-05-14 ASCII Addendum XXXV
+
+### Stage 9 Step 71 Completed: knowledge-base export connectors
+
+- Completed `implementation-plan.md` Stage 9 Step 71 by adding a concrete knowledge-base export adapter behind the existing `crates/integration-engine` export connector boundary.
+- Added `KnowledgeBaseExportAdapter`, `KnowledgeBaseExportTarget`, `KnowledgeBaseExportProfile`, and `KNOWLEDGE_BASE_EXPORT_ADAPTER_ID`.
+- Added export-specific article and annotation snapshots: `ExportArticleSnapshot`, `ExportAnnotationSnapshot`, and `ExportAnnotationType`. These carry content, tags, source metadata, and notes for export connectors without expanding the lighter Webhook/read-later article snapshot.
+- The adapter writes a Markdown directory under a caller-configured root directory. It generates an export index, article pages, and tag pages using relative paths and sanitized filenames.
+- Profile mappings now cover generic Markdown directories, Obsidian vault-style Markdown, Logseq pages, and Notion Markdown import folders. The mappings are file-format/layout mappings only; no provider API credentials, remote Notion API calls, background scheduling, or local REST route writes were added.
+- Added regression coverage proving a tagged/note-bearing article exports to the expected Markdown structure, Obsidian and Logseq profiles produce their profile-specific paths/metadata, and profile mismatches fail before writing files.
+- Kept Step 71 out of `reader-shell`, `apps/desktop/src-tauri/src/local_api.rs`, `apps/sync-server`, Webhook delivery, WebDAV transport, and local SQLite schema migrations. No database schema migration was required.
+
+### Step 71 Verification
+
+- Passed `cargo test -p freelyrss-integration-engine knowledge_base`
+- Passed `cargo test -p freelyrss-integration-engine`
+- Passed `cargo fmt --all --check`
+- Passed `cargo clippy -p freelyrss-integration-engine --all-targets -- -D warnings`
+- Passed `cargo clippy --workspace --all-targets -- -D warnings`
+- Passed `corepack pnpm run desktop:build`
+- Passed `cargo test --workspace`
+- Passed `corepack pnpm run verify`
+
+### Environment Notes
+
+- `corepack pnpm run desktop:build` completed successfully and emitted the existing Vite chunk-size warning for the generated desktop bundle. The warning did not fail the build.
+
+### Next Step (ASCII update)
+
+- The next implementation step in `implementation-plan.md` is Stage 10 Step 72: AI Provider abstraction.
+- Preserve the current boundary split:
+- `crates/integration-engine/src/knowledge_base/` owns only knowledge-base Markdown export layout and file writing under a configured root. It should not become a Notion API client, a credential store, a background export scheduler, a local REST API route, or a reader UI component.
+- `crates/integration-engine/src/model.rs` now separates export-rich article snapshots from lighter automation/read-later snapshots. Future connectors should keep provider payloads and storage-layer records out of generic request DTOs.
+- `apps/desktop/src-tauri/src/local_api.rs` remains a read-mostly local API boundary. Knowledge-base export should continue to require desktop-side confirmation/orchestration before writing files.
+- Step 72 should introduce AI provider contracts as a separate optional intelligence boundary, not by adding AI calls to reader UI, sync-engine, Webhook delivery, knowledge-base export formatting, WebDAV transport, or local business schema.

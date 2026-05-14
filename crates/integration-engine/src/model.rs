@@ -142,6 +142,49 @@ pub struct ArticleIntegrationSnapshot {
     pub tags: Vec<String>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ExportAnnotationType {
+    Highlight,
+    Note,
+    Comment,
+}
+
+impl ExportAnnotationType {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Highlight => "highlight",
+            Self::Note => "note",
+            Self::Comment => "comment",
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct ExportAnnotationSnapshot {
+    pub id: String,
+    pub annotation_type: ExportAnnotationType,
+    pub selected_text: String,
+    pub note: Option<String>,
+    pub color: Option<String>,
+    pub created_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct ExportArticleSnapshot {
+    pub id: String,
+    pub title: String,
+    pub source_title: Option<String>,
+    pub url: Option<String>,
+    pub author: Option<String>,
+    pub summary: Option<String>,
+    pub content: Option<String>,
+    pub published_at: Option<String>,
+    pub fetched_at: Option<String>,
+    pub tags: Vec<String>,
+    pub annotations: Vec<ExportAnnotationSnapshot>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BridgeFeedRequest {
     pub source_url: String,
@@ -159,7 +202,7 @@ pub struct ReadLaterRequest {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExportRequest {
     pub target: String,
-    pub articles: Vec<ArticleIntegrationSnapshot>,
+    pub articles: Vec<ExportArticleSnapshot>,
     pub properties: Vec<IntegrationProperty>,
 }
 

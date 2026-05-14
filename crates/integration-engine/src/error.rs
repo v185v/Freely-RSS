@@ -23,6 +23,10 @@ pub enum IntegrationEngineError {
         adapter_id: String,
         reason: String,
     },
+    KnowledgeBaseExportFailed {
+        adapter_id: String,
+        reason: String,
+    },
 }
 
 impl fmt::Display for IntegrationEngineError {
@@ -57,6 +61,12 @@ impl fmt::Display for IntegrationEngineError {
                 write!(
                     f,
                     "integration adapter {adapter_id} could not deliver webhook: {reason}"
+                )
+            }
+            Self::KnowledgeBaseExportFailed { adapter_id, reason } => {
+                write!(
+                    f,
+                    "integration adapter {adapter_id} could not export knowledge-base markdown: {reason}"
                 )
             }
         }
