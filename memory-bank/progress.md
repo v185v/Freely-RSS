@@ -1944,3 +1944,38 @@
 - `crates/core-domain` already owns the local `AIArtifact` schema/model boundary. Step 73 should persist completed AI results through that domain boundary rather than inventing a separate AI result table.
 - `crates/integration-engine` remains the third-party integration/export boundary. AI output should only enrich Webhook or knowledge-base export if a later explicit workflow supplies approved derived artifacts.
 - Reader UI, sync-engine, WebDAV transport, and local REST API should not call model providers directly as part of Step 73.
+
+## 2026-05-16 ASCII Addendum XXXVII
+
+### Stage 10 Step 73 Completed: AI task queue and cache
+
+- Completed `implementation-plan.md` Stage 10 Step 73 by adding queue/cache orchestration around the existing `crates/ai-adapter` provider boundary.
+- Added `AiTaskQueue`, `AiQueueTask`, `AiQueueRunOutcome`, and `AiQueueReport`.
+- The queue accepts explicit tasks, validates provider submissions plus artifact target metadata, runs one queued task through `AiProviderRegistry`, and maps completed provider responses into `core-domain::AIArtifact`.
+- Added stable input hashing and an in-memory cache keyed by provider, article target, task capability, and task input. Equivalent queued tasks now return a cached `AIArtifact` instead of invoking the provider again.
+- Added JSON result mapping for summary, keywords, translation, and question-answer outputs so completed AI results can flow into the existing `AIArtifact.result` domain shape without adding another AI result table.
+- Added explicit queue/artifact mapping errors. Provider errors remain separate from queue validation and artifact conversion failures.
+- Kept Step 73 out of reader UI, `crates/integration-engine`, `crates/sync-engine`, WebDAV transport, local REST API, sync-server routes, and SQLite migrations. No database schema migration was required.
+
+### Step 73 Verification
+
+- Passed `cargo test -p freelyrss-ai-adapter`
+- Passed `cargo fmt --all --check`
+- Passed `cargo clippy -p freelyrss-ai-adapter --all-targets -- -D warnings`
+- Passed `cargo clippy --workspace --all-targets -- -D warnings`
+- Passed `cargo test --workspace`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run verify`
+
+### Environment Notes
+
+- `corepack pnpm run desktop:build` completed successfully and emitted the existing Vite chunk-size warning for the generated desktop bundle. The warning did not fail the build.
+
+### Next Step (ASCII update)
+
+- The next implementation step in `implementation-plan.md` is Stage 10 Step 74: summary and keyword extraction.
+- Preserve the current boundary split:
+- `crates/ai-adapter` now owns provider contracts plus queue/cache orchestration. It should still not become reader UI, a real provider SDK wrapper, a credential store, a local REST API route, or a sync transport.
+- `AiTaskQueue` is an orchestration primitive, not a durable scheduler. Durable task tables, cancellation, user-visible progress history, retry workers, and persisted queue state remain later work unless Step 74 explicitly needs a minimal storage boundary.
+- Completed results should continue to map into `core-domain::AIArtifact`; do not add a second AI result schema for summaries or keywords.
+- Step 74 should implement summary and keyword extraction on top of the existing provider/queue/cache contracts, not by having reader UI call providers directly.

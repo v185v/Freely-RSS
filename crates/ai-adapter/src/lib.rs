@@ -4,6 +4,7 @@ mod adapter;
 mod error;
 mod mock;
 mod model;
+mod queue;
 mod registry;
 mod retry;
 
@@ -19,6 +20,7 @@ pub use model::{
     AiTaskOutput, AiTaskProperty, AiTaskResponse, AiTaskStatus, AiTaskSubmission,
     AiTranslationRequest,
 };
+pub use queue::{AiQueueReport, AiQueueRunOutcome, AiQueueTask, AiTaskQueue};
 pub use registry::AiProviderRegistry;
 pub use retry::{AiExecutionPolicy, AiRetryPolicy};
 
@@ -28,9 +30,10 @@ mod tests {
 
     use super::{
         AiAdapterError, AiExecutionPolicy, AiProviderCapability, AiProviderKind,
-        AiProviderManifest, AiProviderRegistry, AiRetryPolicy, AiTaskInput, AiTaskOutput,
-        AiTaskSubmission, AiTranslationRequest, MOCK_LOCAL_AI_PROVIDER_ID,
-        MOCK_REMOTE_AI_PROVIDER_ID, MockLocalAiProvider, MockRemoteAiProvider,
+        AiProviderManifest, AiProviderRegistry, AiQueueRunOutcome, AiQueueTask, AiRetryPolicy,
+        AiTaskInput, AiTaskOutput, AiTaskQueue, AiTaskSubmission, AiTranslationRequest,
+        MOCK_LOCAL_AI_PROVIDER_ID, MOCK_REMOTE_AI_PROVIDER_ID, MockLocalAiProvider,
+        MockRemoteAiProvider,
     };
 
     #[test]
@@ -128,6 +131,80 @@ mod tests {
                 reason: "timeout must be greater than zero",
             })
         );
+    }
+
+    #[test]
+    fn queue_executes_provider_and_persists_completed_output_as_artifact() {
+        let mut registry = AiProviderRegistry::default();
+        registry
+            .register(Box::new(MockLocalAiProvider::default()))
+            .expect("register local mock provider");
+
+        let mut queue = AiTaskQueue::default();
+        queue
+            .enqueue(AiQueueTask::new(
+                translation_submission("task-translate"),
+                "article-1",
+                "2026-05-16T00:00:00Z",
+            ))
+            .expect("enqueue task");
+
+        let outcome = queue
+            .run_next(&registry, MOCK_LOCAL_AI_PROVIDER_ID)
+            .expect("run queued task");
+
+        let AiQueueRunOutcome::Completed { artifact } = outcome else {
+            panic!("expected completed artifact");
+        };
+
+        assert_eq!(artifact.id.as_str(), "ai-artifact-task-translate");
+        assert_eq!(artifact.article_id.as_str(), "article-1");
+        assert_eq!(artifact.provider, MOCK_LOCAL_AI_PROVIDER_ID);
+        assert_eq!(artifact.kind.as_str(), "translation");
+        assert_eq!(artifact.created_at.as_str(), "2026-05-16T00:00:00Z");
+        assert_eq!(
+            artifact.result.as_value()["targetLanguage"],
+            serde_json::json!("zh-Hans")
+        );
+        assert_eq!(queue.report().cached_count, 1);
+    }
+
+    #[test]
+    fn queue_uses_input_hash_cache_before_provider_invocation() {
+        let mut registry = AiProviderRegistry::default();
+        registry
+            .register(Box::new(MockLocalAiProvider::default()))
+            .expect("register local mock provider");
+
+        let mut queue = AiTaskQueue::default();
+        queue
+            .enqueue(AiQueueTask::new(
+                translation_submission("task-first"),
+                "article-1",
+                "2026-05-16T00:00:00Z",
+            ))
+            .expect("enqueue first task");
+
+        let first = queue
+            .run_next(&registry, MOCK_LOCAL_AI_PROVIDER_ID)
+            .expect("run first task");
+        let AiQueueRunOutcome::Completed { artifact: cached } = first else {
+            panic!("expected completed artifact");
+        };
+
+        queue
+            .enqueue(AiQueueTask::new(
+                translation_submission("task-second"),
+                "article-1",
+                "2026-05-16T00:01:00Z",
+            ))
+            .expect("enqueue equivalent task");
+
+        let second = queue
+            .run_next(&registry, MOCK_LOCAL_AI_PROVIDER_ID)
+            .expect("equivalent task should hit cache");
+
+        assert_eq!(second, AiQueueRunOutcome::CacheHit { artifact: cached });
     }
 
     fn translation_submission(task_id: &str) -> AiTaskSubmission {

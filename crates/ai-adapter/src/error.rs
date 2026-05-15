@@ -28,6 +28,12 @@ pub enum AiAdapterError {
         provider_id: String,
         reason: String,
     },
+    InvalidQueueTask {
+        reason: &'static str,
+    },
+    InvalidArtifactMapping {
+        reason: String,
+    },
 }
 
 impl fmt::Display for AiAdapterError {
@@ -67,6 +73,15 @@ impl fmt::Display for AiAdapterError {
                 reason,
             } => {
                 write!(f, "AI provider {provider_id} invocation failed: {reason}")
+            }
+            Self::InvalidQueueTask { reason } => {
+                write!(f, "AI queue task is invalid: {reason}")
+            }
+            Self::InvalidArtifactMapping { reason } => {
+                write!(
+                    f,
+                    "AI task response cannot be mapped to AIArtifact: {reason}"
+                )
             }
         }
     }

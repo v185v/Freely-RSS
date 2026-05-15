@@ -2576,3 +2576,32 @@ Step 60 已将 `SyncEvent` 限定为用户可携带状态、订阅组织和自�
 - `crates/ai-adapter` must not call reader UI, Webhook delivery, knowledge-base export, WebDAV sync transport, sync-server routes, or local REST routes directly. Those modules may prepare authorized inputs or consume already-approved derived artifacts later.
 - Real provider implementations should enter as adapters behind `AiProvider`, with credentials, model selection, network clients, and local model process management kept outside generic task DTOs.
 - Step 73 should add queue/cache orchestration around this boundary while preserving AI as explicitly enabled optional functionality.
+
+## 2026-05-16 ASCII Addendum XXXVII
+
+### Step 73 Architecture Insights
+
+- Step 73 adds AI task queue and cache orchestration inside `crates/ai-adapter` while keeping `AiProvider` focused on provider invocation. Providers still do not schedule tasks, persist results, manage credentials, or write to UI/storage directly.
+- `AiTaskQueue` is an in-memory orchestration primitive. It validates queued work, pops one task at a time, checks a deterministic input cache, invokes `AiProviderRegistry` only on cache miss, and returns an `AIArtifact`-backed result.
+- Cache identity is scoped by provider id, article target, capability, and task input. This prevents a local provider result from being reused as a remote provider result while still avoiding duplicate work for equivalent same-provider submissions.
+- Completed queue results are mapped into `core-domain::AIArtifact`. This keeps `AIArtifact` as the single domain model for derived AI results and avoids adding a parallel summary/keyword/translation table.
+- The result JSON shape is intentionally compact and output-specific: summary stores text, keywords stores keyword arrays, translation stores text plus target language, and question-answer stores text plus cited context ids.
+- The queue depends on `freelyrss-core-domain` only for artifact value types. It does not open SQLite connections, run migrations, query articles, expose REST routes, or write provider credentials.
+- No database schema migration was added. The existing `AIArtifact` table remains sufficient for completed derived results; durable queue rows, cancellation, retry execution state, and user-visible task history remain later orchestration/storage work.
+
+### Step 73 File Responsibilities
+
+- `crates/ai-adapter/src/queue.rs`: owns Step 73 queue/cache orchestration. It defines `AiQueueTask`, `AiTaskQueue`, `AiQueueRunOutcome`, `AiQueueReport`, stable input hashing, cache lookup, provider-registry execution, and mapping from `AiTaskResponse` to `AIArtifact`.
+- `crates/ai-adapter/src/error.rs`: adds explicit queue validation and artifact mapping errors so invalid queue metadata and domain conversion failures are distinguishable from provider registration or invocation failures.
+- `crates/ai-adapter/src/lib.rs`: exports the queue/cache API and contains regression tests proving provider execution maps to `AIArtifact` and equivalent same-provider tasks hit the input cache.
+- `crates/ai-adapter/Cargo.toml`: adds `freelyrss-core-domain` for `AIArtifact`/id/json value types and `serde_json` for output result JSON construction.
+- `Cargo.lock`: records the new `freelyrss-ai-adapter` dependency edges after Step 73.
+- `memory-bank/progress.md`: records the completed Step 73 milestone, verification commands, environment note, and Step 74 handoff.
+- `memory-bank/architecture.md`: records the Step 73 queue/cache boundary and file-level responsibility split for future maintainers.
+
+### Step 73 Boundary Notes
+
+- `AiTaskQueue` is not a persistent job runner. It should not grow database writes, background threads, cancellation state, desktop notifications, or retry workers without an explicit later step.
+- `AiTaskQueue` is not an article repository. Authorized callers must provide the article id, task input, and timestamp; the queue should not reach into SQLite, reader UI state, local REST request state, or sync payloads to assemble inputs.
+- Cache hits return already-mapped `AIArtifact` values. Future persistent cache storage should hydrate the queue/cache from the `AIArtifact` domain boundary rather than creating an unrelated cache schema.
+- Step 74 should build summary and keyword extraction flows on top of `AiProviderRegistry` and `AiTaskQueue`, preserving AI as an explicit optional feature.

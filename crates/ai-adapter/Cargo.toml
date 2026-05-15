@@ -7,3 +7,7 @@ version.workspace = true
 
 [lib]
 path = "src/lib.rs"
+
+[dependencies]
+freelyrss-core-domain = { path = "../core-domain" }
+serde_json = "1.0.145"
