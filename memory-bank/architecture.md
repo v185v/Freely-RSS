@@ -2542,3 +2542,37 @@ Step 60 已将 `SyncEvent` 限定为用户可携带状态、订阅组织和自�
 - `KnowledgeBaseExportAdapter` is not a scheduler. Background retries, export history, user-visible task status, and desktop notifications belong in later orchestration work.
 - Export snapshots should be prepared by an authorized caller from approved reader data. The connector should not reach into SQLite, sync events, encrypted WebDAV objects, local cache paths, or REST API request state.
 - Step 72 should introduce AI provider contracts as a separate optional intelligence layer. AI summaries, embeddings, translation, or question answering should not be added to knowledge-base export formatting unless a later explicit export-enrichment step supplies already-approved derived artifacts.
+
+## 2026-05-15 ASCII Addendum XXXVI
+
+### Step 72 Architecture Insights
+
+- Step 72 introduces `crates/ai-adapter` as the optional intelligence-layer boundary. This crate is intentionally separate from reader UI, sync transport, integration/export adapters, and the local REST API.
+- The primary abstraction is `AiProvider`. Local and remote models expose the same manifest, capabilities, task submission envelope, timeout policy, retry policy, and response shape. This keeps "local model" and "cloud model" from becoming two parallel integration paths.
+- `AiTaskSubmission` is the provider-facing unit of work. It can represent article summary, keyword extraction, translation, and limited-context question answering, but it does not schedule work, persist work, or imply that AI is enabled.
+- `AiExecutionPolicy` and `AiRetryPolicy` define execution constraints at the boundary. Actual background scheduling, retry workers, queue state, cancellation, and user-visible task history belong to Step 73 or later orchestration code.
+- `AiProviderRegistry` is the wiring surface. Callers can register providers, discover providers by kind or capability, and submit a task without importing provider-specific SDKs or branching on local versus remote model behavior.
+- `MockLocalAiProvider` and `MockRemoteAiProvider` are deterministic acceptance providers. They prove the shared call shape without introducing network IO, model binaries, credentials, automatic background work, or provider-specific configuration.
+- No database schema migration was required. The existing `AIArtifact` table remains the future persistence target for completed derived results, while Step 72 only defines provider contracts and in-memory invocation boundaries.
+
+### Step 72 File Responsibilities
+
+- `crates/ai-adapter/Cargo.toml`: declares the new `freelyrss-ai-adapter` workspace crate. It has no direct dependencies in Step 72 because the provider boundary does not yet need HTTP clients, async runtimes, serialization, model SDKs, or SQLite access.
+- `crates/ai-adapter/src/lib.rs`: owns the crate public surface and Step 72 regression tests. It re-exports the provider trait, errors, manifests, task DTOs, registry, timeout/retry policy, and mock providers so callers do not deep-link into module internals.
+- `crates/ai-adapter/src/adapter.rs`: owns the provider-neutral `AiProvider` trait. Providers expose a manifest and accept a single `AiTaskSubmission` through one invocation method.
+- `crates/ai-adapter/src/model.rs`: owns the shared AI vocabulary: provider kind, capability, manifest, task properties, summary/keyword/translation/question request DTOs, context scope, task submission, task status, task output, and task response.
+- `crates/ai-adapter/src/retry.rs`: owns execution constraints for provider calls. It defines nonzero timeout validation, disabled retry policy, fixed retry policy, and retry-delay calculation without creating a scheduler.
+- `crates/ai-adapter/src/registry.rs`: owns `AiProviderRegistry`, provider registration, manifest discovery by provider kind or capability, task submission dispatch, and unsupported-capability rejection before provider internals run.
+- `crates/ai-adapter/src/mock.rs`: owns deterministic local and remote mock providers. These providers implement the same trait as future real providers and return stable summaries, keywords, translations, and context-limited answers for tests and shell wiring.
+- `crates/ai-adapter/src/error.rs`: owns explicit AI adapter failures for duplicate registration, missing providers, invalid manifests, invalid task submissions, invalid execution policy, unsupported capabilities, and provider invocation failures.
+- `Cargo.lock`: records the new workspace package after `freelyrss-ai-adapter` joined the Cargo workspace.
+- `memory-bank/progress.md`: records the completed Step 72 milestone, verification commands, environment note, and Step 73 handoff.
+- `memory-bank/architecture.md`: records the Step 72 AI provider boundary and file-level responsibility split for future maintainers.
+
+### Step 72 Boundary Notes
+
+- `crates/ai-adapter` is not the AI task queue. Durable queue rows, cancellation, background workers, retry execution, cache lookup, and progress reporting should be added in Step 73 without changing the provider trait into a scheduler.
+- `crates/ai-adapter` is not an `AIArtifact` repository. Completed model results should be persisted through the existing local domain/storage boundary in a later step, not by adding storage writes to providers.
+- `crates/ai-adapter` must not call reader UI, Webhook delivery, knowledge-base export, WebDAV sync transport, sync-server routes, or local REST routes directly. Those modules may prepare authorized inputs or consume already-approved derived artifacts later.
+- Real provider implementations should enter as adapters behind `AiProvider`, with credentials, model selection, network clients, and local model process management kept outside generic task DTOs.
+- Step 73 should add queue/cache orchestration around this boundary while preserving AI as explicitly enabled optional functionality.

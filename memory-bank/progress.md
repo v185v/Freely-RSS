@@ -2,11 +2,17 @@
 
 ## 当前状态
 
-- 阶段：阶段 9 Step 71 已完成，`crates/integration-engine` 现已拥有知识库导出连接器；知识库导出通过 `IntegrationKind::ExportConnector` / `ExportArticles` 接入，可把带标签、正文和批注的文章快照写入通用 Markdown 目录，并提供 Obsidian、Logseq 与 Notion Markdown 导入 profile 映射。
-- 最后更新：2026-05-14
-- 风险状态：已从“Step 70 已建立本地桌面 REST API；下一步 Step 71 应通过 integration/export 边界实现知识库导出连接器，不要让 REST 请求绕过桌面确认直接写任意文件”推进到“Step 71 已建立知识库导出适配器；下一步 Step 72 可以建立 AI Provider 抽象，但必须保持 AI 为可选增强层，不得让 AI provider、任务队列或模型输出污染核心阅读、同步、Webhook 或本地 REST API 边界”
+- 阶段：阶段 10 Step 72 已完成，新增 `crates/ai-adapter` 作为独立 AI Provider 抽象边界；本地与远程 Provider 通过同一 `AiProvider` trait、`AiTaskSubmission`、`AiExecutionPolicy` / `AiRetryPolicy` 和 `AiProviderRegistry` 接入，并用本地/远程模拟 Provider 验证同一调用入口。
+- 最后更新：2026-05-15
+- 风险状态：已从“Step 71 已建立知识库导出适配器；下一步 Step 72 可以建立 AI Provider 抽象，但必须保持 AI 为可选增强层，不得让 AI provider、任务队列或模型输出污染核心阅读、同步、Webhook 或本地 REST API 边界”推进到“Step 72 已建立 AI Provider 抽象；下一步 Step 73 可以建立 AI 任务队列与缓存，但不得在队列层引入自动启用、UI 直连模型、同步协议载荷变更或绕过 `AIArtifact` 的结果持久化边界”
 
-### 2026-05-14 状态快照（最新）
+### 2026-05-15 状态快照（最新）
+
+- 当前完成：阶段 10 Step 72 已完成，新增 `crates/ai-adapter`，定义本地/远程 AI Provider 的统一 manifest、能力枚举、任务输入/输出、任务提交、超时策略、固定重试策略、注册表和错误边界。当前能力覆盖摘要、关键词、翻译和受限上下文问答；`MockLocalAiProvider` 与 `MockRemoteAiProvider` 通过同一 `AiProviderRegistry::submit` 入口执行任务，证明本地模型和远程模型不会分裂成两套调用面。
+- 当前验证：`cargo test -p freelyrss-ai-adapter`、`cargo fmt --all --check`、`cargo clippy -p freelyrss-ai-adapter --all-targets -- -D warnings`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace`、`corepack pnpm run desktop:build` 与 `corepack pnpm run verify` 全部通过。`desktop:build` 仍出现既有 Vite 大 chunk 提示，但构建成功。
+- 当前下一步：进入阶段 10 Step 73“建立 AI 任务队列与缓存”。应把摘要、关键词、翻译和问答任务排入后台队列，并把完成结果写入 `AIArtifact`；不要在 Step 73 中加入真实 Provider SDK、默认自动启用 AI、reader UI 直连模型、同步事件载荷变更、Webhook/知识库导出自动注入模型输出或本地 REST API 直接触发文件/模型副作用。
+
+### 2026-05-14 状态快照（历史：Step 71）
 
 - 当前完成：阶段 9 Step 71 已完成，`crates/integration-engine` 新增 `KnowledgeBaseExportAdapter`、`KnowledgeBaseExportTarget`、`KnowledgeBaseExportProfile`、`ExportArticleSnapshot`、`ExportAnnotationSnapshot` 和 `ExportAnnotationType`。导出连接器会在调用方显式配置的根目录下生成相对 Markdown 产物，包括索引、文章页和标签页；通用 Markdown、Obsidian、Logseq 与 Notion Markdown profile 分别拥有独立目录/元数据映射。
 - 当前验证：`cargo test -p freelyrss-integration-engine knowledge_base`、`cargo test -p freelyrss-integration-engine`、`cargo fmt --all --check`、`cargo clippy -p freelyrss-integration-engine --all-targets -- -D warnings`、`cargo clippy --workspace --all-targets -- -D warnings`、`corepack pnpm run desktop:build`、`cargo test --workspace` 与 `corepack pnpm run verify` 全部通过。`desktop:build` 仍出现既有 Vite 大 chunk 提示，但构建成功。
@@ -80,7 +86,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 10 Step 72 需要建立 AI Provider 抽象，同时保持 AI 为显式启用的可选增强层，不反向污染核心阅读链路、同步协议、Webhook / 知识库导出适配器、本地 REST API 或本地业务 schema。
+- 当前无阻塞；下一步风险点是阶段 10 Step 73 需要建立 AI 任务队列与缓存，同时保持 AI 为显式启用的可选增强层，不让后台队列自动触发真实模型调用、污染核心阅读链路、改写同步协议、绕过 `AIArtifact` 结果边界，或把模型输出隐式塞入 Webhook / 知识库导出 / 本地 REST API。
 
 ## 本次执行记录
 
@@ -1904,3 +1910,37 @@
 - `crates/integration-engine/src/model.rs` now separates export-rich article snapshots from lighter automation/read-later snapshots. Future connectors should keep provider payloads and storage-layer records out of generic request DTOs.
 - `apps/desktop/src-tauri/src/local_api.rs` remains a read-mostly local API boundary. Knowledge-base export should continue to require desktop-side confirmation/orchestration before writing files.
 - Step 72 should introduce AI provider contracts as a separate optional intelligence boundary, not by adding AI calls to reader UI, sync-engine, Webhook delivery, knowledge-base export formatting, WebDAV transport, or local business schema.
+
+## 2026-05-15 ASCII Addendum XXXVI
+
+### Stage 10 Step 72 Completed: AI Provider abstraction
+
+- Completed `implementation-plan.md` Stage 10 Step 72 by adding `crates/ai-adapter` as the optional intelligence-layer boundary for local and remote model providers.
+- Added a provider-neutral `AiProvider` trait, `AiProviderManifest`, `AiProviderCapability`, task request/response DTOs, `AiProviderRegistry`, and explicit `AiAdapterError` variants.
+- Added `AiTaskSubmission` as the single task submission envelope for summaries, keyword extraction, translation, and limited-context question answering. This is only a submission contract; it is not a background queue.
+- Added `AiExecutionPolicy` and `AiRetryPolicy` to carry timeout and retry rules at the provider boundary. The current step validates these rules but does not add durable scheduling, retry workers, or task history.
+- Added deterministic `MockLocalAiProvider` and `MockRemoteAiProvider` implementations. Regression tests prove both provider kinds can execute through the same `AiProviderRegistry::submit` entry point.
+- Kept Step 72 out of reader UI, `crates/integration-engine`, `crates/sync-engine`, WebDAV transport, the local REST API, and local SQLite schema migrations. No database schema migration was required.
+
+### Step 72 Verification
+
+- Passed `cargo test -p freelyrss-ai-adapter`
+- Passed `cargo fmt --all --check`
+- Passed `cargo clippy -p freelyrss-ai-adapter --all-targets -- -D warnings`
+- Passed `cargo clippy --workspace --all-targets -- -D warnings`
+- Passed `cargo test --workspace`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run verify`
+
+### Environment Notes
+
+- `corepack pnpm run desktop:build` completed successfully and emitted the existing Vite chunk-size warning for the generated desktop bundle. The warning did not fail the build.
+
+### Next Step (ASCII update)
+
+- The next implementation step in `implementation-plan.md` is Stage 10 Step 73: AI task queue and cache.
+- Preserve the current boundary split:
+- `crates/ai-adapter` owns provider contracts, task submission DTOs, timeout/retry policy, registration, and deterministic mock providers. It should not become a worker queue, a cache store, an `AIArtifact` repository, a real provider SDK wrapper, or a reader UI feature.
+- `crates/core-domain` already owns the local `AIArtifact` schema/model boundary. Step 73 should persist completed AI results through that domain boundary rather than inventing a separate AI result table.
+- `crates/integration-engine` remains the third-party integration/export boundary. AI output should only enrich Webhook or knowledge-base export if a later explicit workflow supplies approved derived artifacts.
+- Reader UI, sync-engine, WebDAV transport, and local REST API should not call model providers directly as part of Step 73.

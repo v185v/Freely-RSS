@@ -329,6 +329,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "freelyrss-ai-adapter"
+version = "0.1.0"
+
+[[package]]
 name = "freelyrss-content-pipeline"
 version = "0.1.0"
 dependencies = [
