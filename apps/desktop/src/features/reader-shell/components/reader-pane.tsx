@@ -16,6 +16,8 @@ import { findTextHighlightRanges } from "../search-highlighting"
 import { formatReaderProgress } from "../selectors"
 import type {
   CreateReaderAnnotationInput,
+  ReaderAIQuestionContextScope,
+  ReaderAITranslationMode,
   ReaderAnnotationAnchor,
   ReaderAnnotationKind,
   ReaderContentMode,
@@ -50,21 +52,34 @@ type ReaderPendingSelection = {
 type ReaderPaneProps = {
   activeDetail: ArticleDetailDto | null
   aiInsightErrorMessage: string | null
+  aiQuestionErrorMessage: string | null
+  aiTranslationErrorMessage: string | null
   annotationErrorMessage: string | null
   articleStateErrorMessage: string | null
   describedBy?: string
   documentExportErrorMessage: string | null
   documentExportResult: ReaderDocumentExportResult | null
   headingId: string
+  isAnsweringAIQuestion: boolean
   isCreatingAnnotation: boolean
   isGeneratingAIInsights: boolean
+  isGeneratingAITranslation: boolean
   isExportingDocument: boolean
   isExportingMarkdown: boolean
   isUpdatingArticleState: boolean
   markdownExportErrorMessage: string | null
   markdownExportResult: ReaderMarkdownExportResult | null
   onCreateAnnotation: (input: CreateReaderAnnotationInput) => void
+  onAnswerAIQuestion: (input: {
+    contextScope: ReaderAIQuestionContextScope
+    question: string
+  }) => void
   onGenerateAIInsights: () => void
+  onGenerateAITranslation: (input: {
+    mode: ReaderAITranslationMode
+    selectedText?: string | null
+    targetLanguage: string
+  }) => void
   onExportDocumentBatch: (format: ReaderDocumentExportFormat) => void
   onExportDocumentSingle: (format: ReaderDocumentExportFormat) => void
   onExportMarkdownBatch: () => void
@@ -152,6 +167,15 @@ const MARGIN_OPTIONS: Array<{
   { label: "Narrow", value: "narrow" },
   { label: "Balanced", value: "balanced" },
   { label: "Wide", value: "wide" },
+]
+
+const QUESTION_CONTEXT_SCOPE_OPTIONS: Array<{
+  label: string
+  value: ReaderAIQuestionContextScope
+}> = [
+  { label: "Current article", value: "currentArticle" },
+  { label: "Current source", value: "currentFeed" },
+  { label: "Current filter", value: "currentSearchResult" },
 ]
 
 const DEFAULT_ANNOTATION_COLORS: Record<ReaderAnnotationKind, string> = {
@@ -317,6 +341,18 @@ function readArtifactKeywords(artifact: AIArtifactDto | null) {
   return artifact.result.keywords.filter(
     (keyword): keyword is string => typeof keyword === "string" && keyword.trim().length > 0,
   )
+}
+
+function readArtifactStringArray(artifact: AIArtifactDto | null, key: string) {
+  if (!artifact || !isJsonObject(artifact.result)) {
+    return []
+  }
+
+  const values = artifact.result[key]
+
+  return Array.isArray(values)
+    ? values.filter((value): value is string => typeof value === "string" && value.length > 0)
+    : []
 }
 
 function findLatestArtifact(
@@ -591,21 +627,27 @@ function renderAnnotatedParagraph(
 export function ReaderPane({
   activeDetail,
   aiInsightErrorMessage,
+  aiQuestionErrorMessage,
+  aiTranslationErrorMessage,
   annotationErrorMessage,
   articleStateErrorMessage,
   describedBy,
   documentExportErrorMessage,
   documentExportResult,
   headingId,
+  isAnsweringAIQuestion,
   isCreatingAnnotation,
   isGeneratingAIInsights,
+  isGeneratingAITranslation,
   isExportingDocument,
   isExportingMarkdown,
   isUpdatingArticleState,
   markdownExportErrorMessage,
   markdownExportResult,
   onCreateAnnotation,
+  onAnswerAIQuestion,
   onGenerateAIInsights,
+  onGenerateAITranslation,
   onExportDocumentBatch,
   onExportDocumentSingle,
   onExportMarkdownBatch,
@@ -629,6 +671,10 @@ export function ReaderPane({
   visibleArticleCount,
 }: ReaderPaneProps) {
   const [annotationNoteDraft, setAnnotationNoteDraft] = useState("")
+  const [aiQuestionDraft, setAIQuestionDraft] = useState("What is the main point of this article?")
+  const [aiQuestionScope, setAIQuestionScope] =
+    useState<ReaderAIQuestionContextScope>("currentArticle")
+  const [translationTargetLanguage, setTranslationTargetLanguage] = useState("zh-Hans")
   const [pendingSelection, setPendingSelection] = useState<ReaderPendingSelection | null>(null)
   const [selectionErrorMessage, setSelectionErrorMessage] = useState<string | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
@@ -647,8 +693,17 @@ export function ReaderPane({
   const latestKeywordArtifact = activeDetail
     ? findLatestArtifact(activeDetail.aiArtifacts, "keywords")
     : null
+  const latestTranslationArtifact = activeDetail
+    ? findLatestArtifact(activeDetail.aiArtifacts, "translation")
+    : null
+  const latestQuestionArtifact = activeDetail
+    ? findLatestArtifact(activeDetail.aiArtifacts, "question-answer")
+    : null
   const generatedSummaryText = readArtifactText(latestSummaryArtifact)
   const generatedKeywords = readArtifactKeywords(latestKeywordArtifact)
+  const generatedTranslationText = readArtifactText(latestTranslationArtifact)
+  const generatedAnswerText = readArtifactText(latestQuestionArtifact)
+  const citedContextIds = readArtifactStringArray(latestQuestionArtifact, "citedContextIds")
   const annotationResetKey = `${activeDetail?.article.id ?? "none"}:${readerContentMode}`
   const readerPresentationSummary = `${formatThemeToneLabel(themeTone)} theme, ${formatFontFamilyLabel(readerFontFamily)} font, ${formatFontScaleLabel(readerFontScale)} size, ${formatLineHeightLabel(readerLineHeight).toLowerCase()} leading, ${formatMarginModeLabel(readerMarginMode).toLowerCase()} margins`
   const readerPresentationStyle = {
@@ -772,6 +827,42 @@ export function ReaderPane({
     })
     setAnnotationNoteDraft("")
     clearPendingSelection()
+  }
+
+  function handleGenerateTranslation(mode: ReaderAITranslationMode) {
+    const targetLanguage = translationTargetLanguage.trim()
+
+    if (targetLanguage.length === 0) {
+      setSelectionErrorMessage("Enter a target language code before translating.")
+      return
+    }
+
+    if (mode === "selection" && !pendingSelection) {
+      setSelectionErrorMessage("Select extracted article text before translating a selection.")
+      return
+    }
+
+    setSelectionErrorMessage(null)
+    onGenerateAITranslation({
+      mode,
+      selectedText: mode === "selection" ? pendingSelection?.selectedText : null,
+      targetLanguage,
+    })
+  }
+
+  function handleAskAIQuestion() {
+    const question = aiQuestionDraft.trim()
+
+    if (question.length === 0) {
+      setSelectionErrorMessage("Enter a question before asking the article context.")
+      return
+    }
+
+    setSelectionErrorMessage(null)
+    onAnswerAIQuestion({
+      contextScope: aiQuestionScope,
+      question,
+    })
   }
 
   return (
@@ -954,6 +1045,144 @@ export function ReaderPane({
                       {aiInsightErrorMessage}
                     </p>
                   ) : null}
+                </section>
+
+                <section className="desktop-reader__ai">
+                  <div className="desktop-reader__ai-header">
+                    <div>
+                      <p className="desktop-reader__section-label">AI translation and questions</p>
+                      <p className="desktop-reader__ai-note">
+                        Translation and answers are explicit article actions, and answers cite only
+                        the selected context scope.
+                      </p>
+                    </div>
+                    <div className="desktop-reader__ai-summary">
+                      <span className="desktop-reader__fact-label">Context limit</span>
+                      <strong>
+                        {aiQuestionScope === "currentArticle"
+                          ? "1 article"
+                          : aiQuestionScope === "currentFeed"
+                            ? "source"
+                            : `${visibleArticleCount} visible`}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="desktop-reader__ai-grid desktop-reader__ai-grid--actions">
+                    <div className="desktop-reader__ai-card">
+                      <div>
+                        <span className="desktop-reader__fact-label">Translation</span>
+                        <strong>
+                          {latestTranslationArtifact
+                            ? formatReaderDate(
+                                latestTranslationArtifact.createdAt,
+                                latestTranslationArtifact.createdAt,
+                              )
+                            : "Not generated"}
+                        </strong>
+                      </div>
+                      <label className="desktop-reader__field">
+                        <span>Target language</span>
+                        <input
+                          onChange={(event) => setTranslationTargetLanguage(event.target.value)}
+                          type="text"
+                          value={translationTargetLanguage}
+                        />
+                      </label>
+                      <div className="desktop-reader__ai-actions">
+                        <Button
+                          disabled={isGeneratingAITranslation}
+                          onClick={() => handleGenerateTranslation("fullArticle")}
+                          size="sm"
+                          tone="neutral"
+                        >
+                          {isGeneratingAITranslation ? "Translating..." : "Translate article"}
+                        </Button>
+                        <Button
+                          disabled={isGeneratingAITranslation || !pendingSelection}
+                          onClick={() => handleGenerateTranslation("selection")}
+                          size="sm"
+                          tone="ghost"
+                        >
+                          Translate selection
+                        </Button>
+                      </div>
+                      <p>
+                        {generatedTranslationText ??
+                          "No translation artifact yet. Select extracted text for selection translation."}
+                      </p>
+                      <small>{latestTranslationArtifact?.provider ?? "No provider recorded"}</small>
+                      {aiTranslationErrorMessage ? (
+                        <p className="desktop-reader__error" role="alert">
+                          {aiTranslationErrorMessage}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="desktop-reader__ai-card">
+                      <div>
+                        <span className="desktop-reader__fact-label">Question</span>
+                        <strong>
+                          {latestQuestionArtifact
+                            ? formatReaderDate(
+                                latestQuestionArtifact.createdAt,
+                                latestQuestionArtifact.createdAt,
+                              )
+                            : "Not answered"}
+                        </strong>
+                      </div>
+                      <label className="desktop-reader__field">
+                        <span>Question</span>
+                        <textarea
+                          onChange={(event) => setAIQuestionDraft(event.target.value)}
+                          rows={3}
+                          value={aiQuestionDraft}
+                        />
+                      </label>
+                      <fieldset className="desktop-toolbar-group desktop-reader__control-group">
+                        <legend className="desktop-toolbar-group__legend">Context scope</legend>
+                        <div className="desktop-toolbar-pills">
+                          {QUESTION_CONTEXT_SCOPE_OPTIONS.map((option) => {
+                            const active = aiQuestionScope === option.value
+
+                            return (
+                              <Button
+                                aria-pressed={active}
+                                className={
+                                  active ? "desktop-pill desktop-pill--active" : "desktop-pill"
+                                }
+                                key={option.value}
+                                onClick={() => setAIQuestionScope(option.value)}
+                                size="sm"
+                                tone={active ? "neutral" : "ghost"}
+                              >
+                                {option.label}
+                              </Button>
+                            )
+                          })}
+                        </div>
+                      </fieldset>
+                      <Button
+                        disabled={isAnsweringAIQuestion}
+                        onClick={handleAskAIQuestion}
+                        size="sm"
+                        tone="neutral"
+                      >
+                        {isAnsweringAIQuestion ? "Answering..." : "Ask within context"}
+                      </Button>
+                      <p>{generatedAnswerText ?? "No answer artifact yet."}</p>
+                      {citedContextIds.length > 0 ? (
+                        <small>Cited context: {citedContextIds.join(", ")}</small>
+                      ) : (
+                        <small>{latestQuestionArtifact?.provider ?? "No provider recorded"}</small>
+                      )}
+                      {aiQuestionErrorMessage ? (
+                        <p className="desktop-reader__error" role="alert">
+                          {aiQuestionErrorMessage}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
                 </section>
 
                 <section className="desktop-reader__state-controls">

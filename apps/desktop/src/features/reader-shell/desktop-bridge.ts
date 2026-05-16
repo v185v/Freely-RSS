@@ -2,6 +2,10 @@ import type { ArticleListItemDto } from "@freelyrss/shared-types"
 
 import type {
   ReaderAIInsightResult,
+  ReaderAIQuestionContextScope,
+  ReaderAIQuestionResult,
+  ReaderAITranslationMode,
+  ReaderAITranslationResult,
   ReaderShellData,
   ReaderSortMode,
   ReaderStatusFilter,
@@ -68,6 +72,49 @@ export async function generateDurableArticleInsights(
         maxSummaryChars: 520,
         maxKeywords: 8,
       },
+    })
+  } catch {
+    return null
+  }
+}
+
+export async function generateDurableArticleTranslation(input: {
+  articleId: string
+  mode: ReaderAITranslationMode
+  selectedText?: string | null
+  targetLanguage: string
+}): Promise<ReaderAITranslationResult | null> {
+  const invoke = await resolveInvoke()
+
+  if (!invoke) {
+    return null
+  }
+
+  try {
+    return await invoke<ReaderAITranslationResult>("generate_article_translation", {
+      request: input,
+    })
+  } catch {
+    return null
+  }
+}
+
+export async function answerDurableArticleQuestion(input: {
+  allowedArticleIds: string[]
+  articleId: string
+  contextScope: ReaderAIQuestionContextScope
+  language?: string | null
+  question: string
+}): Promise<ReaderAIQuestionResult | null> {
+  const invoke = await resolveInvoke()
+
+  if (!invoke) {
+    return null
+  }
+
+  try {
+    return await invoke<ReaderAIQuestionResult>("answer_article_question", {
+      request: input,
     })
   } catch {
     return null

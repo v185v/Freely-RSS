@@ -183,6 +183,10 @@ fn stable_input_hash(provider_id: &str, task: &AiQueueTask) -> String {
     fingerprint.push(&task.article_id);
     fingerprint.push(task.submission.input.capability().operation());
     fingerprint.push_input(&task.submission.input);
+    for property in &task.submission.properties {
+        fingerprint.push(&property.key);
+        fingerprint.push(&property.value);
+    }
     format!("fnv64:{:016x}", fingerprint.finish())
 }
 

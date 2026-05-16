@@ -1288,6 +1288,10 @@ body {
   gap: 12px;
 }
 
+.desktop-reader__ai-grid--actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .desktop-reader__ai-card {
   display: grid;
   gap: 12px;
@@ -1348,6 +1352,36 @@ body {
   color: var(--fr-text-muted);
   font-size: 0.88rem;
   line-height: 1.5;
+}
+
+.desktop-reader__field {
+  display: grid;
+  gap: 6px;
+}
+
+.desktop-reader__field span {
+  color: var(--fr-text-faint);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.desktop-reader__field input,
+.desktop-reader__field textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--fr-border);
+  border-radius: 12px;
+  background: var(--fr-panel-soft);
+  color: var(--fr-text);
+  font: inherit;
+  line-height: 1.45;
+}
+
+.desktop-reader__field textarea {
+  resize: vertical;
 }
 
 .desktop-reader__state-summary {
@@ -1744,6 +1778,7 @@ body {
   .desktop-batch__summary,
   .desktop-export__summary,
   .desktop-import__summary,
+  .desktop-reader__ai-grid--actions,
   .desktop-reader__ai-grid,
   .desktop-reader__attachment-facts,
   .desktop-reader__facts,
@@ -1777,6 +1812,8 @@ body {
   .desktop-task-status__summary,
   .desktop-summary__metrics,
   .desktop-reader__body-meta,
+  .desktop-reader__ai-grid--actions,
+  .desktop-reader__ai-grid,
   .desktop-reader__attachment-facts,
   .desktop-reader__facts,
   .desktop-reader__meta-group,

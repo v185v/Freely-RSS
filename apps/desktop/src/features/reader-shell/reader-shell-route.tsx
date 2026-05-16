@@ -25,19 +25,26 @@ import { QueuePane } from "./components/queue-pane"
 import { ReaderPane } from "./components/reader-pane"
 import { SourcePane } from "./components/source-pane"
 import { TaskStatusPanel } from "./components/task-status-panel"
-import { fetchDurableQueueArticles, generateDurableArticleInsights } from "./desktop-bridge"
+import {
+  answerDurableArticleQuestion,
+  fetchDurableQueueArticles,
+  generateDurableArticleInsights,
+  generateDurableArticleTranslation,
+} from "./desktop-bridge"
 import {
   type MockBatchOperationResult,
   type MockDocumentExportResult,
   type MockMarkdownExportResult,
   type MockOpmlExportResult,
   type MockOpmlImportResult,
+  answerMockArticleQuestion,
   createMockAnnotation,
   exportMockDocument,
   exportMockMarkdown,
   exportMockOpml,
   fetchReaderShellData,
   generateMockArticleInsights,
+  generateMockArticleTranslation,
   importMockOpml,
   readerShellQueryKey,
   refreshMockFeed,
@@ -56,7 +63,13 @@ import {
 import { useReaderViewStore } from "./state"
 import { buildReaderTaskStatuses, summarizeReaderTaskStatuses } from "./task-status"
 import { DEFAULT_SOURCE_ID } from "./types"
-import type { ReaderRouteSearch, ReaderShellData, ReaderTaskStatusKind } from "./types"
+import type {
+  ReaderAIQuestionContextScope,
+  ReaderAITranslationMode,
+  ReaderRouteSearch,
+  ReaderShellData,
+  ReaderTaskStatusKind,
+} from "./types"
 
 export function validateReaderSearch(search: Record<string, unknown>): ReaderRouteSearch {
   return {
@@ -235,6 +248,104 @@ export function ReaderShellRoute() {
       }
 
       return generateMockArticleInsights(articleId)
+    },
+    onSuccess: (result) => {
+      if (result.shellData) {
+        queryClient.setQueryData(readerShellQueryKey, result.shellData)
+      }
+    },
+  })
+  const generateArticleTranslationMutation = useMutation({
+    mutationFn: async (input: {
+      articleId: string
+      mode: ReaderAITranslationMode
+      selectedText?: string | null
+      targetLanguage: string
+    }) => {
+      const durableResult = await generateDurableArticleTranslation(input)
+
+      if (durableResult) {
+        const currentData = queryClient.getQueryData<ReaderShellData>(readerShellQueryKey)
+        const currentDetail = currentData?.articleDetails[input.articleId] ?? null
+
+        if (!currentData || !currentDetail) {
+          return {
+            shellData: currentData ?? null,
+            translationResult: durableResult,
+          }
+        }
+
+        const retainedArtifacts = currentDetail.aiArtifacts.filter(
+          (artifact) => artifact.id !== durableResult.artifact.id,
+        )
+
+        return {
+          translationResult: durableResult,
+          shellData: {
+            ...currentData,
+            articleDetails: {
+              ...currentData.articleDetails,
+              [input.articleId]: {
+                ...currentDetail,
+                aiArtifacts: [durableResult.artifact, ...retainedArtifacts],
+              },
+            },
+          },
+        }
+      }
+
+      return generateMockArticleTranslation(input)
+    },
+    onSuccess: (result) => {
+      if (result.shellData) {
+        queryClient.setQueryData(readerShellQueryKey, result.shellData)
+      }
+    },
+  })
+  const answerArticleQuestionMutation = useMutation({
+    mutationFn: async (input: {
+      articleId: string
+      contextScope: ReaderAIQuestionContextScope
+      question: string
+    }) => {
+      const request = {
+        ...input,
+        allowedArticleIds: visibleArticleIds,
+        language: activeDetail?.article.language ?? null,
+      }
+      const durableResult = await answerDurableArticleQuestion(request)
+
+      if (durableResult) {
+        const currentData = queryClient.getQueryData<ReaderShellData>(readerShellQueryKey)
+        const currentDetail = currentData?.articleDetails[input.articleId] ?? null
+
+        if (!currentData || !currentDetail) {
+          return {
+            questionResult: durableResult,
+            shellData: currentData ?? null,
+          }
+        }
+
+        const retainedArtifacts = currentDetail.aiArtifacts.filter(
+          (artifact) => artifact.id !== durableResult.artifact.id,
+        )
+
+        return {
+          questionResult: durableResult,
+          shellData: {
+            ...currentData,
+            articleDetails: {
+              ...currentData.articleDetails,
+              [input.articleId]: {
+                ...currentDetail,
+                aiArtifacts: [durableResult.artifact, ...retainedArtifacts],
+              },
+            },
+          },
+        }
+      }
+
+      return answerMockArticleQuestion(request)
     },
     onSuccess: (result) => {
       if (result.shellData) {
@@ -539,6 +650,14 @@ export function ReaderShellRoute() {
     generateArticleInsightsMutation.error instanceof Error
       ? generateArticleInsightsMutation.error.message
       : null
+  const aiTranslationErrorMessage =
+    generateArticleTranslationMutation.error instanceof Error
+      ? generateArticleTranslationMutation.error.message
+      : null
+  const aiQuestionErrorMessage =
+    answerArticleQuestionMutation.error instanceof Error
+      ? answerArticleQuestionMutation.error.message
+      : null
   const markdownExportErrorMessage =
     exportMarkdownMutation.error instanceof Error ? exportMarkdownMutation.error.message : null
   const documentExportErrorMessage =
@@ -655,6 +774,45 @@ export function ReaderShellRoute() {
       retryLabel: activeDetail ? "Retry AI insights" : null,
       updatedAt:
         generateArticleInsightsMutation.data?.insightResult.artifacts[0]?.createdAt ?? null,
+    },
+    {
+      id: "ai-translation",
+      title: "AI translation",
+      scope: activeDetail ? activeDetail.article.title : "No article selected",
+      isRunning: generateArticleTranslationMutation.isPending,
+      error: generateArticleTranslationMutation.error,
+      completedDetail: generateArticleTranslationMutation.data?.translationResult
+        ? `Generated ${generateArticleTranslationMutation.data.translationResult.artifact.kind} artifact.`
+        : null,
+      idleDetail: activeDetail
+        ? "Ready to translate the selected article or selected reader text."
+        : "Select an article before running AI translation.",
+      runningDetail: activeDetail
+        ? `Translating article text for ${activeDetail.article.title}.`
+        : "Translating article text.",
+      recovery: "Select an article or extracted text, then retry translation.",
+      retryLabel: activeDetail ? "Retry AI translation" : null,
+      updatedAt:
+        generateArticleTranslationMutation.data?.translationResult.artifact.createdAt ?? null,
+    },
+    {
+      id: "ai-question",
+      title: "AI question answering",
+      scope: activeDetail ? activeDetail.article.title : "No article selected",
+      isRunning: answerArticleQuestionMutation.isPending,
+      error: answerArticleQuestionMutation.error,
+      completedDetail: answerArticleQuestionMutation.data?.questionResult
+        ? `Answered with ${answerArticleQuestionMutation.data.questionResult.citedContextIds.length} allowed context item(s).`
+        : null,
+      idleDetail: activeDetail
+        ? "Ready to answer a question using an explicitly selected context scope."
+        : "Select an article before asking an AI question.",
+      runningDetail: activeDetail
+        ? `Answering within the selected context for ${activeDetail.article.title}.`
+        : "Answering within the selected context.",
+      recovery: "Keep an article selected and choose an allowed context scope before retrying.",
+      retryLabel: activeDetail ? "Retry AI question" : null,
+      updatedAt: answerArticleQuestionMutation.data?.questionResult.artifact.createdAt ?? null,
     },
     {
       id: "markdown-export",
@@ -821,6 +979,26 @@ export function ReaderShellRoute() {
         generateArticleInsightsMutation.reset()
         if (activeDetail) {
           generateArticleInsightsMutation.mutate(activeDetail.article.id)
+        }
+        break
+      case "ai-translation":
+        generateArticleTranslationMutation.reset()
+        if (activeDetail) {
+          generateArticleTranslationMutation.mutate({
+            articleId: activeDetail.article.id,
+            mode: "fullArticle",
+            targetLanguage: "zh-Hans",
+          })
+        }
+        break
+      case "ai-question":
+        answerArticleQuestionMutation.reset()
+        if (activeDetail) {
+          answerArticleQuestionMutation.mutate({
+            articleId: activeDetail.article.id,
+            contextScope: "currentArticle",
+            question: "What is the main point of this article?",
+          })
         }
         break
       case "opml-export":
@@ -1131,6 +1309,8 @@ export function ReaderShellRoute() {
             activeDetail={activeDetail}
             annotationErrorMessage={annotationErrorMessage}
             aiInsightErrorMessage={aiInsightErrorMessage}
+            aiQuestionErrorMessage={aiQuestionErrorMessage}
+            aiTranslationErrorMessage={aiTranslationErrorMessage}
             articleStateErrorMessage={articleStateErrorMessage}
             describedBy={READER_SHORTCUT_HINT_ID}
             documentExportErrorMessage={documentExportErrorMessage}
@@ -1138,8 +1318,10 @@ export function ReaderShellRoute() {
             headingId={READER_LANDMARK_IDS.readerHeading}
             isCreatingAnnotation={createAnnotationMutation.isPending}
             isGeneratingAIInsights={generateArticleInsightsMutation.isPending}
+            isAnsweringAIQuestion={answerArticleQuestionMutation.isPending}
             isExportingDocument={exportDocumentMutation.isPending}
             isExportingMarkdown={exportMarkdownMutation.isPending}
+            isGeneratingAITranslation={generateArticleTranslationMutation.isPending}
             isUpdatingArticleState={updateArticleStateMutation.isPending}
             markdownExportErrorMessage={markdownExportErrorMessage}
             markdownExportResult={markdownExportResult}
@@ -1154,6 +1336,31 @@ export function ReaderShellRoute() {
 
               generateArticleInsightsMutation.reset()
               generateArticleInsightsMutation.mutate(activeDetail.article.id)
+            }}
+            onAnswerAIQuestion={(input) => {
+              if (!activeDetail) {
+                return
+              }
+
+              answerArticleQuestionMutation.reset()
+              answerArticleQuestionMutation.mutate({
+                articleId: activeDetail.article.id,
+                contextScope: input.contextScope,
+                question: input.question,
+              })
+            }}
+            onGenerateAITranslation={(input) => {
+              if (!activeDetail) {
+                return
+              }
+
+              generateArticleTranslationMutation.reset()
+              generateArticleTranslationMutation.mutate({
+                articleId: activeDetail.article.id,
+                mode: input.mode,
+                selectedText: input.selectedText,
+                targetLanguage: input.targetLanguage,
+              })
             }}
             onExportDocumentBatch={(format) => {
               exportDocumentMutation.reset()

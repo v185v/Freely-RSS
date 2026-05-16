@@ -2648,3 +2648,42 @@ Step 60 已将 `SyncEvent` 限定为用户可携带状态、订阅组织和自�
 - The mock local provider remains deterministic shell wiring. Real provider selection, credentials, model configuration, local model process management, and remote network clients should be added behind `AiProvider` implementations rather than in the Tauri command or React components.
 - Summary and keyword cache hydration uses existing artifacts. Future translation and Q&A cache hydration should continue using `AIArtifact` rows keyed by provider/input hash instead of adding kind-specific cache tables.
 - Step 75 should add translation and limited-context Q&A by extending the same adapter/queue/artifact/host-command pattern while keeping AI optional, explicit, and local-first.
+
+## 2026-05-17 ASCII Addendum XXXIX
+
+### Step 75 Architecture Insights
+
+- Step 75 adds translation and limited-context question answering as explicit article actions, not as automatic reader behavior. The UI sends an intentional command, the desktop host prepares approved context, and the adapter workflow executes through the existing provider/queue/cache path.
+- `AiArticleActionWorkflow` mirrors the Step 74 insight workflow pattern but keeps action-specific concerns separate. Translation has full-article and selection modes; Q&A has an allowed context scope that must match every supplied context document.
+- Question context is constrained before provider invocation. Current-article Q&A sends only the selected article; current-source Q&A loads bounded articles from the same feed; current-filter Q&A accepts only the visible/approved article ids supplied by the shell.
+- `AIArtifact` remains the only durable result model. Translation stores `kind = "translation"` with target language and text in `result`; Q&A stores `kind = "question-answer"` with answer text and cited context ids. No database migration or kind-specific result table was added.
+- Queue cache identity now includes task properties as well as provider id, article id, capability, and task input. This keeps metadata such as translation mode, target language, and question context scope from being lost when two tasks share the same raw text.
+- The desktop host remains the authorization/orchestration boundary. It reads local SQLite article data, seeds cache from `AIArtifactStore`, persists completed artifacts, and serializes DTOs; it does not contain provider SDK logic, credential handling, sync transport, or REST route behavior.
+- The reader UI remains presentation and command orchestration. It renders `AIArtifactDto` values, collects user-selected translation text or question scope, and merges returned artifacts into the query cache without importing `AiProviderRegistry`, `AiTaskQueue`, SQLite stores, or provider implementations.
+
+### Step 75 File Responsibilities
+
+- `crates/ai-adapter/src/article_actions.rs`: owns Step 75 translation and limited-context Q&A workflow assembly. It defines `AiArticleActionWorkflow`, `AiArticleTranslationRequest`, `AiArticleQuestionRequest`, `AiArticleActionRun`, `AiArticleActionReport`, `AiTranslationMode`, request validation, context-scope validation, task construction, cache seeding, provider-registry execution, and action artifact return values.
+- `crates/ai-adapter/src/queue.rs`: extends stable input hashing to include `AiTaskSubmission.properties`, ensuring translation mode, target language, and question context scope participate in cache identity instead of being treated as presentation-only metadata.
+- `crates/ai-adapter/src/error.rs`: adds `InvalidArticleActionRequest` so translation/Q&A workflow validation failures remain distinct from provider, queue, and artifact-mapping errors.
+- `crates/ai-adapter/src/lib.rs`: exports the Step 75 article-action workflow types and contains regression coverage for translation cache reuse and mixed-scope Q&A rejection.
+- `apps/desktop/src-tauri/src/ai_actions.rs`: owns the desktop Tauri commands `generate_article_translation` and `answer_article_question`. It defines request/response DTOs, maps shell scope names to adapter context scopes, loads authorized article/feed/filter contexts from SQLite, hydrates cache from existing `AIArtifact` rows, invokes `AiArticleActionWorkflow`, persists completed artifacts through `AIArtifactStore`, and tests selected-text translation plus current-article context restriction.
+- `apps/desktop/src-tauri/src/ai_insights.rs`: exposes shared helper functions for loading an article, serializing `AIArtifact` DTOs, resolving the database path, and producing UTC timestamps so `ai_actions.rs` can reuse the same host boundary without duplicating article-row mapping logic.
+- `apps/desktop/src-tauri/src/lib.rs`: wires the new Tauri commands into the desktop invoke handler. It remains a thin command registration layer and does not implement provider or SQLite behavior.
+- `apps/desktop/src/features/reader-shell/desktop-bridge.ts`: adds browser-to-Tauri bridge calls for `generate_article_translation` and `answer_article_question`, returning `null` when Tauri is unavailable so the shell can fall back to local mock behavior in browser development.
+- `apps/desktop/src/features/reader-shell/types.ts`: adds shell-local DTOs for AI translation results, Q&A results, translation mode, question context scope, and task status kinds `ai-translation` / `ai-question`.
+- `apps/desktop/src/features/reader-shell/mock-data.ts`: owns browser-only mock implementations for selected/full article translation and scoped Q&A. It preserves unrelated artifacts, stores generated `translation` / `question-answer` artifacts in mock article details, and constrains mock Q&A contexts to current article, same feed, or provided visible article ids.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`: orchestrates durable-versus-mock translation/Q&A mutations, merges returned artifacts into the reader query cache, passes explicit callbacks into `ReaderPane`, and adds separate task-status entries and retry behavior for AI translation and AI question answering.
+- `apps/desktop/src/features/reader-shell/components/reader-pane.tsx`: owns the Step 75 reader presentation. It adds target-language input, full-article and selection translation buttons, Q&A question input, context-scope segmented controls, latest translation/answer rendering, cited context display, and error states while continuing to consume only `ArticleDetailDto.aiArtifacts`.
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`: protects the UI flow where selected text is translated and current-article Q&A cites only the selected article rather than other visible/source articles.
+- `apps/desktop/src/styles.css`: owns the translation/Q&A panel layout, responsive AI action grid, and local input styling for the reader AI controls.
+- `memory-bank/progress.md`: records the completed Step 75 milestone, validation commands, environment notes, and Step 76 handoff.
+- `memory-bank/architecture.md`: records the Step 75 architecture insights, file responsibilities, and boundary notes for future maintainers.
+
+### Step 75 Boundary Notes
+
+- Translation and Q&A results must continue to be stored as derived `AIArtifact` rows. Do not introduce `TranslationResult`, `QuestionAnswer`, or provider-specific result tables without a later storage design.
+- Q&A context scope is a privacy and correctness boundary. Host or adapter code must reject mixed scopes rather than silently dropping or broadening contexts after the provider request is built.
+- The reader UI may provide visible article ids for current-filter Q&A, but it must not assemble provider prompts, import provider SDKs, or bypass the host/adapter workflow.
+- `apps/desktop/src-tauri/src/ai_actions.rs` may prepare local article contexts but must not become a privacy settings store, real provider client, local REST route, sync protocol endpoint, Webhook adapter, or durable scheduler.
+- Step 76 should add AI privacy and enablement controls around these explicit commands. Opening the reader, switching articles, generating exports, syncing, dispatching Webhooks, or serving local REST requests must not trigger AI implicitly.

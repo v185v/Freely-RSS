@@ -577,6 +577,44 @@ describe("reader shell navigation", () => {
     })
   })
 
+  test("translates selected text and answers only within the current article context", async () => {
+    window.scrollTo = () => {}
+    const user = userEvent.setup()
+
+    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+
+    const readerPane = await screen.findByRole("region", { name: "Reading panel" })
+    const readerScope = within(readerPane)
+
+    await waitFor(() => {
+      expect(
+        readerScope.getByRole("heading", {
+          name: "Turning the desktop shell into a stable three-pane reader skeleton",
+        }),
+      ).toBeTruthy()
+    })
+
+    selectReaderText(readerPane, "state ownership")
+
+    await user.click(readerScope.getByRole("button", { name: "Translate selection" }))
+
+    await waitFor(() => {
+      expect(readerScope.getByText("[zh-Hans] state ownership")).toBeTruthy()
+    })
+
+    await user.click(readerScope.getByRole("button", { name: "Ask within context" }))
+
+    await waitFor(() => {
+      expect(
+        readerScope.getByText(
+          "Mock answer using 1 context item(s): What is the main point of this article?",
+        ),
+      ).toBeTruthy()
+      expect(readerScope.getByText("Cited context: article-layout-shell")).toBeTruthy()
+      expect(readerScope.queryByText(/Cited context:.*article-source-context/i)).toBeNull()
+    })
+  })
+
   test("switches reader content modes and keeps the latest mode after the app reopens", async () => {
     window.scrollTo = () => {}
     const user = userEvent.setup()

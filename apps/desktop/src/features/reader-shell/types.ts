@@ -192,6 +192,22 @@ export interface ReaderAIInsightResult {
   summaryFromCache: boolean
 }
 
+export type ReaderAITranslationMode = "fullArticle" | "selection"
+
+export interface ReaderAITranslationResult {
+  artifact: AIArtifactDto
+  fromCache: boolean
+}
+
+export type ReaderAIQuestionContextScope = "currentArticle" | "currentFeed" | "currentSearchResult"
+
+export interface ReaderAIQuestionResult {
+  artifact: AIArtifactDto
+  citedContextIds: string[]
+  contextScope: string
+  fromCache: boolean
+}
+
 export type ReaderBatchOperationAction = "add-read-later" | "add-tag" | "delete-cache" | "mark-read"
 
 export type ReaderBatchOperationCommand =
@@ -234,6 +250,8 @@ export type ReaderTaskStatusKind =
   | "cache-cleanup"
   | "document-export"
   | "ai-insights"
+  | "ai-question"
+  | "ai-translation"
   | "markdown-export"
   | "opml-export"
   | "opml-import"

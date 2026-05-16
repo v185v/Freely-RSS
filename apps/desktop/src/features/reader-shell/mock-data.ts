@@ -31,6 +31,10 @@ import type {
   OpmlExportReport,
   OpmlImportReport,
   ReaderAIInsightResult,
+  ReaderAIQuestionContextScope,
+  ReaderAIQuestionResult,
+  ReaderAITranslationMode,
+  ReaderAITranslationResult,
   ReaderBatchOperationInput,
   ReaderBatchOperationResult,
   ReaderCacheCleanupReport,
@@ -738,6 +742,16 @@ export type MockBatchOperationResult = {
 
 export type MockArticleInsightResult = {
   insightResult: ReaderAIInsightResult
+  shellData: ReaderShellData
+}
+
+export type MockArticleTranslationResult = {
+  shellData: ReaderShellData
+  translationResult: ReaderAITranslationResult
+}
+
+export type MockArticleQuestionResult = {
+  questionResult: ReaderAIQuestionResult
   shellData: ReaderShellData
 }
 
@@ -1618,15 +1632,17 @@ function buildMockAIArtifact(input: {
   createdAt: string
   kind: AIArtifactDto["kind"]
   result: AIArtifactDto["result"]
+  suffix?: string
 }): AIArtifactDto {
   const fingerprint = JSON.stringify(input.result).length
+  const suffix = input.suffix ? `-${input.suffix}` : ""
 
   return {
-    id: `ai-artifact-${input.kind}-${input.articleId}`,
+    id: `ai-artifact-${input.kind}-${input.articleId}${suffix}`,
     articleId: input.articleId,
     kind: input.kind,
     provider: "freelyrss.ai.mock.local",
-    inputHash: `mock:${input.kind}:${input.articleId}:${fingerprint}`,
+    inputHash: `mock:${input.kind}:${input.articleId}:${fingerprint}${suffix}`,
     result: input.result,
     createdAt: input.createdAt,
   }
@@ -1662,6 +1678,89 @@ function extractMockKeywords(content: string, limit: number) {
   }
 
   return keywords
+}
+
+function buildArticlePlainText(detail: ArticleDetailDto) {
+  return (
+    detail.article.contentExtracted ??
+    detail.article.contentRaw ??
+    detail.article.summary ??
+    detail.article.title
+  ).trim()
+}
+
+function buildMockTranslationText(text: string, targetLanguage: string) {
+  return `[${targetLanguage}] ${text.trim()}`
+}
+
+function normalizeQuestionContextScope(scope: ReaderAIQuestionContextScope) {
+  switch (scope) {
+    case "currentFeed":
+      return "current-feed"
+    case "currentSearchResult":
+      return "current-search-result"
+    default:
+      return "current-article"
+  }
+}
+
+function resolveMockQuestionContexts(input: {
+  allowedArticleIds: ArticleDetailDto["article"]["id"][]
+  articleId: ArticleDetailDto["article"]["id"]
+  contextScope: ReaderAIQuestionContextScope
+}) {
+  const activeDetail = findArticleDetailOrThrow(input.articleId)
+  const scope = normalizeQuestionContextScope(input.contextScope)
+
+  if (input.contextScope === "currentArticle") {
+    return [
+      {
+        id: activeDetail.article.id,
+        title: activeDetail.article.title,
+        content: buildArticlePlainText(activeDetail),
+        scope,
+      },
+    ]
+  }
+
+  const allowedIds =
+    input.contextScope === "currentFeed"
+      ? mockReaderState.articles
+          .filter((article) => article.feedId === activeDetail.article.feedId)
+          .map((article) => article.id)
+      : input.allowedArticleIds
+
+  const contexts = allowedIds
+    .map((articleId) => {
+      const detail = mockReaderState.articleDetails[articleId]
+
+      if (!detail) {
+        return null
+      }
+
+      return {
+        id: detail.article.id,
+        title: detail.article.title,
+        content: buildArticlePlainText(detail),
+        scope,
+      }
+    })
+    .filter((context): context is NonNullable<typeof context> => Boolean(context))
+    .slice(0, 6)
+
+  if (contexts.length === 0) {
+    throw new Error("The selected AI question scope has no approved article context.")
+  }
+
+  return contexts
+}
+
+function createQuestionSuffix(scope: ReaderAIQuestionContextScope, question: string) {
+  return `${scope}-${question
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .slice(0, 40)}`
 }
 
 function clearAttachmentCachePaths(attachmentIds: Set<string>) {
@@ -1961,6 +2060,120 @@ export async function generateMockArticleInsights(
       artifacts: cloneValue([summaryArtifact, keywordArtifact]),
       summaryFromCache: Boolean(existingSummary),
       keywordsFromCache: Boolean(existingKeywords),
+    },
+    shellData: buildReaderShellSnapshot(mockReaderState),
+  }
+}
+
+export async function generateMockArticleTranslation(input: {
+  articleId: ArticleDetailDto["article"]["id"]
+  mode: ReaderAITranslationMode
+  selectedText?: string | null
+  targetLanguage: string
+}): Promise<MockArticleTranslationResult> {
+  const detail = findArticleDetailOrThrow(input.articleId)
+  const now = new Date().toISOString()
+  const sourceText =
+    input.mode === "selection" && input.selectedText?.trim()
+      ? input.selectedText.trim()
+      : buildArticlePlainText(detail)
+
+  if (sourceText.length === 0) {
+    throw new Error("The selected article has no text available for translation.")
+  }
+
+  const targetLanguage = input.targetLanguage.trim() || "zh-Hans"
+  const existingTranslation = detail.aiArtifacts.find(
+    (artifact) =>
+      artifact.kind === "translation" &&
+      artifact.result &&
+      typeof artifact.result === "object" &&
+      !Array.isArray(artifact.result) &&
+      artifact.result.text === buildMockTranslationText(sourceText, targetLanguage),
+  )
+  const translationArtifact =
+    existingTranslation ??
+    buildMockAIArtifact({
+      articleId: input.articleId,
+      createdAt: now,
+      kind: "translation",
+      suffix: `${input.mode}-${targetLanguage}`,
+      result: {
+        kind: "translation",
+        mode: input.mode,
+        text: buildMockTranslationText(sourceText, targetLanguage),
+        targetLanguage,
+      },
+    })
+  const nextArtifacts = [
+    translationArtifact,
+    ...detail.aiArtifacts.filter((artifact) => artifact.id !== translationArtifact.id),
+  ]
+
+  replaceArticleAIArtifacts(input.articleId, nextArtifacts)
+
+  return {
+    translationResult: {
+      artifact: cloneValue(translationArtifact),
+      fromCache: Boolean(existingTranslation),
+    },
+    shellData: buildReaderShellSnapshot(mockReaderState),
+  }
+}
+
+export async function answerMockArticleQuestion(input: {
+  allowedArticleIds: ArticleDetailDto["article"]["id"][]
+  articleId: ArticleDetailDto["article"]["id"]
+  contextScope: ReaderAIQuestionContextScope
+  question: string
+}): Promise<MockArticleQuestionResult> {
+  const detail = findArticleDetailOrThrow(input.articleId)
+  const question = input.question.trim()
+
+  if (question.length === 0) {
+    throw new Error("Enter a question before asking the article context.")
+  }
+
+  const contexts = resolveMockQuestionContexts(input)
+  const citedContextIds = contexts.map((context) => context.id)
+  const contextScope = normalizeQuestionContextScope(input.contextScope)
+  const existingAnswer = detail.aiArtifacts.find(
+    (artifact) =>
+      artifact.kind === "question-answer" &&
+      artifact.result &&
+      typeof artifact.result === "object" &&
+      !Array.isArray(artifact.result) &&
+      artifact.result.question === question &&
+      artifact.result.contextScope === contextScope,
+  )
+  const answerArtifact =
+    existingAnswer ??
+    buildMockAIArtifact({
+      articleId: input.articleId,
+      createdAt: new Date().toISOString(),
+      kind: "question-answer",
+      suffix: createQuestionSuffix(input.contextScope, question),
+      result: {
+        kind: "question-answer",
+        question,
+        contextScope,
+        citedContextIds,
+        text: `Mock answer using ${contexts.length} context item(s): ${question}`,
+      },
+    })
+  const nextArtifacts = [
+    answerArtifact,
+    ...detail.aiArtifacts.filter((artifact) => artifact.id !== answerArtifact.id),
+  ]
+
+  replaceArticleAIArtifacts(input.articleId, nextArtifacts)
+
+  return {
+    questionResult: {
+      artifact: cloneValue(answerArtifact),
+      citedContextIds,
+      contextScope,
+      fromCache: Boolean(existingAnswer),
     },
     shellData: buildReaderShellSnapshot(mockReaderState),
   }

@@ -37,6 +37,9 @@ pub enum AiAdapterError {
     InvalidArticleInsightRequest {
         reason: &'static str,
     },
+    InvalidArticleActionRequest {
+        reason: &'static str,
+    },
 }
 
 impl fmt::Display for AiAdapterError {
@@ -88,6 +91,9 @@ impl fmt::Display for AiAdapterError {
             }
             Self::InvalidArticleInsightRequest { reason } => {
                 write!(f, "AI article insight request is invalid: {reason}")
+            }
+            Self::InvalidArticleActionRequest { reason } => {
+                write!(f, "AI article action request is invalid: {reason}")
             }
         }
     }

@@ -106,7 +106,7 @@ fn generate_article_insights_at(
     })
 }
 
-fn load_article(
+pub(crate) fn load_article(
     connection: &Connection,
     article_id: &ArticleId,
 ) -> Result<Option<Article>, Box<dyn Error>> {
@@ -201,7 +201,7 @@ fn article_to_snapshot(article: &Article) -> AiArticleInsightSnapshot {
     }
 }
 
-fn artifact_to_dto(artifact: AIArtifact) -> AIArtifactDto {
+pub(crate) fn artifact_to_dto(artifact: AIArtifact) -> AIArtifactDto {
     AIArtifactDto {
         id: artifact.id.to_string(),
         article_id: artifact.article_id.to_string(),
@@ -213,11 +213,11 @@ fn artifact_to_dto(artifact: AIArtifact) -> AIArtifactDto {
     }
 }
 
-fn current_iso_timestamp() -> String {
+pub(crate) fn current_iso_timestamp() -> String {
     chrono::DateTime::<Utc>::from(SystemTime::now()).to_rfc3339_opts(SecondsFormat::Secs, true)
 }
 
-fn resolve_database_path(app: &AppHandle) -> Result<PathBuf, String> {
+pub(crate) fn resolve_database_path(app: &AppHandle) -> Result<PathBuf, String> {
     let app_local_data_dir = app
         .path()
         .app_local_data_dir()

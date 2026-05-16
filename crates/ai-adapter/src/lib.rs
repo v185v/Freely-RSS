@@ -1,6 +1,7 @@
 //! Optional AI provider adapter boundaries for FreelyRSS.
 
 mod adapter;
+mod article_actions;
 mod article_insights;
 mod error;
 mod mock;
@@ -10,6 +11,10 @@ mod registry;
 mod retry;
 
 pub use adapter::AiProvider;
+pub use article_actions::{
+    AiArticleActionReport, AiArticleActionRun, AiArticleActionWorkflow, AiArticleQuestionRequest,
+    AiArticleTranslationRequest, AiTranslationMode,
+};
 pub use article_insights::{
     AiArticleInsightReport, AiArticleInsightRequest, AiArticleInsightRun, AiArticleInsightSnapshot,
     AiArticleInsightWorkflow, AiArticleInsights,
@@ -34,12 +39,13 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        AiAdapterError, AiArticleInsightRequest, AiArticleInsightSnapshot,
-        AiArticleInsightWorkflow, AiExecutionPolicy, AiProviderCapability, AiProviderKind,
+        AiAdapterError, AiArticleActionWorkflow, AiArticleInsightRequest, AiArticleInsightSnapshot,
+        AiArticleInsightWorkflow, AiArticleQuestionRequest, AiArticleTranslationRequest,
+        AiContextDocument, AiContextScope, AiExecutionPolicy, AiProviderCapability, AiProviderKind,
         AiProviderManifest, AiProviderRegistry, AiQueueRunOutcome, AiQueueTask, AiRetryPolicy,
-        AiTaskInput, AiTaskOutput, AiTaskQueue, AiTaskSubmission, AiTranslationRequest,
-        MOCK_LOCAL_AI_PROVIDER_ID, MOCK_REMOTE_AI_PROVIDER_ID, MockLocalAiProvider,
-        MockRemoteAiProvider,
+        AiTaskInput, AiTaskOutput, AiTaskQueue, AiTaskSubmission, AiTranslationMode,
+        AiTranslationRequest, MOCK_LOCAL_AI_PROVIDER_ID, MOCK_REMOTE_AI_PROVIDER_ID,
+        MockLocalAiProvider, MockRemoteAiProvider,
     };
 
     #[test]
@@ -286,6 +292,108 @@ mod tests {
         assert!(second.report.keywords_from_cache);
     }
 
+    #[test]
+    fn article_action_workflow_translates_full_article_and_reuses_cache() {
+        let mut registry = AiProviderRegistry::default();
+        registry
+            .register(Box::new(MockLocalAiProvider::default()))
+            .expect("register local mock provider");
+
+        let mut workflow = AiArticleActionWorkflow::new();
+        let first = workflow
+            .translate_article_text(
+                &registry,
+                MOCK_LOCAL_AI_PROVIDER_ID,
+                article_translation_request(),
+            )
+            .expect("translate article");
+
+        assert_eq!(first.artifact.kind.as_str(), "translation");
+        assert_eq!(
+            first.artifact.result.as_value()["text"],
+            serde_json::json!("[zh-Hans] Reader work stays local")
+        );
+        assert_eq!(
+            first.artifact.result.as_value()["targetLanguage"],
+            serde_json::json!("zh-Hans")
+        );
+        assert_eq!(first.report.requested_article_id, "article-insight");
+        assert!(!first.report.from_cache);
+
+        let mut second_workflow = AiArticleActionWorkflow::new();
+        second_workflow.seed_cache(first.artifact.clone());
+        let second = second_workflow
+            .translate_article_text(
+                &registry,
+                MOCK_LOCAL_AI_PROVIDER_ID,
+                article_translation_request(),
+            )
+            .expect("reuse translation");
+
+        assert_eq!(second.artifact, first.artifact);
+        assert!(second.report.from_cache);
+    }
+
+    #[test]
+    fn article_action_workflow_limits_question_context_scope() {
+        let mut registry = AiProviderRegistry::default();
+        registry
+            .register(Box::new(MockLocalAiProvider::default()))
+            .expect("register local mock provider");
+
+        let mut workflow = AiArticleActionWorkflow::new();
+        let run = workflow
+            .answer_limited_question(
+                &registry,
+                MOCK_LOCAL_AI_PROVIDER_ID,
+                article_question_request(vec![AiContextDocument {
+                    id: "article-insight".to_owned(),
+                    scope: AiContextScope::CurrentArticle,
+                    title: "Queue ownership".to_owned(),
+                    content: "Reader work stays local".to_owned(),
+                }]),
+            )
+            .expect("answer question");
+
+        assert_eq!(run.artifact.kind.as_str(), "question-answer");
+        assert_eq!(
+            run.artifact.result.as_value()["citedContextIds"],
+            serde_json::json!(["article-insight"])
+        );
+        assert_eq!(
+            run.report.context_scope,
+            Some(AiContextScope::CurrentArticle)
+        );
+
+        let error = workflow
+            .answer_limited_question(
+                &registry,
+                MOCK_LOCAL_AI_PROVIDER_ID,
+                article_question_request(vec![
+                    AiContextDocument {
+                        id: "article-insight".to_owned(),
+                        scope: AiContextScope::CurrentArticle,
+                        title: "Queue ownership".to_owned(),
+                        content: "Reader work stays local".to_owned(),
+                    },
+                    AiContextDocument {
+                        id: "other-source".to_owned(),
+                        scope: AiContextScope::CurrentFeed,
+                        title: "Other source".to_owned(),
+                        content: "This context is not allowed".to_owned(),
+                    },
+                ]),
+            )
+            .expect_err("mixed scopes must be rejected");
+
+        assert_eq!(
+            error,
+            AiAdapterError::InvalidArticleActionRequest {
+                reason: "article question context is outside the allowed scope"
+            }
+        );
+    }
+
     fn translation_submission(task_id: &str) -> AiTaskSubmission {
         AiTaskSubmission {
             task_id: task_id.to_owned(),
@@ -313,6 +421,28 @@ mod tests {
             "2026-05-16T08:00:00Z",
             Some(80),
             Some(4),
+        )
+    }
+
+    fn article_translation_request() -> AiArticleTranslationRequest {
+        AiArticleTranslationRequest::new(
+            "article-insight",
+            "2026-05-16T08:05:00Z",
+            "Reader work stays local",
+            Some("en".to_owned()),
+            "zh-Hans",
+            AiTranslationMode::FullArticle,
+        )
+    }
+
+    fn article_question_request(contexts: Vec<AiContextDocument>) -> AiArticleQuestionRequest {
+        AiArticleQuestionRequest::new(
+            "article-insight",
+            "2026-05-16T08:06:00Z",
+            "Where does reader work stay?",
+            contexts,
+            AiContextScope::CurrentArticle,
+            Some("en".to_owned()),
         )
     }
 }

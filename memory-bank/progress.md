@@ -2,11 +2,17 @@
 
 ## 当前状态
 
-- 阶段：阶段 10 Step 72 已完成，新增 `crates/ai-adapter` 作为独立 AI Provider 抽象边界；本地与远程 Provider 通过同一 `AiProvider` trait、`AiTaskSubmission`、`AiExecutionPolicy` / `AiRetryPolicy` 和 `AiProviderRegistry` 接入，并用本地/远程模拟 Provider 验证同一调用入口。
-- 最后更新：2026-05-15
-- 风险状态：已从“Step 71 已建立知识库导出适配器；下一步 Step 72 可以建立 AI Provider 抽象，但必须保持 AI 为可选增强层，不得让 AI provider、任务队列或模型输出污染核心阅读、同步、Webhook 或本地 REST API 边界”推进到“Step 72 已建立 AI Provider 抽象；下一步 Step 73 可以建立 AI 任务队列与缓存，但不得在队列层引入自动启用、UI 直连模型、同步协议载荷变更或绕过 `AIArtifact` 的结果持久化边界”
+- 阶段：阶段 10 Step 75 已完成，翻译与限定上下文问答已沿 `crates/ai-adapter` workflow -> 桌面 Tauri command -> `AIArtifactStore` -> `ArticleDetailDto.aiArtifacts` -> reader UI 的路径接入；整文/选段翻译和当前文章/当前来源/当前过滤结果问答都必须由用户显式触发。
+- 最后更新：2026-05-17
+- 风险状态：已从“Step 74 已实现摘要与关键词；下一步 Step 75 应继续通过 `AIArtifact` DTO 与 Tauri/adapter 工作流接入翻译/Q&A，禁止 React 直连 provider SDK 或 queue internals”推进到“Step 75 已完成翻译与限定上下文问答；下一步 Step 76 应实现 AI 隐私与开关控制，必须确保 AI 默认关闭、明确展示发送范围/Provider/缓存删除/重新生成入口，且关闭状态下打开阅读器不得触发任何 AI 请求”
 
-### 2026-05-15 状态快照（最新）
+### 2026-05-17 状态快照（最新）
+
+- 当前完成：阶段 10 Step 75 已完成，新增 `AiArticleActionWorkflow`、`AiArticleTranslationRequest`、`AiArticleQuestionRequest` 与 `AiTranslationMode`，在 `AiTaskQueue` / `AiProviderRegistry` 上组装翻译和限定上下文问答任务；队列缓存指纹现在纳入 task properties，避免同一文本在不同翻译模式或问答 scope 下误命中缓存。桌面端新增 `generate_article_translation` 与 `answer_article_question` Tauri 命令，负责从 SQLite 加载授权文章/来源/当前过滤结果上下文、复用既有 `AIArtifactStore` 缓存、运行 deterministic mock provider、持久化 `translation` 与 `question-answer` artifact 并返回 DTO。Reader UI 新增显式翻译/问答面板，支持整文翻译、选段翻译、当前文章/当前来源/当前过滤结果 scope 选择、引用上下文显示和任务状态追踪。
+- 当前验证：`cargo test -p freelyrss-ai-adapter`、`cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml ai_`、`cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings`、`corepack pnpm --filter @freelyrss/desktop test -- --run reader-shell.test.tsx`、`corepack pnpm --filter @freelyrss/shared-types check`、`corepack pnpm --filter @freelyrss/desktop build`、`cargo fmt --all --check`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace` 与 `corepack pnpm run verify` 全部通过。`desktop build` 仍出现既有 Vite 大 chunk 提示，但构建成功。
+- 当前下一步：进入阶段 10 Step 76“实现 AI 隐私与开关控制”。应让 AI 默认关闭，展示发送范围、Provider、缓存删除和重新生成入口；验证重点是 AI 关闭状态下打开阅读器不会自动触发任何 AI 请求。不要在 Step 76 中加入真实 provider SDK、远程上传默认开关、同步协议载荷变更、Webhook/知识库导出自动注入模型输出或本地 REST API 直接触发模型副作用。
+
+### 2026-05-15 状态快照（历史：Step 72）
 
 - 当前完成：阶段 10 Step 72 已完成，新增 `crates/ai-adapter`，定义本地/远程 AI Provider 的统一 manifest、能力枚举、任务输入/输出、任务提交、超时策略、固定重试策略、注册表和错误边界。当前能力覆盖摘要、关键词、翻译和受限上下文问答；`MockLocalAiProvider` 与 `MockRemoteAiProvider` 通过同一 `AiProviderRegistry::submit` 入口执行任务，证明本地模型和远程模型不会分裂成两套调用面。
 - 当前验证：`cargo test -p freelyrss-ai-adapter`、`cargo fmt --all --check`、`cargo clippy -p freelyrss-ai-adapter --all-targets -- -D warnings`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace`、`corepack pnpm run desktop:build` 与 `corepack pnpm run verify` 全部通过。`desktop:build` 仍出现既有 Vite 大 chunk 提示，但构建成功。
@@ -86,7 +92,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 10 Step 73 需要建立 AI 任务队列与缓存，同时保持 AI 为显式启用的可选增强层，不让后台队列自动触发真实模型调用、污染核心阅读链路、改写同步协议、绕过 `AIArtifact` 结果边界，或把模型输出隐式塞入 Webhook / 知识库导出 / 本地 REST API。
+- 当前无阻塞；下一步风险点是阶段 10 Step 76 需要实现 AI 隐私与开关控制，同时保持 AI 默认关闭、显式触发和本地优先，不让阅读器打开、文章切换、同步、Webhook、知识库导出或本地 REST API 隐式触发模型调用，也不要绕过 `AIArtifact` 结果边界新增 kind-specific 缓存表。
 
 ## 本次执行记录
 
@@ -2018,3 +2024,45 @@
 - `crates/core-domain/src/sqlite/ai_artifact_store.rs` owns persistence for completed `AIArtifact` rows. Future persistent AI cache hydration should reuse this table rather than adding translation, Q&A, summary, or keyword-specific result tables.
 - `apps/desktop/src-tauri/src/ai_insights.rs` owns the desktop host command boundary for article insight generation. It should continue loading authorized article data and persisting artifacts, while real provider credentials and model selection remain later work.
 - Reader UI should keep AI optional and explicit. Step 75 should add translation and limited-context Q&A by consuming `AIArtifact` DTOs and Tauri/adapter workflows, not by importing provider SDKs or queue internals into React components.
+
+## 2026-05-17 ASCII Addendum XXXIX
+
+### Stage 10 Step 75 Completed: translation and limited-context question answering
+
+- Completed `implementation-plan.md` Stage 10 Step 75 by adding explicit article translation and limited-context question workflows on top of the existing AI provider, queue, cache, and `AIArtifact` boundaries.
+- Added `AiArticleActionWorkflow`, `AiArticleTranslationRequest`, `AiArticleQuestionRequest`, `AiArticleActionRun`, `AiArticleActionReport`, and `AiTranslationMode` in `crates/ai-adapter`.
+- Translation supports full-article and selected-text modes. Question answering requires an allowed context scope and rejects mixed-scope contexts before provider invocation.
+- Extended AI queue input hashing to include task properties, so metadata such as translation mode, target language, and question context scope participates in cache identity.
+- Added desktop Tauri commands `generate_article_translation` and `answer_article_question`. They load authorized local article data, seed cache from existing `AIArtifact` rows, run the deterministic local mock provider, persist returned `translation` / `question-answer` artifacts, and expose DTOs to the shell.
+- Wired the reader UI to expose explicit translation and question controls. The panel renders latest translation and answer artifacts, shows cited context ids, tracks AI translation/question task status separately from summary/keyword generation, and keeps browser-only mock fallback behavior for non-Tauri development.
+- Added regression coverage proving selected text translation persists/reuses cache, and current-article Q&A cites only the current article even when other article ids are supplied.
+- Kept Step 75 out of sync-engine, sync-server routes, WebDAV transport, integration-engine Webhook/knowledge-base export, local REST API routes, real provider SDKs, and SQLite migrations. No new AI result table was added.
+
+### Step 75 Verification
+
+- Passed `cargo test -p freelyrss-ai-adapter`
+- Passed `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml ai_`
+- Passed `cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings`
+- Passed `corepack pnpm --filter @freelyrss/desktop test -- --run reader-shell.test.tsx`
+- Passed `corepack pnpm --filter @freelyrss/shared-types check`
+- Passed `corepack pnpm --filter @freelyrss/desktop build`
+- Passed `cargo fmt --all --check`
+- Passed `cargo clippy -p freelyrss-ai-adapter --all-targets -- -D warnings`
+- Passed `cargo clippy --workspace --all-targets -- -D warnings`
+- Passed `cargo test --workspace`
+- Passed `corepack pnpm run format:check`
+- Passed `corepack pnpm run verify`
+
+### Environment Notes
+
+- `corepack pnpm --filter @freelyrss/desktop build` completed successfully and emitted the existing Vite chunk-size warning for the generated desktop bundle. The warning did not fail the build.
+- Browser automation could not be run in this session because the required Node/browser control tool was not exposed, but the reader interaction path is covered by Testing Library regression tests and production build/type-checking.
+
+### Next Step (ASCII update)
+
+- The next implementation step in `implementation-plan.md` is Stage 10 Step 76: AI privacy and enablement controls.
+- Preserve the current boundary split:
+- `crates/ai-adapter/src/article_actions.rs` owns translation and question workflow assembly only. It should not open SQLite, persist artifacts, manage credentials, call UI code, or start background workers.
+- `apps/desktop/src-tauri/src/ai_actions.rs` owns desktop host authorization/orchestration for translation and Q&A. It may load approved local article context and persist completed artifacts, but should not become a real provider SDK wrapper or privacy settings store.
+- Reader UI should keep AI optional and explicit. Step 76 should add privacy toggles, provider/scope disclosure, cache deletion, and regeneration controls without triggering AI on article open, route reconciliation, sync, Webhook, knowledge-base export, or local REST routes.
+- Continue to use `AIArtifact` for persisted derived results; do not add translation-specific or Q&A-specific result tables unless a later storage design explicitly requires it.
