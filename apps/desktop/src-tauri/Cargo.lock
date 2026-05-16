@@ -832,6 +832,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "freelyrss-ai-adapter"
+version = "0.1.0"
+dependencies = [
+ "freelyrss-core-domain",
+ "serde_json",
+]
+
+[[package]]
 name = "freelyrss-core-domain"
 version = "0.1.0"
 dependencies = [
@@ -846,6 +854,8 @@ dependencies = [
 name = "freelyrss-desktop"
 version = "0.0.1"
 dependencies = [
+ "chrono",
+ "freelyrss-ai-adapter",
  "freelyrss-core-domain",
  "getrandom 0.2.17",
  "rusqlite",

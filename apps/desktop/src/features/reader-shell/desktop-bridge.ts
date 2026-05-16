@@ -1,6 +1,11 @@
 import type { ArticleListItemDto } from "@freelyrss/shared-types"
 
-import type { ReaderShellData, ReaderSortMode, ReaderStatusFilter } from "./types"
+import type {
+  ReaderAIInsightResult,
+  ReaderShellData,
+  ReaderSortMode,
+  ReaderStatusFilter,
+} from "./types"
 
 type DurableQueueRequest = {
   feedIds: string[]
@@ -42,6 +47,28 @@ export async function fetchDurableQueueArticles(
       executionMode: "durable",
       items,
     }
+  } catch {
+    return null
+  }
+}
+
+export async function generateDurableArticleInsights(
+  articleId: string,
+): Promise<ReaderAIInsightResult | null> {
+  const invoke = await resolveInvoke()
+
+  if (!invoke) {
+    return null
+  }
+
+  try {
+    return await invoke<ReaderAIInsightResult>("generate_article_insights", {
+      request: {
+        articleId,
+        maxSummaryChars: 520,
+        maxKeywords: 8,
+      },
+    })
   } catch {
     return null
   }

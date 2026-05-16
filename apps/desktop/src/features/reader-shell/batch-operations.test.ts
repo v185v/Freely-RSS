@@ -89,6 +89,7 @@ function createDetail(article: ArticleListItemDto): ArticleDetailDto {
     }),
     attachments: [],
     annotations: [],
+    aiArtifacts: [],
   }
 }
 

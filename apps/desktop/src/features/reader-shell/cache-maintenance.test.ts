@@ -101,6 +101,7 @@ function createDetail(overrides?: Partial<ArticleDetailDto>): ArticleDetailDto {
     tags: [],
     attachments: [],
     annotations: [],
+    aiArtifacts: [],
     ...overrides,
   }
 }

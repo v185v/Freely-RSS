@@ -1204,6 +1204,7 @@ body {
 }
 
 .desktop-reader__article-header,
+.desktop-reader__ai,
 .desktop-reader__annotations,
 .desktop-reader__presentation,
 .desktop-reader__state-controls,
@@ -1241,6 +1242,7 @@ body {
   justify-content: space-between;
 }
 
+.desktop-reader__ai-header,
 .desktop-reader__annotations-header,
 .desktop-reader__presentation-header {
   display: flex;
@@ -1261,6 +1263,91 @@ body {
   margin: 0;
   color: var(--fr-text-muted);
   line-height: 1.6;
+}
+
+.desktop-reader__ai-note {
+  max-width: 56ch;
+  margin: 0;
+  color: var(--fr-text-muted);
+  line-height: 1.6;
+}
+
+.desktop-reader__ai-summary {
+  display: grid;
+  gap: 6px;
+  min-width: min(100%, 160px);
+  padding: 12px 14px;
+  border: 1px solid var(--fr-border);
+  border-radius: 18px;
+  background: var(--fr-panel-inset);
+}
+
+.desktop-reader__ai-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(180px, 0.8fr);
+  gap: 12px;
+}
+
+.desktop-reader__ai-card {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--fr-border);
+  border-radius: 18px;
+  background: var(--fr-panel-inset);
+}
+
+.desktop-reader__ai-card > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.desktop-reader__ai-card p {
+  margin: 0;
+  color: var(--fr-text-muted);
+  line-height: 1.6;
+}
+
+.desktop-reader__ai-card small {
+  overflow-wrap: anywhere;
+  color: var(--fr-text-faint);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.desktop-reader__ai-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.desktop-reader__ai-keywords li {
+  padding: 6px 10px;
+  border: 1px solid rgba(127, 226, 192, 0.28);
+  border-radius: 999px;
+  background: rgba(127, 226, 192, 0.1);
+  color: var(--fr-text);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.desktop-reader__ai-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.desktop-reader__ai-actions span {
+  color: var(--fr-text-muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
 }
 
 .desktop-reader__state-summary {
@@ -1657,6 +1744,7 @@ body {
   .desktop-batch__summary,
   .desktop-export__summary,
   .desktop-import__summary,
+  .desktop-reader__ai-grid,
   .desktop-reader__attachment-facts,
   .desktop-reader__facts,
   .desktop-reader__meta-group,

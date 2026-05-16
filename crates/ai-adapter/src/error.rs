@@ -34,6 +34,9 @@ pub enum AiAdapterError {
     InvalidArtifactMapping {
         reason: String,
     },
+    InvalidArticleInsightRequest {
+        reason: &'static str,
+    },
 }
 
 impl fmt::Display for AiAdapterError {
@@ -82,6 +85,9 @@ impl fmt::Display for AiAdapterError {
                     f,
                     "AI task response cannot be mapped to AIArtifact: {reason}"
                 )
+            }
+            Self::InvalidArticleInsightRequest { reason } => {
+                write!(f, "AI article insight request is invalid: {reason}")
             }
         }
     }

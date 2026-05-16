@@ -2605,3 +2605,46 @@ Step 60 已将 `SyncEvent` 限定为用户可携带状态、订阅组织和自�
 - `AiTaskQueue` is not an article repository. Authorized callers must provide the article id, task input, and timestamp; the queue should not reach into SQLite, reader UI state, local REST request state, or sync payloads to assemble inputs.
 - Cache hits return already-mapped `AIArtifact` values. Future persistent cache storage should hydrate the queue/cache from the `AIArtifact` domain boundary rather than creating an unrelated cache schema.
 - Step 74 should build summary and keyword extraction flows on top of `AiProviderRegistry` and `AiTaskQueue`, preserving AI as an explicit optional feature.
+
+## 2026-05-16 ASCII Addendum XXXVIII
+
+### Step 74 Architecture Insights
+
+- Step 74 adds summary and keyword extraction as an explicit article-insight workflow, not as direct provider calls from React. The reader shell asks the desktop host to generate insights, and the host orchestrates article loading, cache seeding, provider execution, artifact persistence, and DTO mapping.
+- `AiArticleInsightWorkflow` composes existing primitives instead of replacing them. It builds one summary task and one keyword task, enqueues both in `AiTaskQueue`, executes through `AiProviderRegistry`, and returns two `AIArtifact` values plus cache-hit metadata.
+- The existing `AIArtifact` table remains the single persistence model for derived AI results. Summary and keyword extraction did not add a database migration, provider-specific result table, reader-only cache table, or alternate DTO schema.
+- `AIArtifactStore` is the new SQLite boundary for completed artifacts. It can upsert a single artifact, upsert a batch transactionally, list artifacts for an article, and filter by artifact kind for workflow cache hydration.
+- The Tauri command is the host-side authorization/orchestration boundary. It loads the selected article from local SQLite, chooses extracted content over raw content over summary, seeds cached summary/keyword artifacts, runs the deterministic mock local provider, persists the returned artifacts, and exposes only serialized artifact DTOs to the shell.
+- The desktop reader UI stays presentation-only for AI. It renders `ArticleDetailDto.aiArtifacts`, starts generation only from the explicit `Generate insights` command, tracks task status, and keeps a browser-only mock fallback for development where the Tauri command is unavailable.
+- The timestamp boundary now uses real UTC ISO seconds in the desktop host, matching the repository's existing Rust timestamp style and avoiding fixed runtime artifact dates.
+- No database schema migration was added. The complete relevant durable schema is still the existing `AIArtifact(id, article_id, kind, provider, input_hash, result, created_at)` table with its existing article foreign key and indexes from the core business schema.
+
+### Step 74 File Responsibilities
+
+- `crates/ai-adapter/src/article_insights.rs`: owns the article summary/keyword workflow. It validates article insight requests, constructs summary and keyword `AiQueueTask` values, seeds and consumes the queue cache, reports cache hits, and returns paired `AIArtifact` results.
+- `crates/ai-adapter/src/error.rs`: adds `InvalidArticleInsightRequest` so invalid article ids, titles, empty content, invalid limits, and malformed workflow inputs are distinguished from provider, registry, queue, and artifact-mapping failures.
+- `crates/ai-adapter/src/lib.rs`: exports the Step 74 workflow DTOs and contains regression coverage for generated artifacts and seeded-cache reuse through the existing mock provider and queue.
+- `crates/core-domain/src/sqlite/ai_artifact_store.rs`: owns SQLite persistence for completed AI artifacts. It maps database rows into domain `AIArtifact` values, preserves JSON result parsing through `JsonBlob`, and protects upsert/list behavior with store tests.
+- `crates/core-domain/src/sqlite/mod.rs`: re-exports `AIArtifactStore` from the core-domain SQLite public surface so desktop host code can persist artifacts without deep-linking into module internals.
+- `apps/desktop/src-tauri/src/ai_insights.rs`: owns the desktop Tauri `generate_article_insights` command, request/response DTOs, SQLite article loading, artifact cache hydration, mock provider registration, workflow execution, artifact persistence, UTC timestamp creation, and host-side regression tests.
+- `apps/desktop/src-tauri/src/lib.rs`: wires the new Tauri command into the desktop invoke handler. It does not implement provider logic, SQLite row mapping, or reader UI behavior.
+- `apps/desktop/src-tauri/Cargo.toml`: adds `freelyrss-ai-adapter` for the workflow/provider boundary and `chrono` for UTC ISO timestamp formatting in the desktop host.
+- `apps/desktop/src-tauri/Cargo.lock`: records the desktop host dependency graph after adding the AI adapter and timestamp dependency.
+- `packages/shared-types/src/article.ts`: extends `ArticleDetailDto` with `aiArtifacts: AIArtifactDto[]`, making completed derived results part of article detail transport without changing `ArticleDto` or article queue rows.
+- `apps/desktop/src/features/reader-shell/desktop-bridge.ts`: owns the browser-to-Tauri bridge for `generate_article_insights`. It returns `null` when Tauri is unavailable so the shell can use the mock development path.
+- `apps/desktop/src/features/reader-shell/types.ts`: adds the shell-local `ReaderAIInsightResult` contract and the `ai-insights` task-status kind.
+- `apps/desktop/src/features/reader-shell/mock-data.ts`: seeds empty `aiArtifacts` arrays in article details and owns the browser-only mock insight generator, including artifact replacement rules that preserve unrelated artifact kinds.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`: owns shell orchestration for the insight mutation, durable-versus-mock fallback selection, query-cache artifact merging, task-status entry, retry behavior, and prop wiring into the reader pane.
+- `apps/desktop/src/features/reader-shell/components/reader-pane.tsx`: owns AI artifact presentation in the reader panel. It selects latest summary/keyword artifacts, reads compact JSON result shapes, renders provider/timestamp metadata, shows empty/error states, and exposes the explicit generate button.
+- `apps/desktop/src/styles.css`: owns the desktop reader AI panel layout, artifact grid, keyword pill treatment, responsive behavior, and action row styling.
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`: protects the user flow where insights are generated, rendered, and still present after switching away from and back to the article.
+- `apps/desktop/src/features/reader-shell/batch-operations.test.ts` and `apps/desktop/src/features/reader-shell/cache-maintenance.test.ts`: update article-detail fixtures to include the new `aiArtifacts` DTO field while keeping batch and cache behavior unchanged.
+- `progress.md`, `memory-bank/progress.md`, and `memory-bank/architecture.md`: record the Step 74 milestone, verification commands, environment notes, file responsibilities, and Step 75 handoff.
+
+### Step 74 Boundary Notes
+
+- The reader UI must not import `AiProviderRegistry`, `AiTaskQueue`, provider implementations, or SQLite stores. It should continue consuming `AIArtifactDto` values and invoking host/adapter workflows through an explicit command.
+- `AIArtifactStore` must remain a completed-artifact repository, not a durable AI job queue. Persistent queue rows, cancellation, retries, progress history, and background workers require a later explicit design.
+- The mock local provider remains deterministic shell wiring. Real provider selection, credentials, model configuration, local model process management, and remote network clients should be added behind `AiProvider` implementations rather than in the Tauri command or React components.
+- Summary and keyword cache hydration uses existing artifacts. Future translation and Q&A cache hydration should continue using `AIArtifact` rows keyed by provider/input hash instead of adding kind-specific cache tables.
+- Step 75 should add translation and limited-context Q&A by extending the same adapter/queue/artifact/host-command pattern while keeping AI optional, explicit, and local-first.

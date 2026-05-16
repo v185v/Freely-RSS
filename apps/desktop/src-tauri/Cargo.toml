@@ -15,6 +15,8 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+chrono = { version = "0.4.42", default-features = false, features = ["std"] }
+freelyrss-ai-adapter = { path = "../../../crates/ai-adapter" }
 freelyrss-core-domain = { path = "../../../crates/core-domain" }
 getrandom = "0.2.15"
 rusqlite = { version = "0.37.0", features = ["bundled"] }

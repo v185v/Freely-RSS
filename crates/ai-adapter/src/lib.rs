@@ -1,6 +1,7 @@
 //! Optional AI provider adapter boundaries for FreelyRSS.
 
 mod adapter;
+mod article_insights;
 mod error;
 mod mock;
 mod model;
@@ -9,6 +10,10 @@ mod registry;
 mod retry;
 
 pub use adapter::AiProvider;
+pub use article_insights::{
+    AiArticleInsightReport, AiArticleInsightRequest, AiArticleInsightRun, AiArticleInsightSnapshot,
+    AiArticleInsightWorkflow, AiArticleInsights,
+};
 pub use error::AiAdapterError;
 pub use mock::{
     MOCK_LOCAL_AI_PROVIDER_ID, MOCK_REMOTE_AI_PROVIDER_ID, MockLocalAiProvider,
@@ -29,7 +34,8 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        AiAdapterError, AiExecutionPolicy, AiProviderCapability, AiProviderKind,
+        AiAdapterError, AiArticleInsightRequest, AiArticleInsightSnapshot,
+        AiArticleInsightWorkflow, AiExecutionPolicy, AiProviderCapability, AiProviderKind,
         AiProviderManifest, AiProviderRegistry, AiQueueRunOutcome, AiQueueTask, AiRetryPolicy,
         AiTaskInput, AiTaskOutput, AiTaskQueue, AiTaskSubmission, AiTranslationRequest,
         MOCK_LOCAL_AI_PROVIDER_ID, MOCK_REMOTE_AI_PROVIDER_ID, MockLocalAiProvider,
@@ -207,6 +213,79 @@ mod tests {
         assert_eq!(second, AiQueueRunOutcome::CacheHit { artifact: cached });
     }
 
+    #[test]
+    fn article_insight_workflow_generates_summary_and_keywords_as_artifacts() {
+        let mut registry = AiProviderRegistry::default();
+        registry
+            .register(Box::new(MockLocalAiProvider::default()))
+            .expect("register local mock provider");
+
+        let mut workflow = AiArticleInsightWorkflow::new();
+        let run = workflow
+            .generate_summary_and_keywords(
+                &registry,
+                MOCK_LOCAL_AI_PROVIDER_ID,
+                article_insight_request(),
+            )
+            .expect("generate article insights");
+
+        assert_eq!(run.artifacts.summary.kind.as_str(), "summary");
+        assert_eq!(run.artifacts.keywords.kind.as_str(), "keywords");
+        assert_eq!(
+            run.artifacts.summary.id.as_str(),
+            "ai-artifact-summary-article-insight"
+        );
+        assert_eq!(
+            run.artifacts.keywords.id.as_str(),
+            "ai-artifact-keywords-article-insight"
+        );
+        assert_eq!(
+            run.artifacts.summary.result.as_value()["kind"],
+            serde_json::json!("summary")
+        );
+        assert_eq!(
+            run.artifacts.keywords.result.as_value()["keywords"],
+            serde_json::json!(["queue", "ownership", "keeps", "reader"])
+        );
+        assert_eq!(run.report.provider_id, MOCK_LOCAL_AI_PROVIDER_ID);
+        assert_eq!(run.report.requested_article_id, "article-insight");
+        assert!(!run.report.summary_from_cache);
+        assert!(!run.report.keywords_from_cache);
+    }
+
+    #[test]
+    fn article_insight_workflow_reuses_seeded_cache_for_equivalent_requests() {
+        let mut registry = AiProviderRegistry::default();
+        registry
+            .register(Box::new(MockLocalAiProvider::default()))
+            .expect("register local mock provider");
+
+        let mut workflow = AiArticleInsightWorkflow::new();
+        let first = workflow
+            .generate_summary_and_keywords(
+                &registry,
+                MOCK_LOCAL_AI_PROVIDER_ID,
+                article_insight_request(),
+            )
+            .expect("first insight run");
+
+        let mut second_workflow = AiArticleInsightWorkflow::new();
+        second_workflow.seed_cache(first.artifacts.summary.clone());
+        second_workflow.seed_cache(first.artifacts.keywords.clone());
+
+        let second = second_workflow
+            .generate_summary_and_keywords(
+                &registry,
+                MOCK_LOCAL_AI_PROVIDER_ID,
+                article_insight_request(),
+            )
+            .expect("second insight run");
+
+        assert_eq!(second.artifacts, first.artifacts);
+        assert!(second.report.summary_from_cache);
+        assert!(second.report.keywords_from_cache);
+    }
+
     fn translation_submission(task_id: &str) -> AiTaskSubmission {
         AiTaskSubmission {
             task_id: task_id.to_owned(),
@@ -218,5 +297,22 @@ mod tests {
             execution: AiExecutionPolicy::default(),
             properties: Vec::new(),
         }
+    }
+
+    fn article_insight_request() -> AiArticleInsightRequest {
+        AiArticleInsightRequest::new(
+            AiArticleInsightSnapshot {
+                article_id: "article-insight".to_owned(),
+                title: "Queue ownership keeps reader boundaries stable".to_owned(),
+                summary: Some("Queue ownership summary".to_owned()),
+                content:
+                    "Reader work stays local and queue ownership keeps provider calls explicit."
+                        .to_owned(),
+                language: Some("en".to_owned()),
+            },
+            "2026-05-16T08:00:00Z",
+            Some(80),
+            Some(4),
+        )
     }
 }

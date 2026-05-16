@@ -1,5 +1,6 @@
 //! SQLite bootstrap and migration support for the FreelyRSS local database.
 
+mod ai_artifact_store;
 mod article_search_store;
 mod backup;
 mod error;
@@ -18,6 +19,7 @@ use std::{
 
 use rusqlite::{Connection, TransactionBehavior};
 
+pub use ai_artifact_store::AIArtifactStore;
 pub use article_search_store::{
     ArticleSearchHit, ArticleSearchListItem, ArticleSearchReadFilter, ArticleSearchSort,
     ArticleSearchStore,

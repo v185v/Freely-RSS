@@ -9,7 +9,7 @@ import {
   useState,
 } from "react"
 
-import type { ArticleDetailDto } from "@freelyrss/shared-types"
+import type { AIArtifactDto, ArticleDetailDto, JsonValue } from "@freelyrss/shared-types"
 import { Button, SplitPane, Surface } from "@freelyrss/ui"
 
 import { findTextHighlightRanges } from "../search-highlighting"
@@ -49,6 +49,7 @@ type ReaderPendingSelection = {
 
 type ReaderPaneProps = {
   activeDetail: ArticleDetailDto | null
+  aiInsightErrorMessage: string | null
   annotationErrorMessage: string | null
   articleStateErrorMessage: string | null
   describedBy?: string
@@ -56,12 +57,14 @@ type ReaderPaneProps = {
   documentExportResult: ReaderDocumentExportResult | null
   headingId: string
   isCreatingAnnotation: boolean
+  isGeneratingAIInsights: boolean
   isExportingDocument: boolean
   isExportingMarkdown: boolean
   isUpdatingArticleState: boolean
   markdownExportErrorMessage: string | null
   markdownExportResult: ReaderMarkdownExportResult | null
   onCreateAnnotation: (input: CreateReaderAnnotationInput) => void
+  onGenerateAIInsights: () => void
   onExportDocumentBatch: (format: ReaderDocumentExportFormat) => void
   onExportDocumentSingle: (format: ReaderDocumentExportFormat) => void
   onExportMarkdownBatch: () => void
@@ -290,6 +293,41 @@ function formatAnnotationTypeLabel(type: ArticleDetailDto["annotations"][number]
     default:
       return "Comment"
   }
+}
+
+function isJsonObject(value: JsonValue): value is Record<string, JsonValue> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+}
+
+function readArtifactText(artifact: AIArtifactDto | null) {
+  if (!artifact || !isJsonObject(artifact.result)) {
+    return null
+  }
+
+  const text = artifact.result.text
+
+  return typeof text === "string" && text.trim().length > 0 ? text : null
+}
+
+function readArtifactKeywords(artifact: AIArtifactDto | null) {
+  if (!artifact || !isJsonObject(artifact.result) || !Array.isArray(artifact.result.keywords)) {
+    return []
+  }
+
+  return artifact.result.keywords.filter(
+    (keyword): keyword is string => typeof keyword === "string" && keyword.trim().length > 0,
+  )
+}
+
+function findLatestArtifact(
+  artifacts: AIArtifactDto[],
+  kind: AIArtifactDto["kind"],
+): AIArtifactDto | null {
+  return (
+    artifacts
+      .filter((artifact) => artifact.kind === kind)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0] ?? null
+  )
 }
 
 function getExtractedParagraphs(content: ArticleDetailDto["article"]["contentExtracted"]) {
@@ -552,6 +590,7 @@ function renderAnnotatedParagraph(
 
 export function ReaderPane({
   activeDetail,
+  aiInsightErrorMessage,
   annotationErrorMessage,
   articleStateErrorMessage,
   describedBy,
@@ -559,12 +598,14 @@ export function ReaderPane({
   documentExportResult,
   headingId,
   isCreatingAnnotation,
+  isGeneratingAIInsights,
   isExportingDocument,
   isExportingMarkdown,
   isUpdatingArticleState,
   markdownExportErrorMessage,
   markdownExportResult,
   onCreateAnnotation,
+  onGenerateAIInsights,
   onExportDocumentBatch,
   onExportDocumentSingle,
   onExportMarkdownBatch,
@@ -600,6 +641,14 @@ export function ReaderPane({
   const activeReaderContent = readerContentMode === "raw" ? rawContent : extractedContent
   const alternateReaderContent = readerContentMode === "raw" ? extractedContent : rawContent
   const primaryUrl = activeDetail?.article.canonicalUrl ?? activeDetail?.article.originalUrl ?? null
+  const latestSummaryArtifact = activeDetail
+    ? findLatestArtifact(activeDetail.aiArtifacts, "summary")
+    : null
+  const latestKeywordArtifact = activeDetail
+    ? findLatestArtifact(activeDetail.aiArtifacts, "keywords")
+    : null
+  const generatedSummaryText = readArtifactText(latestSummaryArtifact)
+  const generatedKeywords = readArtifactKeywords(latestKeywordArtifact)
   const annotationResetKey = `${activeDetail?.article.id ?? "none"}:${readerContentMode}`
   const readerPresentationSummary = `${formatThemeToneLabel(themeTone)} theme, ${formatFontFamilyLabel(readerFontFamily)} font, ${formatFontScaleLabel(readerFontScale)} size, ${formatLineHeightLabel(readerLineHeight).toLowerCase()} leading, ${formatMarginModeLabel(readerMarginMode).toLowerCase()} margins`
   const readerPresentationStyle = {
@@ -819,6 +868,93 @@ export function ReaderPane({
                       "This article does not expose a summary yet, so the reading panel falls back to the extracted body."}
                   </p>
                 </header>
+
+                <section className="desktop-reader__ai">
+                  <div className="desktop-reader__ai-header">
+                    <div>
+                      <p className="desktop-reader__section-label">AI article insights</p>
+                      <p className="desktop-reader__ai-note">
+                        Stored summaries and keywords stay attached to the selected article.
+                      </p>
+                    </div>
+                    <div className="desktop-reader__ai-summary">
+                      <span className="desktop-reader__fact-label">Artifacts</span>
+                      <strong>{activeDetail.aiArtifacts.length}</strong>
+                    </div>
+                  </div>
+
+                  {generatedSummaryText || generatedKeywords.length > 0 ? (
+                    <div className="desktop-reader__ai-grid">
+                      <div className="desktop-reader__ai-card">
+                        <div>
+                          <span className="desktop-reader__fact-label">Summary</span>
+                          <strong>
+                            {latestSummaryArtifact
+                              ? formatReaderDate(
+                                  latestSummaryArtifact.createdAt,
+                                  latestSummaryArtifact.createdAt,
+                                )
+                              : "Not generated"}
+                          </strong>
+                        </div>
+                        <p>{generatedSummaryText ?? "No generated summary artifact yet."}</p>
+                        <small>{latestSummaryArtifact?.provider ?? "No provider recorded"}</small>
+                      </div>
+
+                      <div className="desktop-reader__ai-card">
+                        <div>
+                          <span className="desktop-reader__fact-label">Keywords</span>
+                          <strong>
+                            {latestKeywordArtifact
+                              ? formatReaderDate(
+                                  latestKeywordArtifact.createdAt,
+                                  latestKeywordArtifact.createdAt,
+                                )
+                              : "Not generated"}
+                          </strong>
+                        </div>
+                        {generatedKeywords.length > 0 ? (
+                          <ul className="desktop-reader__ai-keywords">
+                            {generatedKeywords.map((keyword) => (
+                              <li key={keyword}>{keyword}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p>No generated keyword artifact yet.</p>
+                        )}
+                        <small>{latestKeywordArtifact?.provider ?? "No provider recorded"}</small>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="desktop-empty-state desktop-empty-state--compact">
+                      <p className="desktop-empty-state__eyebrow">No AI artifacts</p>
+                      <h3>No summary or keywords yet.</h3>
+                      <p>Run insights for this article to add them here.</p>
+                    </div>
+                  )}
+
+                  <div className="desktop-reader__ai-actions">
+                    <Button
+                      disabled={isGeneratingAIInsights}
+                      onClick={onGenerateAIInsights}
+                      size="sm"
+                      tone="neutral"
+                    >
+                      {isGeneratingAIInsights ? "Generating insights..." : "Generate insights"}
+                    </Button>
+                    <span>
+                      {latestSummaryArtifact && latestKeywordArtifact
+                        ? "Summary and keywords are available for this article."
+                        : "Idle for this article."}
+                    </span>
+                  </div>
+
+                  {aiInsightErrorMessage ? (
+                    <p className="desktop-reader__error" role="alert">
+                      {aiInsightErrorMessage}
+                    </p>
+                  ) : null}
+                </section>
 
                 <section className="desktop-reader__state-controls">
                   <div className="desktop-reader__state-controls-header">

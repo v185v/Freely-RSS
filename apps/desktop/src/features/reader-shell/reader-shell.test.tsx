@@ -511,6 +511,72 @@ describe("reader shell navigation", () => {
     ).toBeNull()
   })
 
+  test("generates article insight artifacts and keeps them when reopening the article", async () => {
+    window.scrollTo = () => {}
+    const user = userEvent.setup()
+
+    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+
+    const queuePane = await screen.findByRole("region", { name: "Article queue" })
+    const readerPane = screen.getByRole("region", { name: "Reading panel" })
+    const queueScope = within(queuePane)
+    const readerScope = within(readerPane)
+
+    await waitFor(() => {
+      expect(
+        readerScope.getByRole("heading", {
+          name: "Turning the desktop shell into a stable three-pane reader skeleton",
+        }),
+      ).toBeTruthy()
+    })
+
+    expect(readerScope.getByText("No summary or keywords yet.")).toBeTruthy()
+
+    await user.click(readerScope.getByRole("button", { name: "Generate insights" }))
+
+    await waitFor(() => {
+      expect(
+        readerScope.getByText(
+          /Mock summary for article-layout-shell: The shell now reads like an application/i,
+        ),
+      ).toBeTruthy()
+      expect(readerScope.getByText("turning", { selector: "li" })).toBeTruthy()
+      expect(readerScope.getByText("desktop", { selector: "li" })).toBeTruthy()
+      expect(readerScope.getAllByText("freelyrss.ai.mock.local")).toHaveLength(2)
+    })
+
+    await user.click(
+      queueScope.getByRole("button", {
+        name: /Why layout state should stay separate from source and query state/i,
+      }),
+    )
+
+    await waitFor(() => {
+      expect(
+        readerScope.getByRole("heading", {
+          name: "Why layout state should stay separate from source and query state",
+        }),
+      ).toBeTruthy()
+    })
+
+    await user.click(
+      queueScope.getByRole("button", {
+        name: /Turning the desktop shell into a stable three-pane reader skeleton/i,
+      }),
+    )
+
+    await waitFor(() => {
+      expect(
+        readerScope.getByText(
+          /Mock summary for article-layout-shell: The shell now reads like an application/i,
+        ),
+      ).toBeTruthy()
+      expect(
+        readerScope.getByText("Summary and keywords are available for this article."),
+      ).toBeTruthy()
+    })
+  })
+
   test("switches reader content modes and keeps the latest mode after the app reopens", async () => {
     window.scrollTo = () => {}
     const user = userEvent.setup()

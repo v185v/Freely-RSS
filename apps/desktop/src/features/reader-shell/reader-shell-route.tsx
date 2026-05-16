@@ -25,7 +25,7 @@ import { QueuePane } from "./components/queue-pane"
 import { ReaderPane } from "./components/reader-pane"
 import { SourcePane } from "./components/source-pane"
 import { TaskStatusPanel } from "./components/task-status-panel"
-import { fetchDurableQueueArticles } from "./desktop-bridge"
+import { fetchDurableQueueArticles, generateDurableArticleInsights } from "./desktop-bridge"
 import {
   type MockBatchOperationResult,
   type MockDocumentExportResult,
@@ -37,6 +37,7 @@ import {
   exportMockMarkdown,
   exportMockOpml,
   fetchReaderShellData,
+  generateMockArticleInsights,
   importMockOpml,
   readerShellQueryKey,
   refreshMockFeed,
@@ -194,6 +195,51 @@ export function ReaderShellRoute() {
     mutationFn: createMockAnnotation,
     onSuccess: (nextShellData) => {
       queryClient.setQueryData(readerShellQueryKey, nextShellData)
+    },
+  })
+  const generateArticleInsightsMutation = useMutation({
+    mutationFn: async (articleId: string) => {
+      const durableResult = await generateDurableArticleInsights(articleId)
+
+      if (durableResult) {
+        const currentData = queryClient.getQueryData<ReaderShellData>(readerShellQueryKey)
+        const currentDetail = currentData?.articleDetails[articleId] ?? null
+
+        if (!currentData || !currentDetail) {
+          return {
+            insightResult: durableResult,
+            shellData: currentData ?? null,
+          }
+        }
+
+        const replacedArtifactKinds = new Set(
+          durableResult.artifacts.map((artifact) => artifact.kind),
+        )
+        const retainedArtifacts = currentDetail.aiArtifacts.filter(
+          (artifact) => !replacedArtifactKinds.has(artifact.kind),
+        )
+
+        return {
+          insightResult: durableResult,
+          shellData: {
+            ...currentData,
+            articleDetails: {
+              ...currentData.articleDetails,
+              [articleId]: {
+                ...currentDetail,
+                aiArtifacts: [...durableResult.artifacts, ...retainedArtifacts],
+              },
+            },
+          },
+        }
+      }
+
+      return generateMockArticleInsights(articleId)
+    },
+    onSuccess: (result) => {
+      if (result.shellData) {
+        queryClient.setQueryData(readerShellQueryKey, result.shellData)
+      }
     },
   })
   const importOpmlMutation = useMutation({
@@ -489,6 +535,10 @@ export function ReaderShellRoute() {
       : null
   const annotationErrorMessage =
     createAnnotationMutation.error instanceof Error ? createAnnotationMutation.error.message : null
+  const aiInsightErrorMessage =
+    generateArticleInsightsMutation.error instanceof Error
+      ? generateArticleInsightsMutation.error.message
+      : null
   const markdownExportErrorMessage =
     exportMarkdownMutation.error instanceof Error ? exportMarkdownMutation.error.message : null
   const documentExportErrorMessage =
@@ -585,6 +635,26 @@ export function ReaderShellRoute() {
         "Retry cleanup after lowering the cache budget or review protected articles if space remains tight.",
       retryLabel: "Retry cleanup",
       updatedAt: latestCleanup?.completedAt ?? null,
+    },
+    {
+      id: "ai-insights",
+      title: "AI article insights",
+      scope: activeDetail ? activeDetail.article.title : "No article selected",
+      isRunning: generateArticleInsightsMutation.isPending,
+      error: generateArticleInsightsMutation.error,
+      completedDetail: generateArticleInsightsMutation.data?.insightResult
+        ? `Generated ${generateArticleInsightsMutation.data.insightResult.artifacts.length} AI artifact(s).`
+        : null,
+      idleDetail: activeDetail
+        ? "Ready to generate an explicit summary and keyword artifact for the selected article."
+        : "Select an article before running AI insight generation.",
+      runningDetail: activeDetail
+        ? `Generating article insights for ${activeDetail.article.title}.`
+        : "Generating article insights.",
+      recovery: "Retry after selecting an article with extracted or raw content.",
+      retryLabel: activeDetail ? "Retry AI insights" : null,
+      updatedAt:
+        generateArticleInsightsMutation.data?.insightResult.artifacts[0]?.createdAt ?? null,
     },
     {
       id: "markdown-export",
@@ -745,6 +815,12 @@ export function ReaderShellRoute() {
             },
             title: `${resolvedActiveSource.title} HTML export`,
           })
+        }
+        break
+      case "ai-insights":
+        generateArticleInsightsMutation.reset()
+        if (activeDetail) {
+          generateArticleInsightsMutation.mutate(activeDetail.article.id)
         }
         break
       case "opml-export":
@@ -1054,12 +1130,14 @@ export function ReaderShellRoute() {
           <ReaderPane
             activeDetail={activeDetail}
             annotationErrorMessage={annotationErrorMessage}
+            aiInsightErrorMessage={aiInsightErrorMessage}
             articleStateErrorMessage={articleStateErrorMessage}
             describedBy={READER_SHORTCUT_HINT_ID}
             documentExportErrorMessage={documentExportErrorMessage}
             documentExportResult={documentExportResult}
             headingId={READER_LANDMARK_IDS.readerHeading}
             isCreatingAnnotation={createAnnotationMutation.isPending}
+            isGeneratingAIInsights={generateArticleInsightsMutation.isPending}
             isExportingDocument={exportDocumentMutation.isPending}
             isExportingMarkdown={exportMarkdownMutation.isPending}
             isUpdatingArticleState={updateArticleStateMutation.isPending}
@@ -1068,6 +1146,14 @@ export function ReaderShellRoute() {
             onCreateAnnotation={(input) => {
               createAnnotationMutation.reset()
               createAnnotationMutation.mutate(input)
+            }}
+            onGenerateAIInsights={() => {
+              if (!activeDetail) {
+                return
+              }
+
+              generateArticleInsightsMutation.reset()
+              generateArticleInsightsMutation.mutate(activeDetail.article.id)
             }}
             onExportDocumentBatch={(format) => {
               exportDocumentMutation.reset()

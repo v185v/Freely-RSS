@@ -1,3 +1,4 @@
+mod ai_insights;
 mod local_api;
 mod reader_queue;
 mod storage;
@@ -12,6 +13,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            ai_insights::generate_article_insights,
             local_api::get_local_api_status,
             reader_queue::load_reader_queue_articles
         ])

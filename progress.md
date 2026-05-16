@@ -87,3 +87,15 @@
 - Added focused unit coverage in `markdown-export.test.ts` plus reader-shell flow coverage in `reader-shell.test.tsx`.
 - Verified the Step 56 work with `corepack pnpm --filter @freelyrss/desktop test -- --run markdown-export.test.ts reader-shell.test.tsx`, `corepack pnpm run format`, `corepack pnpm run desktop:build`, `corepack pnpm run verify`, and `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`.
 - Updated `memory-bank/progress.md` and `memory-bank/architecture.md` with the Step 56 implementation record, verification results, architectural insights, and per-file responsibility notes for the next developer.
+
+## 2026-05-16
+
+- Reviewed all files in `memory-bank/` and resumed from `memory-bank/progress.md`, which identified Stage 10 Step 74 as the next implementation target: summary and keyword extraction.
+- Implemented the Step 74 article insight workflow in `crates/ai-adapter`, using `AiTaskQueue` and `AiProviderRegistry` to generate summary and keyword `AIArtifact` values without exposing provider calls to the reader UI.
+- Added `AIArtifactStore` in `crates/core-domain` for upserting and listing completed artifacts from the existing `AIArtifact` table; no database migration or parallel AI result schema was added.
+- Added the desktop Tauri command `generate_article_insights` in `apps/desktop/src-tauri`, including SQLite article loading, existing artifact cache seeding, mock local provider execution, persistence, DTO mapping, and UTC ISO created-at timestamps.
+- Extended shared/article detail DTOs and the desktop reader shell so `Generate insights` is an explicit user action, artifacts render in the reading panel, task status tracks the run, and browser-only development uses a mock fallback.
+- Added tests for adapter workflow/cache reuse, SQLite artifact store persistence, Tauri generation/persistence/cache reuse, and reader UI generation after switching away and back to the article.
+- Verified the Step 74 work with `cargo test -p freelyrss-ai-adapter`, `cargo test -p freelyrss-core-domain ai_artifact_store`, `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml ai_insights`, `cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings`, `corepack pnpm --filter @freelyrss/desktop test -- --run reader-shell.test.tsx`, `corepack pnpm --filter @freelyrss/shared-types check`, `corepack pnpm run desktop:build`, `corepack pnpm run verify`, and `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`.
+- Browser-checked the local desktop web shell at `http://localhost:1420/`; the AI panel rendered and `Generate insights` produced the expected summary, keywords, and provider metadata. The only console error observed was the existing missing `favicon.ico` 404.
+- Updated `memory-bank/progress.md` and `memory-bank/architecture.md` with the Step 74 implementation record, validation notes, file responsibilities, and Stage 10 Step 75 handoff.

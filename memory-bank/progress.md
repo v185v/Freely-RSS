@@ -1979,3 +1979,42 @@
 - `AiTaskQueue` is an orchestration primitive, not a durable scheduler. Durable task tables, cancellation, user-visible progress history, retry workers, and persisted queue state remain later work unless Step 74 explicitly needs a minimal storage boundary.
 - Completed results should continue to map into `core-domain::AIArtifact`; do not add a second AI result schema for summaries or keywords.
 - Step 74 should implement summary and keyword extraction on top of the existing provider/queue/cache contracts, not by having reader UI call providers directly.
+
+## 2026-05-16 ASCII Addendum XXXVIII
+
+### Stage 10 Step 74 Completed: summary and keyword extraction
+
+- Completed `implementation-plan.md` Stage 10 Step 74 by adding an explicit article-insight workflow for summary and keyword extraction.
+- Added `AiArticleInsightWorkflow`, `AiArticleInsightRequest`, article snapshots, run reports, and cache seeding in `crates/ai-adapter`. The workflow builds summary and keyword queue tasks and executes them through `AiTaskQueue` plus `AiProviderRegistry`; it does not let reader UI call providers directly.
+- Added `AIArtifactStore` in `crates/core-domain` so completed summary and keyword artifacts can be upserted and listed through the existing `AIArtifact` table. No database migration or second AI result schema was added.
+- Added the desktop Tauri command `generate_article_insights`, which loads the selected article from SQLite, seeds the workflow cache from existing summary/keyword artifacts, runs the deterministic local mock provider, persists returned artifacts, and returns DTOs to the shell.
+- Extended `ArticleDetailDto` with `aiArtifacts` and wired the desktop reader shell so the user explicitly clicks `Generate insights`; the reader panel then renders stored summary and keyword artifacts, provider metadata, cache-aware task status, and a mock fallback for browser-only development.
+- Added regression coverage for the adapter workflow, SQLite artifact store, Tauri persistence/cache reuse, and reader UI generation/reopen behavior.
+
+### Step 74 Verification
+
+- Passed `cargo test -p freelyrss-ai-adapter`
+- Passed `cargo test -p freelyrss-core-domain ai_artifact_store`
+- Passed `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml ai_insights`
+- Passed `cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings`
+- Passed `corepack pnpm --filter @freelyrss/desktop test -- --run reader-shell.test.tsx`
+- Passed `corepack pnpm --filter @freelyrss/shared-types check`
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run verify`
+- Passed `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`
+- Browser-checked `http://localhost:1420/`: the AI panel rendered, `Generate insights` produced 2 artifacts, and summary/keywords/provider metadata appeared correctly.
+
+### Environment Notes
+
+- `corepack pnpm run desktop:build` and the Tauri no-bundle build completed successfully and emitted the existing Vite chunk-size warning for the generated desktop bundle. The warning did not fail the build.
+- The browser check showed only the existing missing `favicon.ico` 404 in the dev server console; it is unrelated to Step 74.
+- The desktop Tauri command now formats `createdAt` as a real UTC ISO timestamp using `chrono`, matching the rest of the Rust timestamp style.
+
+### Next Step (ASCII update)
+
+- The next implementation step in `implementation-plan.md` is Stage 10 Step 75: translation and limited-context question answering.
+- Preserve the current boundary split:
+- `crates/ai-adapter/src/article_insights.rs` owns article summary/keyword workflow assembly and should remain a provider/queue orchestration layer, not a SQLite repository, credential store, UI feature, or durable scheduler.
+- `crates/core-domain/src/sqlite/ai_artifact_store.rs` owns persistence for completed `AIArtifact` rows. Future persistent AI cache hydration should reuse this table rather than adding translation, Q&A, summary, or keyword-specific result tables.
+- `apps/desktop/src-tauri/src/ai_insights.rs` owns the desktop host command boundary for article insight generation. It should continue loading authorized article data and persisting artifacts, while real provider credentials and model selection remain later work.
+- Reader UI should keep AI optional and explicit. Step 75 should add translation and limited-context Q&A by consuming `AIArtifact` DTOs and Tauri/adapter workflows, not by importing provider SDKs or queue internals into React components.

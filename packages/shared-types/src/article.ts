@@ -1,3 +1,4 @@
+import type { AIArtifactDto } from "./automation"
 import type { AnnotationType, AttachmentType, ImportanceLevel, ReadState } from "./enums"
 import type { AnnotationId, ArticleId, AttachmentId, FeedId, TagId } from "./ids"
 import type { TagDto } from "./organization"
@@ -92,4 +93,5 @@ export interface ArticleDetailDto {
   tags: TagDto[]
   attachments: AttachmentDto[]
   annotations: AnnotationDto[]
+  aiArtifacts: AIArtifactDto[]
 }

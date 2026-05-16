@@ -5,6 +5,7 @@ import {
   serializeQueryDefinition,
 } from "@freelyrss/shared-query"
 import type {
+  AIArtifactDto,
   AnnotationDto,
   ArticleDetailDto,
   ArticleListItemDto,
@@ -29,6 +30,7 @@ import type {
   CreateReaderAnnotationInput,
   OpmlExportReport,
   OpmlImportReport,
+  ReaderAIInsightResult,
   ReaderBatchOperationInput,
   ReaderBatchOperationResult,
   ReaderCacheCleanupReport,
@@ -482,6 +484,7 @@ const articleDetails: Record<string, ArticleDetailDto> = {
         createdAt: "2026-04-08T08:49:00Z",
       },
     ],
+    aiArtifacts: [],
   },
   "article-source-context": {
     article: {
@@ -519,6 +522,7 @@ const articleDetails: Record<string, ArticleDetailDto> = {
     tags: [findTag("tag-ops")],
     attachments: [],
     annotations: [],
+    aiArtifacts: [],
   },
   "article-query-bridge": {
     article: {
@@ -566,6 +570,7 @@ const articleDetails: Record<string, ArticleDetailDto> = {
       },
     ],
     annotations: [],
+    aiArtifacts: [],
   },
   "article-window-behavior": {
     article: {
@@ -602,6 +607,7 @@ const articleDetails: Record<string, ArticleDetailDto> = {
     tags: [findTag("tag-product")],
     attachments: [],
     annotations: [],
+    aiArtifacts: [],
   },
   "article-midnight-dispatch": {
     article: {
@@ -665,6 +671,7 @@ const articleDetails: Record<string, ArticleDetailDto> = {
       },
     ],
     annotations: [],
+    aiArtifacts: [],
   },
 }
 
@@ -726,6 +733,11 @@ export type MockDocumentExportResult = ReaderDocumentExportResult
 
 export type MockBatchOperationResult = {
   batchResult: ReaderBatchOperationResult
+  shellData: ReaderShellData
+}
+
+export type MockArticleInsightResult = {
+  insightResult: ReaderAIInsightResult
   shellData: ReaderShellData
 }
 
@@ -1295,6 +1307,7 @@ function createDenseQueueFixtures(feed: FeedDto) {
             ]
           : [],
       annotations: [],
+      aiArtifacts: [],
     }
   }
 
@@ -1585,6 +1598,72 @@ function replaceArticleAnnotations(
   }
 }
 
+function replaceArticleAIArtifacts(
+  articleId: ArticleDetailDto["article"]["id"],
+  nextArtifacts: AIArtifactDto[],
+) {
+  const detail = findArticleDetailOrThrow(articleId)
+
+  mockReaderState.articleDetails = {
+    ...mockReaderState.articleDetails,
+    [articleId]: {
+      ...detail,
+      aiArtifacts: cloneValue(nextArtifacts),
+    },
+  }
+}
+
+function buildMockAIArtifact(input: {
+  articleId: ArticleDetailDto["article"]["id"]
+  createdAt: string
+  kind: AIArtifactDto["kind"]
+  result: AIArtifactDto["result"]
+}): AIArtifactDto {
+  const fingerprint = JSON.stringify(input.result).length
+
+  return {
+    id: `ai-artifact-${input.kind}-${input.articleId}`,
+    articleId: input.articleId,
+    kind: input.kind,
+    provider: "freelyrss.ai.mock.local",
+    inputHash: `mock:${input.kind}:${input.articleId}:${fingerprint}`,
+    result: input.result,
+    createdAt: input.createdAt,
+  }
+}
+
+function buildMockSummaryText(detail: ArticleDetailDto) {
+  const source =
+    detail.article.summary ??
+    detail.article.contentExtracted ??
+    detail.article.contentRaw ??
+    detail.article.title
+  const normalized = source.replace(/\s+/g, " ").trim()
+  const excerpt = normalized.slice(0, 180)
+
+  return `Mock summary for ${detail.article.id}: ${excerpt}`
+}
+
+function extractMockKeywords(content: string, limit: number) {
+  const keywords: string[] = []
+
+  for (const token of content.split(/\s+/)) {
+    const normalized = token.replace(/^[^a-z0-9]+|[^a-z0-9]+$/gi, "").toLowerCase()
+
+    if (normalized.length < 4 || keywords.includes(normalized)) {
+      continue
+    }
+
+    keywords.push(normalized)
+
+    if (keywords.length >= limit) {
+      break
+    }
+  }
+
+  return keywords
+}
+
 function clearAttachmentCachePaths(attachmentIds: Set<string>) {
   if (attachmentIds.size === 0) {
     return
@@ -1832,6 +1911,59 @@ export async function createMockAnnotation(
   replaceArticleAnnotations(input.articleId, [...detail.annotations, nextAnnotation])
 
   return buildReaderShellSnapshot(mockReaderState)
+}
+
+export async function generateMockArticleInsights(
+  articleId: ArticleDetailDto["article"]["id"],
+): Promise<MockArticleInsightResult> {
+  const detail = findArticleDetailOrThrow(articleId)
+  const existingSummary = detail.aiArtifacts.find((artifact) => artifact.kind === "summary")
+  const existingKeywords = detail.aiArtifacts.find((artifact) => artifact.kind === "keywords")
+  const now = new Date().toISOString()
+  const content = [
+    detail.article.title,
+    detail.article.summary ?? "",
+    detail.article.contentExtracted ?? detail.article.contentRaw ?? "",
+  ]
+    .join(" ")
+    .trim()
+  const summaryArtifact =
+    existingSummary ??
+    buildMockAIArtifact({
+      articleId,
+      createdAt: now,
+      kind: "summary",
+      result: {
+        kind: "summary",
+        text: buildMockSummaryText(detail),
+      },
+    })
+  const keywordArtifact =
+    existingKeywords ??
+    buildMockAIArtifact({
+      articleId,
+      createdAt: now,
+      kind: "keywords",
+      result: {
+        kind: "keywords",
+        keywords: extractMockKeywords(content, 6),
+      },
+    })
+  const otherArtifacts = detail.aiArtifacts.filter(
+    (artifact) => artifact.kind !== "summary" && artifact.kind !== "keywords",
+  )
+  const nextArtifacts = [summaryArtifact, keywordArtifact, ...otherArtifacts]
+
+  replaceArticleAIArtifacts(articleId, nextArtifacts)
+
+  return {
+    insightResult: {
+      artifacts: cloneValue([summaryArtifact, keywordArtifact]),
+      summaryFromCache: Boolean(existingSummary),
+      keywordsFromCache: Boolean(existingKeywords),
+    },
+    shellData: buildReaderShellSnapshot(mockReaderState),
+  }
 }
 
 export async function importMockOpml(opmlText: string): Promise<MockOpmlImportResult> {

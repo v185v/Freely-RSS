@@ -1,5 +1,6 @@
 import type { QueryDefinition } from "@freelyrss/shared-query"
 import type {
+  AIArtifactDto,
   AnnotationDto,
   ArticleDetailDto,
   ArticleListItemDto,
@@ -185,6 +186,12 @@ export interface ReaderDocumentExportResult {
   report: ReaderDocumentExportReport
 }
 
+export interface ReaderAIInsightResult {
+  artifacts: AIArtifactDto[]
+  keywordsFromCache: boolean
+  summaryFromCache: boolean
+}
+
 export type ReaderBatchOperationAction = "add-read-later" | "add-tag" | "delete-cache" | "mark-read"
 
 export type ReaderBatchOperationCommand =
@@ -226,6 +233,7 @@ export type ReaderTaskStatusKind =
   | "batch-operation"
   | "cache-cleanup"
   | "document-export"
+  | "ai-insights"
   | "markdown-export"
   | "opml-export"
   | "opml-import"
