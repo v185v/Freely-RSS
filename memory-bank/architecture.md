@@ -2687,3 +2687,39 @@ Step 60 已将 `SyncEvent` 限定为用户可携带状态、订阅组织和自�
 - The reader UI may provide visible article ids for current-filter Q&A, but it must not assemble provider prompts, import provider SDKs, or bypass the host/adapter workflow.
 - `apps/desktop/src-tauri/src/ai_actions.rs` may prepare local article contexts but must not become a privacy settings store, real provider client, local REST route, sync protocol endpoint, Webhook adapter, or durable scheduler.
 - Step 76 should add AI privacy and enablement controls around these explicit commands. Opening the reader, switching articles, generating exports, syncing, dispatching Webhooks, or serving local REST requests must not trigger AI implicitly.
+
+## 2026-05-17 ASCII Addendum XL
+
+### Step 76 Architecture Insights
+
+- Step 76 adds privacy and enablement controls around existing AI workflows rather than changing provider, queue, or artifact contracts. AI remains optional, explicit, and off by default in the reader shell.
+- Reader AI enablement is a local UI preference. It gates command buttons and retry paths before any host invocation is attempted, but it is not a credential store, provider selector, sync protocol setting, or durable authorization model.
+- Cached AI artifacts are still readable when AI is disabled. This keeps previously approved derived results available while preventing new provider submissions until the user explicitly turns AI back on.
+- Provider and data-scope disclosure lives in the reader panel near the AI controls. The UI states the provider id and that current article text is sent only after an explicit AI command, keeping privacy context visible at the action point.
+- Cache deletion uses the existing `AIArtifact` table. The new desktop command deletes completed derived artifacts for the selected article; it does not delete original article content, annotations, feed data, sync events, search index rows, local media cache, or export outputs.
+- Regeneration remains the same explicit path as Steps 74 and 75. Enabling AI does not generate anything by itself; summary/keyword generation, translation, and Q&A still require separate user commands.
+- No database schema migration was added. The complete relevant durable AI result schema remains `AIArtifact(id, article_id, kind, provider, input_hash, result, created_at)` from the core business schema.
+- Step 76 does not add real provider SDKs, remote model network clients, credential handling, background workers, durable queue rows, cancellation, or persistent AI privacy policy storage.
+
+### Step 76 File Responsibilities
+
+- `crates/core-domain/src/sqlite/ai_artifact_store.rs`: adds `delete_ai_artifacts_for_article`, the completed-artifact deletion boundary for one article. It keeps upsert/list/delete behavior in the SQLite domain store and does not know about reader UI, provider execution, sync, or cache file eviction.
+- `apps/desktop/src-tauri/src/ai_actions.rs`: adds the Tauri command `delete_article_ai_cache`, request/response DTOs, database opening, article id validation, `AIArtifactStore` deletion, and regression coverage. The file continues to own desktop host orchestration for AI article actions without becoming a provider SDK wrapper or settings repository.
+- `apps/desktop/src-tauri/src/lib.rs`: registers `delete_article_ai_cache` with the Tauri invoke handler. It remains a thin command registration module.
+- `apps/desktop/src/features/reader-shell/state.ts`: adds the persisted `readerAiEnabled` UI preference, defaulting to false. It owns local preference hydration/reset/write behavior only; it does not call providers, open SQLite, or manage credentials.
+- `apps/desktop/src/features/reader-shell/types.ts`: adds `ReaderAICacheDeleteResult` and the `ai-cache` task-status kind so the shell can represent cache deletion without changing shared article DTOs or adding a new result schema.
+- `apps/desktop/src/features/reader-shell/desktop-bridge.ts`: adds `deleteDurableArticleAiCache`, the browser-to-Tauri bridge for article AI cache deletion. It returns `null` when Tauri is unavailable so mock development can follow the same UI flow.
+- `apps/desktop/src/features/reader-shell/mock-data.ts`: adds `deleteMockArticleAiCache`, which clears mock `aiArtifacts` for one article and returns a cache-delete result plus a refreshed shell snapshot. Mock insight/translation/Q&A generation remain explicit.
+- `apps/desktop/src/features/reader-shell/reader-shell-route.tsx`: owns Step 76 shell orchestration. It reads/writes the AI enabled preference, blocks AI generation/retry mutations when disabled, wires durable-versus-mock AI cache deletion, merges deleted artifacts into the query cache, and adds an AI cache task-status entry.
+- `apps/desktop/src/features/reader-shell/components/reader-pane.tsx`: owns the Step 76 reader controls. It renders the AI enable/disable toggle, provider/data-scope disclosure, cache deletion command, disabled generation controls while AI is off, and cached artifact display.
+- `apps/desktop/src/features/reader-shell/reader-shell.test.tsx`: protects default-disabled behavior, explicit enablement before generation, selected-text translation/Q&A after enablement, and explicit AI cache deletion from the reader UI.
+- `memory-bank/progress.md`: records the completed Step 76 milestone, verification commands, environment notes, and Step 77 handoff.
+- `memory-bank/architecture.md`: records the Step 76 architecture insights, file responsibilities, and boundary notes for future maintainers.
+
+### Step 76 Boundary Notes
+
+- Reader AI enablement must not be treated as consent for background AI work. Article open, route reconciliation, sync, Webhook delivery, knowledge-base export, local REST requests, and task-status rendering must not invoke model providers.
+- The cache deletion command operates only on `AIArtifact` rows for a selected article. It must not become a generic SQLite cleanup command, local cache file deletion path, or export-output remover.
+- The UI may disclose provider ids and scopes, but provider selection, real credentials, remote/local model configuration, and persistent privacy policy should enter through a later explicit settings boundary.
+- AI cache deletion should continue to reuse `AIArtifactStore`. Do not add kind-specific summary, translation, or Q&A cleanup tables unless a later storage design changes the artifact model.
+- Step 77 should build the Web read-only entry as a remote-access surface over synchronized data, not by importing desktop Tauri commands, desktop-local SQLite stores, or desktop-only AI privacy controls into the Web app.

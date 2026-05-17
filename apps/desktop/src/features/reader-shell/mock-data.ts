@@ -30,6 +30,7 @@ import type {
   CreateReaderAnnotationInput,
   OpmlExportReport,
   OpmlImportReport,
+  ReaderAICacheDeleteResult,
   ReaderAIInsightResult,
   ReaderAIQuestionContextScope,
   ReaderAIQuestionResult,
@@ -2174,6 +2175,26 @@ export async function answerMockArticleQuestion(input: {
       citedContextIds,
       contextScope,
       fromCache: Boolean(existingAnswer),
+    },
+    shellData: buildReaderShellSnapshot(mockReaderState),
+  }
+}
+
+export async function deleteMockArticleAiCache(
+  articleId: ArticleDetailDto["article"]["id"],
+): Promise<{
+  cacheDeleteResult: ReaderAICacheDeleteResult
+  shellData: ReaderShellData
+}> {
+  const detail = findArticleDetailOrThrow(articleId)
+  const deletedArtifactCount = detail.aiArtifacts.length
+
+  replaceArticleAIArtifacts(articleId, [])
+
+  return {
+    cacheDeleteResult: {
+      articleId,
+      deletedArtifactCount,
     },
     shellData: buildReaderShellSnapshot(mockReaderState),
   }

@@ -531,6 +531,13 @@ describe("reader shell navigation", () => {
     })
 
     expect(readerScope.getByText("No summary or keywords yet.")).toBeTruthy()
+    expect(readerScope.getByText("AI is disabled; cached artifacts remain visible.")).toBeTruthy()
+    expect(readerScope.getByRole("button", { name: "Generate insights" })).toHaveProperty(
+      "disabled",
+      true,
+    )
+
+    await user.click(readerScope.getByRole("button", { name: "AI: disabled" }))
 
     await user.click(readerScope.getByRole("button", { name: "Generate insights" }))
 
@@ -594,6 +601,8 @@ describe("reader shell navigation", () => {
       ).toBeTruthy()
     })
 
+    await user.click(readerScope.getByRole("button", { name: "AI: disabled" }))
+
     selectReaderText(readerPane, "state ownership")
 
     await user.click(readerScope.getByRole("button", { name: "Translate selection" }))
@@ -612,6 +621,54 @@ describe("reader shell navigation", () => {
       ).toBeTruthy()
       expect(readerScope.getByText("Cited context: article-layout-shell")).toBeTruthy()
       expect(readerScope.queryByText(/Cited context:.*article-source-context/i)).toBeNull()
+    })
+  })
+
+  test("keeps AI disabled by default and deletes cached artifacts explicitly", async () => {
+    window.scrollTo = () => {}
+    const user = userEvent.setup()
+
+    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
+
+    const readerPane = await screen.findByRole("region", { name: "Reading panel" })
+    const readerScope = within(readerPane)
+
+    await waitFor(() => {
+      expect(
+        readerScope.getByRole("heading", {
+          name: "Turning the desktop shell into a stable three-pane reader skeleton",
+        }),
+      ).toBeTruthy()
+    })
+
+    expect(
+      readerScope.getByRole("button", { name: "AI: disabled" }).getAttribute("aria-pressed"),
+    ).toBe("false")
+    expect(readerScope.getByRole("button", { name: "Generate insights" })).toHaveProperty(
+      "disabled",
+      true,
+    )
+    expect(readerScope.getByRole("button", { name: "Translate article" })).toHaveProperty(
+      "disabled",
+      true,
+    )
+    expect(readerScope.getByRole("button", { name: "Ask within context" })).toHaveProperty(
+      "disabled",
+      true,
+    )
+
+    await user.click(readerScope.getByRole("button", { name: "AI: disabled" }))
+    await user.click(readerScope.getByRole("button", { name: "Generate insights" }))
+
+    await waitFor(() => {
+      expect(readerScope.getAllByText("freelyrss.ai.mock.local")).toHaveLength(2)
+    })
+
+    await user.click(readerScope.getByRole("button", { name: "Delete AI cache" }))
+
+    await waitFor(() => {
+      expect(readerScope.getByText("No summary or keywords yet.")).toBeTruthy()
+      expect(readerScope.queryByText(/Mock summary for article-layout-shell/i)).toBeNull()
     })
   })
 

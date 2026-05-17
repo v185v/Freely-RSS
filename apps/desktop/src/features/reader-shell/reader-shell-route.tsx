@@ -27,6 +27,7 @@ import { SourcePane } from "./components/source-pane"
 import { TaskStatusPanel } from "./components/task-status-panel"
 import {
   answerDurableArticleQuestion,
+  deleteDurableArticleAiCache,
   fetchDurableQueueArticles,
   generateDurableArticleInsights,
   generateDurableArticleTranslation,
@@ -39,6 +40,7 @@ import {
   type MockOpmlImportResult,
   answerMockArticleQuestion,
   createMockAnnotation,
+  deleteMockArticleAiCache,
   exportMockDocument,
   exportMockMarkdown,
   exportMockOpml,
@@ -138,6 +140,8 @@ export function ReaderShellRoute() {
   const setReaderLineHeight = useReaderViewStore((state) => state.setReaderLineHeight)
   const readerMarginMode = useReaderViewStore((state) => state.readerMarginMode)
   const setReaderMarginMode = useReaderViewStore((state) => state.setReaderMarginMode)
+  const readerAiEnabled = useReaderViewStore((state) => state.readerAiEnabled)
+  const setReaderAiEnabled = useReaderViewStore((state) => state.setReaderAiEnabled)
   const setStatusFilter = useReaderViewStore((state) => state.setStatusFilter)
   const statusFilter = useReaderViewStore((state) => state.statusFilter)
   const themeTone = useReaderViewStore((state) => state.themeTone)
@@ -351,6 +355,34 @@ export function ReaderShellRoute() {
       if (result.shellData) {
         queryClient.setQueryData(readerShellQueryKey, result.shellData)
       }
+    },
+  })
+  const deleteArticleAiCacheMutation = useMutation({
+    mutationFn: async (articleId: string) => {
+      const durableResult = await deleteDurableArticleAiCache(articleId)
+      const currentData = queryClient.getQueryData<ReaderShellData>(readerShellQueryKey)
+      const currentDetail = currentData?.articleDetails[articleId] ?? null
+
+      if (durableResult && currentData && currentDetail) {
+        return {
+          cacheDeleteResult: durableResult,
+          shellData: {
+            ...currentData,
+            articleDetails: {
+              ...currentData.articleDetails,
+              [articleId]: {
+                ...currentDetail,
+                aiArtifacts: [],
+              },
+            },
+          },
+        }
+      }
+
+      return deleteMockArticleAiCache(articleId)
+    },
+    onSuccess: (result) => {
+      queryClient.setQueryData(readerShellQueryKey, result.shellData)
     },
   })
   const importOpmlMutation = useMutation({
@@ -815,6 +847,25 @@ export function ReaderShellRoute() {
       updatedAt: answerArticleQuestionMutation.data?.questionResult.artifact.createdAt ?? null,
     },
     {
+      id: "ai-cache",
+      title: "AI cache",
+      scope: activeDetail ? activeDetail.article.title : "No article selected",
+      isRunning: deleteArticleAiCacheMutation.isPending,
+      error: deleteArticleAiCacheMutation.error,
+      completedDetail: deleteArticleAiCacheMutation.data?.cacheDeleteResult
+        ? `Deleted ${deleteArticleAiCacheMutation.data.cacheDeleteResult.deletedArtifactCount} AI artifact(s).`
+        : null,
+      idleDetail: activeDetail
+        ? "AI cache can be deleted for the selected article without disabling core reading."
+        : "Select an article before deleting AI cache.",
+      runningDetail: activeDetail
+        ? `Deleting AI artifacts for ${activeDetail.article.title}.`
+        : "Deleting AI artifacts.",
+      recovery: "Retry after selecting an article with stored AI artifacts.",
+      retryLabel: activeDetail ? "Retry AI cache delete" : null,
+      updatedAt: null,
+    },
+    {
       id: "markdown-export",
       title: "Markdown export",
       scope: "Reader export",
@@ -977,13 +1028,13 @@ export function ReaderShellRoute() {
         break
       case "ai-insights":
         generateArticleInsightsMutation.reset()
-        if (activeDetail) {
+        if (activeDetail && readerAiEnabled) {
           generateArticleInsightsMutation.mutate(activeDetail.article.id)
         }
         break
       case "ai-translation":
         generateArticleTranslationMutation.reset()
-        if (activeDetail) {
+        if (activeDetail && readerAiEnabled) {
           generateArticleTranslationMutation.mutate({
             articleId: activeDetail.article.id,
             mode: "fullArticle",
@@ -993,12 +1044,18 @@ export function ReaderShellRoute() {
         break
       case "ai-question":
         answerArticleQuestionMutation.reset()
-        if (activeDetail) {
+        if (activeDetail && readerAiEnabled) {
           answerArticleQuestionMutation.mutate({
             articleId: activeDetail.article.id,
             contextScope: "currentArticle",
             question: "What is the main point of this article?",
           })
+        }
+        break
+      case "ai-cache":
+        deleteArticleAiCacheMutation.reset()
+        if (activeDetail) {
+          deleteArticleAiCacheMutation.mutate(activeDetail.article.id)
         }
         break
       case "opml-export":
@@ -1319,9 +1376,11 @@ export function ReaderShellRoute() {
             isCreatingAnnotation={createAnnotationMutation.isPending}
             isGeneratingAIInsights={generateArticleInsightsMutation.isPending}
             isAnsweringAIQuestion={answerArticleQuestionMutation.isPending}
+            isDeletingAICache={deleteArticleAiCacheMutation.isPending}
             isExportingDocument={exportDocumentMutation.isPending}
             isExportingMarkdown={exportMarkdownMutation.isPending}
             isGeneratingAITranslation={generateArticleTranslationMutation.isPending}
+            isReaderAIEnabled={readerAiEnabled}
             isUpdatingArticleState={updateArticleStateMutation.isPending}
             markdownExportErrorMessage={markdownExportErrorMessage}
             markdownExportResult={markdownExportResult}
@@ -1330,7 +1389,7 @@ export function ReaderShellRoute() {
               createAnnotationMutation.mutate(input)
             }}
             onGenerateAIInsights={() => {
-              if (!activeDetail) {
+              if (!activeDetail || !readerAiEnabled) {
                 return
               }
 
@@ -1338,7 +1397,7 @@ export function ReaderShellRoute() {
               generateArticleInsightsMutation.mutate(activeDetail.article.id)
             }}
             onAnswerAIQuestion={(input) => {
-              if (!activeDetail) {
+              if (!activeDetail || !readerAiEnabled) {
                 return
               }
 
@@ -1350,7 +1409,7 @@ export function ReaderShellRoute() {
               })
             }}
             onGenerateAITranslation={(input) => {
-              if (!activeDetail) {
+              if (!activeDetail || !readerAiEnabled) {
                 return
               }
 
@@ -1361,6 +1420,14 @@ export function ReaderShellRoute() {
                 selectedText: input.selectedText,
                 targetLanguage: input.targetLanguage,
               })
+            }}
+            onDeleteAICache={() => {
+              if (!activeDetail) {
+                return
+              }
+
+              deleteArticleAiCacheMutation.reset()
+              deleteArticleAiCacheMutation.mutate(activeDetail.article.id)
             }}
             onExportDocumentBatch={(format) => {
               exportDocumentMutation.reset()
@@ -1427,6 +1494,7 @@ export function ReaderShellRoute() {
             onSetReaderFontScale={setReaderFontScale}
             onSetReaderLineHeight={setReaderLineHeight}
             onSetReaderMarginMode={setReaderMarginMode}
+            onSetReaderAIEnabled={setReaderAiEnabled}
             onSetThemeTone={setThemeTone}
             onUpdateArticleState={(input) => {
               updateArticleStateMutation.reset()

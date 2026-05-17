@@ -15,6 +15,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             ai_actions::answer_article_question,
+            ai_actions::delete_article_ai_cache,
             ai_actions::generate_article_translation,
             ai_insights::generate_article_insights,
             local_api::get_local_api_status,

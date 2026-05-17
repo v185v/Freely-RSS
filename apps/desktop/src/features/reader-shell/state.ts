@@ -16,6 +16,7 @@ import type {
 
 const READER_CONTENT_MODE_STORAGE_KEY = "freelyrss.reader-content-mode"
 const READER_PRESENTATION_SETTINGS_STORAGE_KEY = "freelyrss.reader-presentation-settings"
+const READER_AI_ENABLED_STORAGE_KEY = "freelyrss.reader-ai-enabled"
 const DEFAULT_READER_CONTENT_MODE: ReaderContentMode = "extracted"
 const DEFAULT_THEME_TONE: ReaderThemeTone = "midnight"
 const DEFAULT_BASE_THEME_TONE: ReaderBaseThemeTone = "midnight"
@@ -82,6 +83,38 @@ function clearPersistedReaderContentMode() {
 
   try {
     window.localStorage.removeItem(READER_CONTENT_MODE_STORAGE_KEY)
+  } catch {}
+}
+
+function readPersistedReaderAiEnabled() {
+  if (typeof window === "undefined") {
+    return false
+  }
+
+  try {
+    return window.localStorage.getItem(READER_AI_ENABLED_STORAGE_KEY) === "true"
+  } catch {
+    return false
+  }
+}
+
+function writePersistedReaderAiEnabled(readerAiEnabled: boolean) {
+  if (typeof window === "undefined") {
+    return
+  }
+
+  try {
+    window.localStorage.setItem(READER_AI_ENABLED_STORAGE_KEY, String(readerAiEnabled))
+  } catch {}
+}
+
+function clearPersistedReaderAiEnabled() {
+  if (typeof window === "undefined") {
+    return
+  }
+
+  try {
+    window.localStorage.removeItem(READER_AI_ENABLED_STORAGE_KEY)
   } catch {}
 }
 
@@ -178,12 +211,14 @@ type ReaderViewStore = {
   readerContentMode: ReaderContentMode
   readerLineHeight: ReaderLineHeight
   readerMarginMode: ReaderMarginMode
+  readerAiEnabled: boolean
   searchText: string
   setReaderFontFamily: (readerFontFamily: ReaderFontFamily) => void
   setReaderFontScale: (readerFontScale: ReaderFontScale) => void
   setReaderContentMode: (readerContentMode: ReaderContentMode) => void
   setReaderLineHeight: (readerLineHeight: ReaderLineHeight) => void
   setReaderMarginMode: (readerMarginMode: ReaderMarginMode) => void
+  setReaderAiEnabled: (readerAiEnabled: boolean) => void
   setSearchText: (searchText: string) => void
   setBatchSelectedArticleIds: (articleIds: ArticleListItemDto["id"][]) => void
   setCollapsedFolderIds: (folderIds: string[]) => void
@@ -207,6 +242,7 @@ const readerViewDefaults = {
   readerContentMode: DEFAULT_READER_CONTENT_MODE,
   readerLineHeight: DEFAULT_READER_LINE_HEIGHT,
   readerMarginMode: DEFAULT_READER_MARGIN_MODE,
+  readerAiEnabled: false,
   searchText: "",
   sortMode: "newest" as ReaderSortMode,
   statusFilter: "all" as ReaderStatusFilter,
@@ -245,6 +281,7 @@ function areArticleIdArraysEqual(
 }
 
 const persistedPresentationSettings = readPersistedReaderPresentationSettings()
+const persistedReaderAiEnabled = readPersistedReaderAiEnabled()
 
 export const useReaderViewStore = create<ReaderViewStore>((set) => ({
   ...readerViewDefaults,
@@ -254,6 +291,7 @@ export const useReaderViewStore = create<ReaderViewStore>((set) => ({
   readerFontScale: persistedPresentationSettings.fontScale,
   readerLineHeight: persistedPresentationSettings.lineHeight,
   readerMarginMode: persistedPresentationSettings.marginMode,
+  readerAiEnabled: persistedReaderAiEnabled,
   themeTone: persistedPresentationSettings.themeTone,
   setReaderContentMode: (readerContentMode) => {
     writePersistedReaderContentMode(readerContentMode)
@@ -295,6 +333,10 @@ export const useReaderViewStore = create<ReaderViewStore>((set) => ({
       })
       return nextState
     }),
+  setReaderAiEnabled: (readerAiEnabled) => {
+    writePersistedReaderAiEnabled(readerAiEnabled)
+    set({ readerAiEnabled })
+  },
   setSearchText: (searchText) => set({ searchText }),
   setBatchSelectedArticleIds: (articleIds) =>
     set({ batchSelectedArticleIds: normalizeArticleIds(articleIds) }),
@@ -359,6 +401,7 @@ export const useReaderViewStore = create<ReaderViewStore>((set) => ({
 }))
 
 export function resetReaderViewStore(options?: {
+  preservePersistedReaderAiEnabled?: boolean
   preservePersistedReaderContentMode?: boolean
   preservePersistedReaderPresentationSettings?: boolean
 }) {
@@ -368,6 +411,10 @@ export function resetReaderViewStore(options?: {
 
   if (!options?.preservePersistedReaderPresentationSettings) {
     clearPersistedReaderPresentationSettings()
+  }
+
+  if (!options?.preservePersistedReaderAiEnabled) {
+    clearPersistedReaderAiEnabled()
   }
 
   const nextPresentationSettings = options?.preservePersistedReaderPresentationSettings
@@ -391,6 +438,9 @@ export function resetReaderViewStore(options?: {
     readerFontScale: nextPresentationSettings.fontScale,
     readerLineHeight: nextPresentationSettings.lineHeight,
     readerMarginMode: nextPresentationSettings.marginMode,
+    readerAiEnabled: options?.preservePersistedReaderAiEnabled
+      ? readPersistedReaderAiEnabled()
+      : false,
     themeTone: nextPresentationSettings.themeTone,
   })
 }

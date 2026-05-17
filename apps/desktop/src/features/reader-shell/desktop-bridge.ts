@@ -1,6 +1,7 @@
 import type { ArticleListItemDto } from "@freelyrss/shared-types"
 
 import type {
+  ReaderAICacheDeleteResult,
   ReaderAIInsightResult,
   ReaderAIQuestionContextScope,
   ReaderAIQuestionResult,
@@ -16,6 +17,26 @@ type DurableQueueRequest = {
   searchText: string
   sortMode: ReaderSortMode
   statusFilter: ReaderStatusFilter
+}
+
+export async function deleteDurableArticleAiCache(
+  articleId: string,
+): Promise<ReaderAICacheDeleteResult | null> {
+  const invoke = await resolveInvoke()
+
+  if (!invoke) {
+    return null
+  }
+
+  try {
+    return await invoke<ReaderAICacheDeleteResult>("delete_article_ai_cache", {
+      request: {
+        articleId,
+      },
+    })
+  } catch {
+    return null
+  }
 }
 
 type DurableQueueResponse = {

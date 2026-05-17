@@ -106,6 +106,18 @@ impl<'conn> AIArtifactStore<'conn> {
         Ok(artifacts)
     }
 
+    pub fn delete_ai_artifacts_for_article(
+        &mut self,
+        article_id: &ArticleId,
+    ) -> Result<usize, StoreError> {
+        let deleted = self.connection.execute(
+            "DELETE FROM AIArtifact WHERE article_id = ?1",
+            params![article_id.as_str()],
+        )?;
+
+        Ok(deleted)
+    }
+
     fn query_ai_artifacts_for_article(
         &mut self,
         article_id: &ArticleId,
@@ -237,6 +249,21 @@ mod tests {
         assert_eq!(
             summary_only[0].result.as_value()["text"],
             serde_json::json!("Updated summary")
+        );
+
+        let deleted = store
+            .delete_ai_artifacts_for_article(
+                &ArticleId::try_from("article-ai").expect("article id"),
+            )
+            .expect("delete artifacts");
+        assert_eq!(deleted, 2);
+        assert!(
+            store
+                .list_ai_artifacts_for_article(
+                    &ArticleId::try_from("article-ai").expect("article id")
+                )
+                .expect("list after delete")
+                .is_empty()
         );
     }
 

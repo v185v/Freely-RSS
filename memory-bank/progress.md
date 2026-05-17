@@ -2066,3 +2066,43 @@
 - `apps/desktop/src-tauri/src/ai_actions.rs` owns desktop host authorization/orchestration for translation and Q&A. It may load approved local article context and persist completed artifacts, but should not become a real provider SDK wrapper or privacy settings store.
 - Reader UI should keep AI optional and explicit. Step 76 should add privacy toggles, provider/scope disclosure, cache deletion, and regeneration controls without triggering AI on article open, route reconciliation, sync, Webhook, knowledge-base export, or local REST routes.
 - Continue to use `AIArtifact` for persisted derived results; do not add translation-specific or Q&A-specific result tables unless a later storage design explicitly requires it.
+
+## 2026-05-17 ASCII Addendum XL
+
+### Stage 10 Step 76 Completed: AI privacy and enablement controls
+
+- Completed `implementation-plan.md` Stage 10 Step 76 by adding explicit reader AI enablement and privacy controls around the existing insight, translation, and Q&A workflows.
+- Added a reader-local `readerAiEnabled` setting that defaults to disabled and persists only as a UI preference. Opening the reader or switching articles now leaves all AI generation buttons disabled until the user explicitly enables AI.
+- The reader panel now discloses the current provider id (`freelyrss.ai.mock.local`) and that current article text is sent only after an explicit AI button press. Cached AI artifacts remain visible while AI is disabled.
+- Added article-level AI cache deletion. The desktop host exposes `delete_article_ai_cache`, and `AIArtifactStore` deletes all `AIArtifact` rows for the selected article without adding new AI result tables or schema migrations.
+- Regeneration remains explicit. Existing summary/keyword, translation, and question controls still call the same host/adapter workflows, but route reconciliation, article open, sync, Webhook, knowledge-base export, and local REST routes do not trigger AI.
+- Browser-only mock data now mirrors durable cache deletion so non-Tauri development uses the same reader flow.
+- Kept Step 76 out of real provider SDKs, credential storage, sync-engine, sync-server routes, WebDAV transport, integration-engine Webhook/knowledge-base export, local REST API routes, and SQLite migrations. No database schema migration was required.
+
+### Step 76 Verification
+
+- Passed `corepack pnpm --filter @freelyrss/desktop test -- --run reader-shell.test.tsx`
+- Passed `cargo test -p freelyrss-core-domain ai_artifact_store`
+- Passed `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml ai_`
+- Passed `corepack pnpm --filter @freelyrss/shared-types check`
+- Passed `corepack pnpm --filter @freelyrss/desktop build`
+- Passed `cargo fmt --all --check`
+- Passed `cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings`
+- Passed `cargo clippy --workspace --all-targets -- -D warnings`
+- Passed `cargo test --workspace`
+- Passed `corepack pnpm run format:check`
+- Passed `corepack pnpm run verify`
+
+### Environment Notes
+
+- `corepack pnpm --filter @freelyrss/desktop build` completed successfully and emitted the existing Vite chunk-size warning for the generated desktop bundle. The warning did not fail the build.
+- Browser automation was not run for this step; the default-disabled AI interaction path, explicit enablement, generation, and cache deletion are covered by Testing Library regression tests plus production build/type-checking.
+
+### Next Step (ASCII update)
+
+- The next implementation step in `implementation-plan.md` is Stage 11 Step 77: build the Web read-only entry.
+- Preserve the current boundary split:
+- Reader AI enablement is a local UI preference and privacy gate, not a provider credential store, durable scheduler, sync setting, or backend authorization model.
+- `delete_article_ai_cache` deletes completed derived artifacts for one selected article through the `AIArtifact` table. It should not delete original article content, annotations, search indexes, WebDAV blobs, sync events, or knowledge-base export files.
+- `AIArtifactStore` remains the completed-artifact repository. Future provider configuration, persistent privacy settings, and real model credentials should enter through explicit settings/storage boundaries rather than the reader pane or adapter workflows.
+- Step 77 should build `apps/web` as a remote read-only access entry using synchronized data boundaries. It should not reuse desktop-local SQLite commands, desktop Tauri-only AI controls, local REST routes, or feed-fetching pipelines as if the Web app were the local-first desktop host.

@@ -94,6 +94,19 @@ pub struct ArticleQuestionRunDto {
     pub cited_context_ids: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteArticleAiCacheRequest {
+    pub article_id: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteArticleAiCacheDto {
+    pub article_id: String,
+    pub deleted_artifact_count: usize,
+}
+
 #[tauri::command]
 pub fn generate_article_translation(
     app: AppHandle,
@@ -109,6 +122,15 @@ pub fn answer_article_question(
     request: GenerateArticleQuestionRequest,
 ) -> Result<ArticleQuestionRunDto, String> {
     answer_article_question_at(resolve_database_path(&app)?, request, current_iso_timestamp())
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn delete_article_ai_cache(
+    app: AppHandle,
+    request: DeleteArticleAiCacheRequest,
+) -> Result<DeleteArticleAiCacheDto, String> {
+    delete_article_ai_cache_at(resolve_database_path(&app)?, request)
         .map_err(|error| error.to_string())
 }
 
@@ -236,6 +258,29 @@ fn answer_article_question_at(
         from_cache: run.report.from_cache,
         context_scope: request.context_scope.as_str().to_owned(),
         cited_context_ids,
+    })
+}
+
+fn delete_article_ai_cache_at(
+    database_path: PathBuf,
+    request: DeleteArticleAiCacheRequest,
+) -> Result<DeleteArticleAiCacheDto, Box<dyn Error>> {
+    if !database_path.exists() {
+        return Err("FreelyRSS local database has not been initialized yet.".into());
+    }
+
+    let mut connection = Connection::open(database_path)?;
+    prepare_database_connection(&connection)?;
+
+    let article_id = ArticleId::try_from(request.article_id.as_str())?;
+    let deleted_artifact_count = {
+        let mut artifact_store = AIArtifactStore::new(&mut connection);
+        artifact_store.delete_ai_artifacts_for_article(&article_id)?
+    };
+
+    Ok(DeleteArticleAiCacheDto {
+        article_id: article_id.to_string(),
+        deleted_artifact_count,
     })
 }
 
@@ -523,6 +568,39 @@ mod tests {
             run.artifact.result["citedContextIds"],
             serde_json::json!(["article-ai"])
         );
+    }
+
+    #[test]
+    fn deletes_article_ai_artifact_cache() {
+        let temp_dir = tempdir().expect("temp dir");
+        let database_path = temp_dir.path().join("article-ai-cache.sqlite3");
+
+        initialize_database(&database_path, &DatabaseInitializationOptions::default())
+            .expect("initialize database");
+        seed_articles(&database_path);
+
+        generate_article_translation_at(
+            database_path.clone(),
+            GenerateArticleTranslationRequest {
+                article_id: "article-ai".to_owned(),
+                mode: GenerateArticleTranslationMode::Selection,
+                selected_text: Some("Reader work stays local".to_owned()),
+                target_language: Some("zh-Hans".to_owned()),
+            },
+            "2026-05-17T02:10:00Z",
+        )
+        .expect("seed translation cache");
+
+        let deleted = super::delete_article_ai_cache_at(
+            database_path,
+            super::DeleteArticleAiCacheRequest {
+                article_id: "article-ai".to_owned(),
+            },
+        )
+        .expect("delete ai cache");
+
+        assert_eq!(deleted.article_id, "article-ai");
+        assert_eq!(deleted.deleted_artifact_count, 1);
     }
 
     fn seed_articles(database_path: &std::path::Path) {

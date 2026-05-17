@@ -208,6 +208,11 @@ export interface ReaderAIQuestionResult {
   fromCache: boolean
 }
 
+export interface ReaderAICacheDeleteResult {
+  articleId: ArticleDetailDto["article"]["id"]
+  deletedArtifactCount: number
+}
+
 export type ReaderBatchOperationAction = "add-read-later" | "add-tag" | "delete-cache" | "mark-read"
 
 export type ReaderBatchOperationCommand =
@@ -249,6 +254,7 @@ export type ReaderTaskStatusKind =
   | "batch-operation"
   | "cache-cleanup"
   | "document-export"
+  | "ai-cache"
   | "ai-insights"
   | "ai-question"
   | "ai-translation"

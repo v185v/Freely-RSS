@@ -64,6 +64,8 @@ type ReaderPaneProps = {
   isCreatingAnnotation: boolean
   isGeneratingAIInsights: boolean
   isGeneratingAITranslation: boolean
+  isDeletingAICache: boolean
+  isReaderAIEnabled: boolean
   isExportingDocument: boolean
   isExportingMarkdown: boolean
   isUpdatingArticleState: boolean
@@ -74,6 +76,7 @@ type ReaderPaneProps = {
     contextScope: ReaderAIQuestionContextScope
     question: string
   }) => void
+  onDeleteAICache: () => void
   onGenerateAIInsights: () => void
   onGenerateAITranslation: (input: {
     mode: ReaderAITranslationMode
@@ -89,6 +92,7 @@ type ReaderPaneProps = {
   onSetReaderFontScale: (readerFontScale: ReaderFontScale) => void
   onSetReaderLineHeight: (readerLineHeight: ReaderLineHeight) => void
   onSetReaderMarginMode: (readerMarginMode: ReaderMarginMode) => void
+  onSetReaderAIEnabled: (enabled: boolean) => void
   onSetThemeTone: (themeTone: ReaderThemeTone) => void
   onUpdateArticleState: (input: ReaderStateMutationInput) => void
   paneId: string
@@ -639,6 +643,8 @@ export function ReaderPane({
   isCreatingAnnotation,
   isGeneratingAIInsights,
   isGeneratingAITranslation,
+  isDeletingAICache,
+  isReaderAIEnabled,
   isExportingDocument,
   isExportingMarkdown,
   isUpdatingArticleState,
@@ -646,6 +652,7 @@ export function ReaderPane({
   markdownExportResult,
   onCreateAnnotation,
   onAnswerAIQuestion,
+  onDeleteAICache,
   onGenerateAIInsights,
   onGenerateAITranslation,
   onExportDocumentBatch,
@@ -657,6 +664,7 @@ export function ReaderPane({
   onSetReaderFontScale,
   onSetReaderLineHeight,
   onSetReaderMarginMode,
+  onSetReaderAIEnabled,
   onSetThemeTone,
   onUpdateArticleState,
   paneId,
@@ -830,6 +838,11 @@ export function ReaderPane({
   }
 
   function handleGenerateTranslation(mode: ReaderAITranslationMode) {
+    if (!isReaderAIEnabled) {
+      setSelectionErrorMessage("Enable AI before sending article text to a provider.")
+      return
+    }
+
     const targetLanguage = translationTargetLanguage.trim()
 
     if (targetLanguage.length === 0) {
@@ -851,6 +864,11 @@ export function ReaderPane({
   }
 
   function handleAskAIQuestion() {
+    if (!isReaderAIEnabled) {
+      setSelectionErrorMessage("Enable AI before sending article context to a provider.")
+      return
+    }
+
     const question = aiQuestionDraft.trim()
 
     if (question.length === 0) {
@@ -974,6 +992,29 @@ export function ReaderPane({
                     </div>
                   </div>
 
+                  <div className="desktop-reader__ai-actions">
+                    <Button
+                      aria-pressed={isReaderAIEnabled}
+                      onClick={() => onSetReaderAIEnabled(!isReaderAIEnabled)}
+                      size="sm"
+                      tone={isReaderAIEnabled ? "neutral" : "ghost"}
+                    >
+                      AI: {isReaderAIEnabled ? "enabled" : "disabled"}
+                    </Button>
+                    <Button
+                      disabled={isDeletingAICache || activeDetail.aiArtifacts.length === 0}
+                      onClick={onDeleteAICache}
+                      size="sm"
+                      tone="ghost"
+                    >
+                      {isDeletingAICache ? "Deleting cache..." : "Delete AI cache"}
+                    </Button>
+                    <span>
+                      Provider freelyrss.ai.mock.local; current article text is sent only after an
+                      explicit AI button press.
+                    </span>
+                  </div>
+
                   {generatedSummaryText || generatedKeywords.length > 0 ? (
                     <div className="desktop-reader__ai-grid">
                       <div className="desktop-reader__ai-card">
@@ -1026,8 +1067,12 @@ export function ReaderPane({
 
                   <div className="desktop-reader__ai-actions">
                     <Button
-                      disabled={isGeneratingAIInsights}
-                      onClick={onGenerateAIInsights}
+                      disabled={isGeneratingAIInsights || !isReaderAIEnabled}
+                      onClick={() => {
+                        if (isReaderAIEnabled) {
+                          onGenerateAIInsights()
+                        }
+                      }}
                       size="sm"
                       tone="neutral"
                     >
@@ -1036,7 +1081,9 @@ export function ReaderPane({
                     <span>
                       {latestSummaryArtifact && latestKeywordArtifact
                         ? "Summary and keywords are available for this article."
-                        : "Idle for this article."}
+                        : isReaderAIEnabled
+                          ? "Idle for this article."
+                          : "AI is disabled; cached artifacts remain visible."}
                     </span>
                   </div>
 
@@ -1091,7 +1138,7 @@ export function ReaderPane({
                       </label>
                       <div className="desktop-reader__ai-actions">
                         <Button
-                          disabled={isGeneratingAITranslation}
+                          disabled={isGeneratingAITranslation || !isReaderAIEnabled}
                           onClick={() => handleGenerateTranslation("fullArticle")}
                           size="sm"
                           tone="neutral"
@@ -1099,7 +1146,9 @@ export function ReaderPane({
                           {isGeneratingAITranslation ? "Translating..." : "Translate article"}
                         </Button>
                         <Button
-                          disabled={isGeneratingAITranslation || !pendingSelection}
+                          disabled={
+                            isGeneratingAITranslation || !pendingSelection || !isReaderAIEnabled
+                          }
                           onClick={() => handleGenerateTranslation("selection")}
                           size="sm"
                           tone="ghost"
@@ -1163,7 +1212,7 @@ export function ReaderPane({
                         </div>
                       </fieldset>
                       <Button
-                        disabled={isAnsweringAIQuestion}
+                        disabled={isAnsweringAIQuestion || !isReaderAIEnabled}
                         onClick={handleAskAIQuestion}
                         size="sm"
                         tone="neutral"
