@@ -13,6 +13,8 @@
     "desktop:build": "corepack pnpm --filter @freelyrss/desktop build",
     "desktop:tauri:dev": "corepack pnpm --filter @freelyrss/desktop tauri dev",
     "desktop:tauri:build": "corepack pnpm --filter @freelyrss/desktop tauri build",
+    "web:dev": "corepack pnpm --filter @freelyrss/web dev",
+    "web:build": "corepack pnpm --filter @freelyrss/web build",
     "docs:links": "node scripts/check-doc-links.mjs",
     "format": "biome format --write .",
     "format:check": "biome check .",
@@ -20,13 +22,14 @@
     "lint:fix": "biome check --write .",
     "test:config": "node --test packages/shared-config/src/config.test.js",
     "test:desktop": "corepack pnpm --filter @freelyrss/desktop test",
+    "test:web": "corepack pnpm --filter @freelyrss/web test",
     "test:types": "corepack pnpm --filter @freelyrss/shared-types check",
     "test:query": "corepack pnpm --filter @freelyrss/shared-query check && corepack pnpm --filter @freelyrss/shared-query test",
     "rust:fmt": "cargo fmt --all",
     "rust:fmt:check": "cargo fmt --all --check",
     "rust:clippy": "cargo clippy --workspace --all-targets -- -D warnings",
     "test:rust": "cargo test --workspace",
-    "verify": "corepack pnpm run format:check && corepack pnpm run lint && corepack pnpm run test:config && corepack pnpm run test:types && corepack pnpm run test:query && corepack pnpm run test:desktop && corepack pnpm run rust:fmt:check && corepack pnpm run rust:clippy && corepack pnpm run test:rust && corepack pnpm run docs:links"
+    "verify": "corepack pnpm run format:check && corepack pnpm run lint && corepack pnpm run test:config && corepack pnpm run test:types && corepack pnpm run test:query && corepack pnpm run test:desktop && corepack pnpm run test:web && corepack pnpm run web:build && corepack pnpm run rust:fmt:check && corepack pnpm run rust:clippy && corepack pnpm run test:rust && corepack pnpm run docs:links"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",

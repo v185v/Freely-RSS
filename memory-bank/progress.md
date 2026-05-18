@@ -2106,3 +2106,54 @@
 - `delete_article_ai_cache` deletes completed derived artifacts for one selected article through the `AIArtifact` table. It should not delete original article content, annotations, search indexes, WebDAV blobs, sync events, or knowledge-base export files.
 - `AIArtifactStore` remains the completed-artifact repository. Future provider configuration, persistent privacy settings, and real model credentials should enter through explicit settings/storage boundaries rather than the reader pane or adapter workflows.
 - Step 77 should build `apps/web` as a remote read-only access entry using synchronized data boundaries. It should not reuse desktop-local SQLite commands, desktop Tauri-only AI controls, local REST routes, or feed-fetching pipelines as if the Web app were the local-first desktop host.
+
+## 2026-05-18 ASCII Addendum XLI
+
+### Stage 11 Step 77 Completed: Web read-only entry
+
+- Completed `implementation-plan.md` Stage 11 Step 77 by building `apps/web` as a standalone React + Vite read-only entry over synchronized article data.
+- Added a Web workspace app with its own `package.json`, `tsconfig.json`, `vite.config.ts`, `index.html`, React entrypoint, local stylesheet, and Vitest coverage.
+- Added a remote-client mock layer that returns a session snapshot, feed summaries, article lists, and article detail snapshots. The Web app only reads these synchronized snapshots; it does not call Tauri commands, desktop-local SQLite, feed fetchers, or AI workflows.
+- The Web UI now renders a signed-in remote session banner, source filters, a remote article queue, and a read-only article detail pane. It filters and opens synchronized articles from the remote snapshot while keeping state changes local to the browser shell.
+- Added root workspace scripts for `web:dev`, `web:build`, and `test:web`, and extended `verify` so the Web entry is part of the full repository validation chain.
+- Browser verification confirmed the page rendered correctly at `http://127.0.0.1:5174/`, default article details loaded, and filtering to `podcast` surfaced the expected remote article. The only console error was the existing `favicon.ico` 404 from the dev server.
+
+### Step 77 Verification
+
+- Passed `corepack pnpm install`
+- Passed `corepack pnpm --filter @freelyrss/web build`
+- Passed `corepack pnpm --filter @freelyrss/web test`
+- Passed `corepack pnpm run format:check`
+- Passed `corepack pnpm run lint`
+- Passed `corepack pnpm run format`
+- Passed `corepack pnpm run verify`
+- Passed browser checks against `http://127.0.0.1:5174/`
+
+### Environment Notes
+
+- `corepack pnpm run verify` now includes `test:web` and `web:build`, so the Web entry is covered by the repository-wide validation chain.
+- The browser dev server only reported the existing `favicon.ico` 404. No app-level runtime errors appeared during the Web verification flow.
+
+### Step 77 File Responsibilities
+
+- `apps/web/package.json`: declares the Web app package, its scripts, and its local React/Vite/testing dependencies.
+- `apps/web/tsconfig.json`: owns the Web app TypeScript compiler settings.
+- `apps/web/vite.config.ts`: owns the Web dev server and Vitest environment configuration.
+- `apps/web/index.html`: provides the Web app HTML shell and root mount point.
+- `apps/web/src/main.tsx`: bootstraps the React application into `#root`.
+- `apps/web/src/web-app.tsx`: owns the read-only Web UI composition, including session summary, source filters, article queue, and detail pane.
+- `apps/web/src/remote-client.ts`: owns the local remote snapshot mock used by the Web shell. It models synchronized read data and does not mutate local storage or invoke desktop-only commands.
+- `apps/web/src/styles.css`: owns the Web-specific layout and responsive styling layered on top of the shared UI theme.
+- `apps/web/src/web-app.test.tsx`: protects the read-only rendering and search filtering behavior.
+- `apps/web/src/vite-env.d.ts`: provides Vite type declarations for the Web app.
+- `package.json`: adds workspace scripts for Web development, build, test, and verification.
+- `pnpm-lock.yaml`: records the workspace dependency graph after adding the Web app package.
+- `memory-bank/progress.md`: records the completed Step 77 milestone, verification commands, browser check, and the Step 78 handoff.
+- `memory-bank/architecture.md`: records the Step 77 Web entry architecture, file responsibilities, and boundary notes.
+
+### Step 77 Boundary Notes
+
+- `apps/web` is a remote read-only access surface. It should continue to consume synchronized snapshots and should not gain desktop-local SQLite commands, Tauri invocations, feed-fetching logic, or AI controls.
+- The remote client mock is a shell boundary, not a durable sync implementation. Real API wiring can replace it later, but the Web app should keep a read-only contract.
+- Future write-capable Web workflows, if any, should enter through an explicit remote API and sync boundary rather than being borrowed from desktop-only host commands.
+- Step 78 should continue expanding the Web surface only within the remote/synchronized-data contract defined here.

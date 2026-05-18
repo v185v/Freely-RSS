@@ -2723,3 +2723,39 @@ Step 60 已将 `SyncEvent` 限定为用户可携带状态、订阅组织和自�
 - The UI may disclose provider ids and scopes, but provider selection, real credentials, remote/local model configuration, and persistent privacy policy should enter through a later explicit settings boundary.
 - AI cache deletion should continue to reuse `AIArtifactStore`. Do not add kind-specific summary, translation, or Q&A cleanup tables unless a later storage design changes the artifact model.
 - Step 77 should build the Web read-only entry as a remote-access surface over synchronized data, not by importing desktop Tauri commands, desktop-local SQLite stores, or desktop-only AI privacy controls into the Web app.
+
+## 2026-05-18 ASCII Addendum XLI
+
+### Step 77 Architecture Insights
+
+- Step 77 introduces `apps/web` as the first Web access surface. It is intentionally a remote read-only reader over synchronized data, not a second local-first desktop host.
+- The Web app consumes session, source, article-list, and article-detail snapshots through a remote-client boundary. That boundary is currently a deterministic mock, but its shape is compatible with future sync-server backed reads.
+- Source filtering, text filtering, and article opening are browser UI state only. They do not write article state, generate sync events, call the desktop local REST API, run feed fetchers, mutate SQLite, or invoke Tauri commands.
+- The Web surface reuses shared DTOs from `@freelyrss/shared-types` and shared primitives from `@freelyrss/ui`, preserving domain vocabulary without importing desktop reader-shell internals.
+- The app deliberately excludes desktop-only capabilities: local cache policy, OPML import/export, local AI enablement controls, article AI generation, Webhook dispatch, knowledge-base export, feed refresh, batch operations, and local media cache management.
+- Repository verification now treats Web as a first-class workspace package. `test:web` and `web:build` are included in `verify`, which prevents the Web shell from silently drifting out of type/build/test coverage.
+- No Rust, SQLite, sync-server, or database schema changes were required. Step 77 is a client shell and contract boundary step.
+
+### Step 77 File Responsibilities
+
+- `apps/web/package.json`: owns the Web package metadata, Vite dev/build scripts, Vitest script, and React/shared package dependencies.
+- `apps/web/tsconfig.json`: owns Web-specific TypeScript checking for browser DOM code, JSX, module resolution, and strict compilation.
+- `apps/web/vite.config.ts`: owns the Web Vite app configuration, including the fixed dev port `5174` and jsdom test environment.
+- `apps/web/index.html`: owns the static browser entry document, page title, root node, and module script loading `src/main.tsx`.
+- `apps/web/src/vite-env.d.ts`: owns Vite ambient typings for the Web package.
+- `apps/web/src/main.tsx`: owns React root creation and top-level Web app mounting. It imports Web-specific styles and does not contain feature logic.
+- `apps/web/src/remote-client.ts`: owns the synchronized read snapshot mock. It defines `WebSessionDto`, `WebReaderSnapshotDto`, feed summaries, article list rows, article details, and read-only fetch functions. It should later be replaceable by remote API calls without changing UI ownership.
+- `apps/web/src/web-app.tsx`: owns the Web read-only reader composition. It renders the account/session header, metrics, source filter list, article queue search, and article detail view using shared UI components and shared DTOs.
+- `apps/web/src/styles.css`: owns Web-specific layout and responsive treatment while importing `@freelyrss/ui/theme.css` for shared tokens and component styles.
+- `apps/web/src/web-app.test.tsx`: owns regression coverage for rendering the read-only Web entry and filtering synchronized article snapshots.
+- `package.json`: owns root Web commands (`web:dev`, `web:build`, `test:web`) and adds Web test/build coverage to the repository `verify` chain.
+- `pnpm-lock.yaml`: records dependency resolution after `@freelyrss/web` gained real React/Vite/test dependencies.
+- `memory-bank/progress.md`: records the completed Step 77 milestone, verification commands, browser check, and Step 78 handoff.
+- `memory-bank/architecture.md`: records the Step 77 Web architecture boundary and file-level responsibilities.
+
+### Step 77 Boundary Notes
+
+- `apps/web` must remain remote-data oriented. It should not import from `apps/desktop/src/features/reader-shell`, `apps/desktop/src-tauri`, `crates/feed-engine`, local SQLite stores, or Tauri bridges.
+- The current remote-client mock is not a sync engine, auth system, or persistence layer. It exists to stabilize the Web UI contract before real remote API wiring.
+- Web read-only article details may show synchronized user state, annotations, attachments, and future derived artifacts, but generating or mutating those records should require a later explicit remote API design.
+- Step 78 should keep the Web scope constrained to the already-defined remote access entry and should not expand into local feed fetching, full offline cache management, complex rule editing, or deep system integration.
