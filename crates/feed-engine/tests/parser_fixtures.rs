@@ -1,10 +1,13 @@
 use std::{fs, path::PathBuf};
 
-use freelyrss_core_domain::{AttachmentType, FeedFormat, FeedId, IsoDateTime, UrlString};
+use freelyrss_core_domain::{
+    AttachmentType, FeedErrorKind, FeedFormat, FeedId, IsoDateTime, UrlString,
+};
 use freelyrss_feed_engine::{
     DefaultFeedNormalizer, DefaultFeedParser, FeedDiscoveryResult, FeedNormalizer, FeedParser,
     FetchRequest, FetchedFeed, NormalizeContext, ParsedFeedDocument, ParsedSource,
 };
+use serde::Deserialize;
 
 #[test]
 fn default_parser_reads_rss_2_rich_media_fixtures() {
@@ -202,6 +205,52 @@ fn default_parser_rejects_empty_feed_bodies_with_a_distinct_error() {
             "fetched feed body was empty after trimming whitespace",
         )
     );
+}
+
+#[test]
+fn default_parser_rejects_declared_parse_error_fixtures() {
+    let parser = DefaultFeedParser;
+    let error_fixtures = parse_error_fixtures();
+
+    assert!(
+        !error_fixtures.is_empty(),
+        "parser regression manifest should include explicit parse-error fixtures"
+    );
+
+    for fixture in error_fixtures {
+        let fetched = fetched_fixture(&fixture.path, fixture.content_type());
+        let expected_message_fragment = fixture
+            .expected_message_fragment
+            .as_deref()
+            .unwrap_or_else(|| {
+                panic!(
+                    "parse-error fixture {} should declare an expected message fragment",
+                    fixture.id
+                )
+            });
+        let error = match parser.parse(&fetched) {
+            Ok(parsed) => panic!(
+                "fixture {} should fail with {:?}, got successful parse: {parsed:?}",
+                fixture.id,
+                fixture.expected_error_kind()
+            ),
+            Err(error) => error,
+        };
+
+        assert_eq!(
+            error.error_kind(),
+            Some(fixture.expected_error_kind()),
+            "fixture {} should preserve the expected feed error kind",
+            fixture.id
+        );
+        assert!(
+            error.message().contains(expected_message_fragment),
+            "fixture {} error message {:?} should contain {:?}",
+            fixture.id,
+            error.message(),
+            expected_message_fragment
+        );
+    }
 }
 
 #[test]
@@ -434,4 +483,68 @@ fn timestamp(value: &str) -> IsoDateTime {
 
 fn url(value: &str) -> UrlString {
     UrlString::try_from(value).expect("valid url")
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FixtureManifest {
+    fixtures: Vec<FixtureEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FixtureEntry {
+    id: String,
+    format: String,
+    path: String,
+    expected_outcome: String,
+    expected_error_kind: Option<String>,
+    expected_message_fragment: Option<String>,
+}
+
+impl FixtureEntry {
+    fn content_type(&self) -> &str {
+        match self.format.as_str() {
+            "rss" => "application/rss+xml",
+            "atom" => "application/atom+xml",
+            "json-feed" | "json" => "application/feed+json",
+            "html" => "text/html; charset=utf-8",
+            "xml" => "application/xml",
+            other => panic!("unsupported fixture format {other}"),
+        }
+    }
+
+    fn expected_error_kind(&self) -> FeedErrorKind {
+        match self.expected_error_kind.as_deref() {
+            Some("parse") => FeedErrorKind::Parse,
+            Some("empty") => FeedErrorKind::Empty,
+            Some(other) => panic!("unsupported expected error kind {other}"),
+            None => panic!(
+                "parse-error fixture {} should declare an error kind",
+                self.id
+            ),
+        }
+    }
+}
+
+fn parse_error_fixtures() -> Vec<FixtureEntry> {
+    let manifest_path = fixture_path("manifest.json");
+    let content = fs::read_to_string(&manifest_path).unwrap_or_else(|error| {
+        panic!(
+            "fixture manifest should be readable at {}: {error}",
+            manifest_path.display()
+        )
+    });
+    let manifest = serde_json::from_str::<FixtureManifest>(&content).unwrap_or_else(|error| {
+        panic!(
+            "fixture manifest should be valid JSON at {}: {error}",
+            manifest_path.display()
+        )
+    });
+
+    manifest
+        .fixtures
+        .into_iter()
+        .filter(|fixture| fixture.expected_outcome == "parse-error")
+        .collect()
 }

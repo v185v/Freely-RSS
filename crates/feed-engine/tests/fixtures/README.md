@@ -18,5 +18,9 @@ Fixture inventory:
 - `html/html-single-feed.html`: HTML page with exactly one discoverable RSS feed.
 - `html/html-multiple-feeds.html`: HTML page with multiple discoverable RSS / Atom / JSON Feed candidates.
 - `html/html-no-feed.html`: HTML page without any discoverable feed links.
+- `invalid/malformed-rss.xml`: malformed XML sample that must stay a parser error.
+- `invalid/unsupported-opml-root.xml`: XML sample with an unsupported root element.
+- `invalid/unsupported-json-feed-version.json`: JSON Feed-like sample with an unsupported spec version.
+- `invalid/invalid-json-feed.json`: syntactically invalid JSON sample for parse-error regression.
 
 When later steps add parser assertions, reuse these files directly instead of inventing ad hoc inline samples.

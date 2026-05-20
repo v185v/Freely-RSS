@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Malformed RSS Regression</title>
+    <link>https://example.com/feeds/malformed</link>
+    <!-- freelyrss-fixture-scenario: malformed-xml -->
+    <item>
+      <title>Broken item should not parse</title>
+      <link>https://example.com/articles/broken-item</link>
+    </item>
+  </channel>
+<!-- Missing closing rss element on purpose. -->

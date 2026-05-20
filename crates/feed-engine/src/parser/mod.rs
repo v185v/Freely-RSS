@@ -43,7 +43,7 @@ impl FeedParser for DefaultFeedParser {
 
         match parse_xml_feed(source) {
             Ok(parsed) => Ok(ParsedSource::Feed(parsed)),
-            Err(_error) if source_has_html_signature(source) => {
+            Err(_error) if should_fallback_to_html_discovery(source) => {
                 html::discover(source, &fetched.final_url).map(ParsedSource::Discovery)
             }
             Err(error) => Err(error),
@@ -112,6 +112,32 @@ fn source_has_html_signature(source: &str) -> bool {
         || prefix.contains("<html")
         || prefix.contains("<head")
         || prefix.contains("<body")
+}
+
+fn should_fallback_to_html_discovery(source: &str) -> bool {
+    if !source_has_html_signature(source) {
+        return false;
+    }
+
+    if !source.trim_start().starts_with("<?xml") {
+        return true;
+    }
+
+    Document::parse_with_options(
+        source,
+        ParsingOptions {
+            allow_dtd: true,
+            ..ParsingOptions::default()
+        },
+    )
+    .ok()
+    .is_some_and(|document| {
+        document
+            .root_element()
+            .tag_name()
+            .name()
+            .eq_ignore_ascii_case("html")
+    })
 }
 
 fn child_element<'a, 'input>(

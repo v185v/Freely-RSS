@@ -20,6 +20,9 @@ struct FixtureEntry {
     id: String,
     format: String,
     path: String,
+    expected_outcome: String,
+    expected_error_kind: Option<String>,
+    expected_message_fragment: Option<String>,
     article_count: usize,
     scenarios: Vec<String>,
     markers: Vec<String>,
@@ -121,6 +124,21 @@ fn fixture_catalog_entries_point_to_existing_files_with_expected_signatures() {
                     fixture.id
                 );
             }
+            "json" => {
+                assert!(
+                    content.trim_start().starts_with('{'),
+                    "JSON regression fixture {} should start with a JSON object",
+                    fixture.id
+                );
+            }
+            "xml" => {
+                let trimmed = content.trim_start();
+                assert!(
+                    trimmed.starts_with("<?xml") || trimmed.starts_with('<'),
+                    "XML regression fixture {} should start with an XML document",
+                    fixture.id
+                );
+            }
             "html" => {
                 let trimmed = content.trim_start().to_ascii_lowercase();
                 assert!(
@@ -136,6 +154,43 @@ fn fixture_catalog_entries_point_to_existing_files_with_expected_signatures() {
                 );
             }
             other => panic!("unsupported fixture format {other}"),
+        }
+
+        match fixture.expected_outcome.as_str() {
+            "parsed-feed" | "feed-discovery" => {
+                assert!(
+                    fixture.expected_error_kind.is_none(),
+                    "fixture {} should not declare an error kind for successful outcome {}",
+                    fixture.id,
+                    fixture.expected_outcome
+                );
+                assert!(
+                    fixture.expected_message_fragment.is_none(),
+                    "fixture {} should not declare an error fragment for successful outcome {}",
+                    fixture.id,
+                    fixture.expected_outcome
+                );
+            }
+            "parse-error" => {
+                assert_eq!(
+                    fixture.expected_error_kind.as_deref(),
+                    Some("parse"),
+                    "fixture {} should declare the expected parse error kind",
+                    fixture.id
+                );
+                assert!(
+                    fixture
+                        .expected_message_fragment
+                        .as_deref()
+                        .is_some_and(|fragment| !fragment.trim().is_empty()),
+                    "fixture {} should declare a non-empty parse error message fragment",
+                    fixture.id
+                );
+            }
+            other => panic!(
+                "fixture {} has unsupported expected outcome {other}",
+                fixture.id
+            ),
         }
 
         for marker in fixture.markers {

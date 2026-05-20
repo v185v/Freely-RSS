@@ -2863,3 +2863,37 @@ Step 60 已将 `SyncEvent` 限定为用户可携带状态、订阅组织和自�
 - System sharing is an explicit user action in the mobile shell. It must stay separate from Webhook automation, knowledge-base export, local REST API exposure, and background sync fanout.
 - Cached playback state belongs to the mobile platform boundary. It should not reuse desktop cache eviction, desktop reader-shell media UI, or desktop Tauri commands.
 - Step 81 should start Stage 12 parser regression work. Parser fixtures and feed-engine regression coverage should not depend on mobile platform state.
+
+## 2026-05-20 ASCII Addendum XLV
+
+### Step 81 Architecture Insights
+
+- Step 81 moves Stage 12 stability work into `crates/feed-engine`, because feed parsing is the first boundary that converts untrusted external content into FreelyRSS domain inputs.
+- The parser regression suite is manifest-driven. `manifest.json` is now the explicit ledger for fixture scenarios, expected outcomes, parse-error kinds, and stable error-message fragments, so parser coverage is not hidden in test code alone.
+- Success and failure paths are both first-class regression assets. RSS, Atom, JSON Feed, HTML discovery, rich media, duplicates, sparse fields, longform, multilingual content, and legacy RSS remain covered, while malformed XML, unsupported XML roots, unsupported JSON Feed versions, and invalid JSON now have fixed negative samples.
+- `DefaultFeedParser` keeps a conservative fallback boundary. HTML feed discovery is only a fallback for true HTML/XHTML documents; unsupported non-feed XML now stays a parse error so feed health diagnostics can report the right failure.
+- The fixture catalog validates file structure before parser assertions run. This protects the test corpus from drift: missing markers, wrong paths, empty files, wrong signatures, or missing error metadata fail fast.
+- The regression fixtures are test-only assets. They do not change runtime parser APIs, feed normalization contracts, local SQLite schema, sync payloads, UI shells, or mobile/Web mock data.
+- No database migration was added. Step 81 changes parser dispatch and test coverage only; storage, dedup indexes, fetcher persistence, sync-server persistence, desktop commands, and app package dependencies remain unchanged.
+
+### Step 81 File Responsibilities
+
+- `crates/feed-engine/src/parser/mod.rs`: owns top-level parser dispatch. It detects JSON Feed, XML RSS/Atom, HTML discovery documents, empty bodies, and parse failures. `should_fallback_to_html_discovery` now owns the rule that XML parse failures may fall back only when the document root is actually HTML/XHTML.
+- `crates/feed-engine/tests/fixtures/manifest.json`: owns the parser fixture catalog. It lists required scenarios, fixture ids, formats, paths, expected parser outcomes, expected parse-error metadata, article/link counts, scenarios, and marker strings.
+- `crates/feed-engine/tests/fixtures/README.md`: owns human-readable fixture inventory notes and tells future parser tests to reuse fixed samples instead of inline ad hoc inputs.
+- `crates/feed-engine/tests/fixtures/invalid/malformed-rss.xml`: owns the malformed RSS XML failure sample used to assert XML parse errors remain observable.
+- `crates/feed-engine/tests/fixtures/invalid/unsupported-opml-root.xml`: owns the unsupported XML root failure sample used to prevent OPML-like XML from being treated as feed discovery.
+- `crates/feed-engine/tests/fixtures/invalid/unsupported-json-feed-version.json`: owns the unsupported JSON Feed version failure sample.
+- `crates/feed-engine/tests/fixtures/invalid/invalid-json-feed.json`: owns the invalid JSON syntax failure sample.
+- `crates/feed-engine/tests/fixture_catalog.rs`: owns fixture catalog integrity tests. It verifies scenario coverage, unique ids, relative paths, expected outcomes, parse-error metadata, markers, and per-format signatures.
+- `crates/feed-engine/tests/parser_fixtures.rs`: owns parser and normalizer behavior regression tests over fixed fixtures. It now reads manifest-declared parse-error fixtures and checks `FeedErrorKind` plus message fragments.
+- `memory-bank/progress.md`: records Step 81 completion, validation commands, environment notes, and Step 82 handoff.
+- `memory-bank/architecture.md`: records Step 81 parser regression architecture, file responsibilities, and future boundaries.
+
+### Step 81 Boundary Notes
+
+- Parser fixtures must remain local, deterministic, and test-only. They should not be loaded by desktop/Web/mobile runtime code or synchronized across devices.
+- New parser edge cases should be added through the catalog first: update `requiredScenarios` when a scenario becomes required, add or update fixture files, then add parser or normalizer assertions.
+- Unsupported XML should fail clearly unless it is actually an HTML/XHTML discovery document. This keeps feed health diagnostics accurate and prevents XML-adjacent formats from disappearing into a no-feed discovery result.
+- Parser regression tests should stay focused on feed parsing, discovery, and normalization. They should not grow into desktop E2E, sync replay, content extraction, AI, Webhook, export, or mobile platform tests.
+- Step 82 should layer desktop end-to-end checks on top of the existing app shell and fixed test data without weakening the feed-engine fixture boundary.

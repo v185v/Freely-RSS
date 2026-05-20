@@ -1,0 +1,6 @@
+{
+  "version": "https://jsonfeed.org/version/2",
+  "title": "Unsupported JSON Feed Version",
+  "_fixtureScenarios": ["unsupported-json-version"],
+  "items": []
+}

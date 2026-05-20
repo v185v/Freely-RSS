@@ -2,11 +2,17 @@
 
 ## 当前状态
 
-- 阶段：阶段 11 Step 80 已完成，移动端已在 React Native + Expo 阅读优先壳内补齐移动平台缓存与媒体能力边界；当前移动入口覆盖登录/同步快照、文章阅读、搜索、笔记草稿/同步批注展示、播客附件消费、离线缓存状态、缓存音频播放状态、后台恢复状态和系统分享入口，桌面 SQLite、Tauri command、本地抓取、复杂规则编辑、AI 生成、Webhook、知识库导出、本地 REST API 和桌面缓存逐出均保持延后。
+- 阶段：阶段 12 Step 81 已完成，`crates/feed-engine` 已拥有 manifest 驱动的解析回归测试集；当前回归资产覆盖 RSS、Atom、JSON Feed、HTML feed discovery、富媒体、重复文章、缺失字段、长文、多语言、legacy RSS 0.91，以及 malformed XML、unsupported XML root、unsupported JSON Feed version、invalid JSON 等失败路径。
 - 最后更新：2026-05-20
-- 风险状态：已从“Step 79 已通过 `apps/mobile/src/mobile-scope.ts`、`mobile-client.ts`、`mobile-selectors.ts` 与 Expo 入口固化移动端首期边界；下一步 Step 80 应在同一移动端边界内补齐离线缓存、音频播放、后台恢复和系统分享基础能力”推进到“Step 80 已通过 `apps/mobile/src/mobile-platform.ts`、扩展后的 scope/client/selectors/UI 与测试固化移动端缓存/媒体/分享边界；下一步 Step 81 应进入 Stage 12 解析回归测试集，不要继续扩张移动端平台能力或引入桌面本地 host 职责。”
+- 风险状态：已从“Step 80 已通过 `apps/mobile/src/mobile-platform.ts`、扩展后的 scope/client/selectors/UI 与测试固化移动端缓存/媒体/分享边界；下一步 Step 81 应进入 Stage 12 解析回归测试集，不要继续扩张移动端平台能力或引入桌面本地 host 职责”推进到“Step 81 已通过 `crates/feed-engine/tests/fixtures/manifest.json`、新增 invalid fixtures、`fixture_catalog.rs`、`parser_fixtures.rs` 和解析器回退修正固化解析回归集；下一步 Step 82 应建立桌面端端到端测试，围绕添加订阅源、抓取、阅读、状态标记、搜索和导出验证核心离线链路。”
 
 ### 2026-05-20 状态快照（最新）
+
+- 当前完成：阶段 12 Step 81 已完成，`crates/feed-engine/tests/fixtures/manifest.json` 现在声明每个 fixture 的 `expectedOutcome`，并把 required scenarios 扩展到 malformed XML、unsupported feed root、unsupported JSON Feed version 和 invalid JSON。新增 `tests/fixtures/invalid/` 下四个失败样本；`fixture_catalog.rs` 校验 fixture outcome、错误元数据、格式签名和 marker；`parser_fixtures.rs` 从 manifest 读取 `parse-error` 样本并断言 `FeedErrorKind` 与错误消息片段。`DefaultFeedParser` 的 XML 解析失败回退现在只对真实 HTML/XHTML discovery 生效，避免 OPML 这类非 feed XML 因包含 `<head>` 被误判为 HTML discovery。
+- 当前验证：`cargo test -p freelyrss-feed-engine`、`cargo fmt --all --check` 与 `corepack pnpm run verify` 全部通过。
+- 当前下一步：进入阶段 12 Step 82“建立桌面端端到端测试”。应围绕桌面核心离线链路建立可重复 E2E 场景，覆盖添加订阅源、抓取、阅读、状态标记、搜索和导出；不要在 Step 82 中扩张 AI、Webhook、Web、移动端平台能力或改变同步协议边界。
+
+### 2026-05-20 状态快照（历史：Step 80）
 
 - 当前完成：阶段 11 Step 80 已完成，新增 `apps/mobile/src/mobile-platform.ts`，集中定义移动端离线缓存、缓存附件、媒体会话、后台恢复、系统分享目标与平台 readiness summary；`MOBILE_SCOPE_CONTRACT` 现在显式允许 `offline-cache-read`、`mobile-audio-playback`、`background-media-resume` 和 `system-share-sheet`。`mobile-client` 随同步快照返回 platform/platformSummary，`mobile-selectors` 纯派生离线状态、播放恢复状态与分享 payload，`App.tsx` 展示离线缓存状态、后台恢复状态、缓存音频播放意图和系统分享入口。
 - 当前验证：`corepack pnpm --filter @freelyrss/mobile test`、`corepack pnpm --filter @freelyrss/mobile check`、`corepack pnpm run format:check`、`corepack pnpm run lint`、`corepack pnpm --filter @freelyrss/mobile exec expo export --platform ios --output-dir dist-mobile-check` 与 `corepack pnpm run verify` 全部通过。`dist-mobile-check` 为验证输出，已在验证后删除。
@@ -2316,3 +2322,48 @@
 - System sharing remains user-initiated from the mobile shell. It should not become background Webhook dispatch, knowledge-base export, local REST exposure, or sync-server fanout.
 - Future durable downloads, native audio engine integration, lock-screen media controls, background tasks, and offline mutation queues should implement the Step 80 platform boundary rather than importing desktop host responsibilities.
 - Step 81 should move to Stage 12 parser regression fixtures and tests. It should not continue expanding mobile capabilities until the parsing regression suite is validated.
+
+## 2026-05-20 ASCII Addendum XLV
+
+### Stage 12 Step 81 Completed: parser regression fixture suite
+
+- Completed `implementation-plan.md` Stage 12 Step 81 by turning the existing feed-engine sample set into a manifest-driven parser regression suite with both successful and failing parser paths.
+- Expanded `crates/feed-engine/tests/fixtures/manifest.json` with `expectedOutcome`, parse-error metadata, and required scenarios for malformed XML, unsupported feed roots, unsupported JSON Feed versions, and invalid JSON.
+- Added four deterministic failure fixtures under `crates/feed-engine/tests/fixtures/invalid/`: malformed RSS XML, unsupported OPML root XML, unsupported JSON Feed version, and syntactically invalid JSON.
+- Strengthened `fixture_catalog.rs` so the fixture inventory validates outcome declarations, parse-error metadata, marker strings, relative paths, and format signatures for RSS, Atom, JSON Feed, HTML discovery, raw JSON, and generic XML regression fixtures.
+- Extended `parser_fixtures.rs` so parse-error fixtures are loaded from the manifest and assert the expected `FeedErrorKind` plus a stable error-message fragment.
+- Fixed `DefaultFeedParser` XML fallback behavior so unsupported non-feed XML is not silently reclassified as HTML feed discovery simply because it contains a `<head>` element. Valid HTML/XHTML discovery remains the only XML-parse-failure fallback path.
+- Kept Step 81 inside `crates/feed-engine` and test fixtures. No desktop UI, Web, mobile, sync-server, AI, integration adapter, SQLite schema, or package dependency changes were required.
+
+### Step 81 Verification
+
+- Passed `cargo test -p freelyrss-feed-engine`
+- Passed `cargo fmt --all --check`
+- Passed `corepack pnpm run verify`
+
+### Environment Notes
+
+- The first targeted `cargo test -p freelyrss-feed-engine` run exposed the unsupported OPML root regression: the parser previously returned `FeedDiscoveryResult::None` instead of a parse error. The parser fallback was tightened and the new regression now protects that behavior.
+- `corepack pnpm run verify` completed the full repository chain: Biome format/lint, JS/TS package tests, Web build, mobile type-check, Rust format/clippy/tests, and Markdown link checks.
+
+### Step 81 File Responsibilities
+
+- `crates/feed-engine/src/parser/mod.rs`: owns the top-level parser dispatch between JSON Feed, XML feed parsing, HTML discovery, and parse errors. The new `should_fallback_to_html_discovery` helper keeps fallback limited to true HTML/XHTML documents.
+- `crates/feed-engine/tests/fixtures/manifest.json`: owns the parser fixture catalog, required scenario ledger, expected parser outcomes, parse-error kinds, and stable error-message fragments.
+- `crates/feed-engine/tests/fixtures/invalid/malformed-rss.xml`: owns the malformed XML regression sample for RSS parser failure handling.
+- `crates/feed-engine/tests/fixtures/invalid/unsupported-opml-root.xml`: owns the unsupported XML root regression sample that prevents OPML-like XML from being treated as HTML discovery.
+- `crates/feed-engine/tests/fixtures/invalid/unsupported-json-feed-version.json`: owns the unsupported JSON Feed version regression sample.
+- `crates/feed-engine/tests/fixtures/invalid/invalid-json-feed.json`: owns the invalid JSON syntax regression sample.
+- `crates/feed-engine/tests/fixtures/README.md`: documents fixture inventory and keeps future parser assertions pointed at fixed sample files instead of ad hoc inline strings.
+- `crates/feed-engine/tests/fixture_catalog.rs`: owns fixture inventory integrity tests, including scenario coverage, relative paths, format signatures, markers, and expected-outcome metadata.
+- `crates/feed-engine/tests/parser_fixtures.rs`: owns parser and normalizer regression assertions against fixed fixtures, including manifest-driven parse-error coverage.
+- `memory-bank/progress.md`: records the completed Step 81 milestone, validation commands, environment note, and Step 82 handoff.
+- `memory-bank/architecture.md`: records the Step 81 parser regression boundary, affected file responsibilities, and constraints for future Stage 12 work.
+
+### Step 81 Boundary Notes
+
+- Parser regression fixtures are test assets, not runtime seed data. They should not be bundled into app shells, sync payloads, local SQLite migrations, or mobile/Web mocks.
+- Failure fixtures should stay deterministic and local. They should not depend on live network responses, remote feeds, provider SDKs, or platform UI state.
+- Adding a new supported feed format or edge case should update `manifest.json` first, then fixture files, then parser assertions. Scenario coverage should remain explicit.
+- The parser fallback rule should remain conservative: HTML discovery is for actual HTML/XHTML documents, while unsupported XML feed-like documents should surface parse errors for observability and feed health diagnostics.
+- Step 82 should build desktop end-to-end regression coverage around the core offline reader flow. It should not expand parser fixture scope further unless an E2E blocker reveals a concrete parser gap.

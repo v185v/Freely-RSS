@@ -11,13 +11,18 @@
     "multilingual",
     "html-single-feed",
     "html-multiple-feeds",
-    "html-no-feed"
+    "html-no-feed",
+    "malformed-xml",
+    "unsupported-feed-root",
+    "unsupported-json-version",
+    "invalid-json"
   ],
   "fixtures": [
     {
       "id": "rss-rich-media",
       "format": "rss",
       "path": "rss/rss-2-rich-media.xml",
+      "expectedOutcome": "parsed-feed",
       "articleCount": 2,
       "scenarios": ["rss", "rich-media"],
       "markers": [
@@ -30,6 +35,7 @@
       "id": "rss-duplicates-and-missing-fields",
       "format": "rss",
       "path": "rss/rss-2-duplicates-and-missing-fields.xml",
+      "expectedOutcome": "parsed-feed",
       "articleCount": 3,
       "scenarios": ["rss", "duplicate-articles", "missing-fields"],
       "markers": [
@@ -42,6 +48,7 @@
       "id": "rss-091-legacy",
       "format": "rss",
       "path": "rss/rss-0.91-legacy.xml",
+      "expectedOutcome": "parsed-feed",
       "articleCount": 1,
       "scenarios": ["rss", "legacy-rss-0.91"],
       "markers": [
@@ -53,6 +60,7 @@
       "id": "atom-longform-multilingual",
       "format": "atom",
       "path": "atom/atom-longform-multilingual.xml",
+      "expectedOutcome": "parsed-feed",
       "articleCount": 2,
       "scenarios": ["atom", "longform", "multilingual"],
       "markers": [
@@ -66,6 +74,7 @@
       "id": "json-feed-podcast",
       "format": "json-feed",
       "path": "json-feed/json-feed-podcast.json",
+      "expectedOutcome": "parsed-feed",
       "articleCount": 2,
       "scenarios": ["json-feed", "rich-media"],
       "markers": [
@@ -78,6 +87,7 @@
       "id": "html-single-feed",
       "format": "html",
       "path": "html/html-single-feed.html",
+      "expectedOutcome": "feed-discovery",
       "articleCount": 1,
       "scenarios": ["html-single-feed"],
       "markers": [
@@ -90,6 +100,7 @@
       "id": "html-multiple-feeds",
       "format": "html",
       "path": "html/html-multiple-feeds.html",
+      "expectedOutcome": "feed-discovery",
       "articleCount": 4,
       "scenarios": ["html-multiple-feeds"],
       "markers": [
@@ -103,12 +114,69 @@
       "id": "html-no-feed",
       "format": "html",
       "path": "html/html-no-feed.html",
+      "expectedOutcome": "feed-discovery",
       "articleCount": 0,
       "scenarios": ["html-no-feed"],
       "markers": [
         "freelyrss-fixture-scenario: html-no-feed",
         "FreelyRSS About",
         "Plain HTML page fixture without any discoverable feed links."
+      ]
+    },
+    {
+      "id": "malformed-rss",
+      "format": "rss",
+      "path": "invalid/malformed-rss.xml",
+      "expectedOutcome": "parse-error",
+      "expectedErrorKind": "parse",
+      "expectedMessageFragment": "feed XML could not be parsed",
+      "articleCount": 1,
+      "scenarios": ["rss", "malformed-xml"],
+      "markers": [
+        "freelyrss-fixture-scenario: malformed-xml",
+        "Missing closing rss element on purpose."
+      ]
+    },
+    {
+      "id": "unsupported-opml-root",
+      "format": "xml",
+      "path": "invalid/unsupported-opml-root.xml",
+      "expectedOutcome": "parse-error",
+      "expectedErrorKind": "parse",
+      "expectedMessageFragment": "unsupported feed root element: opml",
+      "articleCount": 0,
+      "scenarios": ["unsupported-feed-root"],
+      "markers": [
+        "freelyrss-fixture-scenario: unsupported-feed-root",
+        "<opml version=\"2.0\">"
+      ]
+    },
+    {
+      "id": "unsupported-json-feed-version",
+      "format": "json",
+      "path": "invalid/unsupported-json-feed-version.json",
+      "expectedOutcome": "parse-error",
+      "expectedErrorKind": "parse",
+      "expectedMessageFragment": "unsupported JSON Feed version",
+      "articleCount": 0,
+      "scenarios": ["json-feed", "unsupported-json-version"],
+      "markers": [
+        "\"_fixtureScenarios\": [\"unsupported-json-version\"]",
+        "\"version\": \"https://jsonfeed.org/version/2\""
+      ]
+    },
+    {
+      "id": "invalid-json-feed",
+      "format": "json",
+      "path": "invalid/invalid-json-feed.json",
+      "expectedOutcome": "parse-error",
+      "expectedErrorKind": "parse",
+      "expectedMessageFragment": "feed JSON could not be parsed",
+      "articleCount": 0,
+      "scenarios": ["json-feed", "invalid-json"],
+      "markers": [
+        "freelyrss-fixture-scenario: invalid-json",
+        "Invalid JSON Feed Syntax"
       ]
     }
   ]
