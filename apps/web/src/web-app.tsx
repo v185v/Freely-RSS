@@ -2,7 +2,7 @@ import { Button, ListRow, ListSection, Surface, ThemeRoot } from "@freelyrss/ui"
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query"
 import { useMemo, useState } from "react"
 
-import { fetchRemoteReaderSnapshot, remoteArticleDetails } from "./remote-client"
+import { fetchRemoteArticleDetail, fetchRemoteReaderSnapshot } from "./remote-client"
 
 const queryClient = new QueryClient()
 
@@ -42,8 +42,24 @@ function WebReader() {
       return matchesFeed && matchesSearch
     })
   }, [normalizedSearch, selectedFeedId, snapshot])
-  const activeArticleId = selectedArticleId ?? visibleArticles[0]?.id ?? null
-  const selectedArticle = activeArticleId ? remoteArticleDetails[activeArticleId] : undefined
+  const selectedArticleVisible =
+    selectedArticleId !== null &&
+    visibleArticles.some((article) => article.id === selectedArticleId)
+  const activeArticleId =
+    selectedArticleVisible && selectedArticleId
+      ? selectedArticleId
+      : (visibleArticles[0]?.id ?? null)
+  const articleDetailQuery = useQuery({
+    enabled: activeArticleId !== null,
+    queryKey: ["web-reader-article", activeArticleId],
+    queryFn: async () => {
+      if (!activeArticleId) {
+        throw new Error("Missing active article id")
+      }
+
+      return fetchRemoteArticleDetail(activeArticleId)
+    },
+  })
 
   if (snapshotQuery.isLoading) {
     return (
@@ -67,10 +83,25 @@ function WebReader() {
     )
   }
 
-  const detail = selectedArticle
+  if (snapshot.scopeSummary.scopeViolations.length > 0) {
+    return (
+      <main className="web-shell web-shell--loading">
+        <Surface>
+          <p className="web-kicker">Remote reader</p>
+          <h1>Web scope contract violated</h1>
+        </Surface>
+      </main>
+    )
+  }
+
+  const detail = articleDetailQuery.data
 
   return (
-    <main className="web-shell">
+    <main
+      className="web-shell"
+      data-scope-blockers={snapshot.scopeSummary.blockingRequirements}
+      data-scope-mode={snapshot.scope.mode}
+    >
       <header className="web-header">
         <div>
           <p className="web-kicker">Remote synchronized entry</p>

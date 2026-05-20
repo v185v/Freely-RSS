@@ -1,5 +1,12 @@
 import type { ArticleDetailDto, ArticleListItemDto, FeedSummaryDto } from "@freelyrss/shared-types"
 
+import {
+  WEB_SCOPE_CONTRACT,
+  type WebScopeContract,
+  type WebScopeSummary,
+  summarizeWebScopeRequirements,
+} from "./web-scope"
+
 export interface WebSessionDto {
   accountEmail: string
   deviceName: string
@@ -10,6 +17,8 @@ export interface WebSessionDto {
 export interface WebReaderSnapshotDto {
   articles: ArticleListItemDto[]
   feeds: FeedSummaryDto[]
+  scope: WebScopeContract
+  scopeSummary: WebScopeSummary
   session: WebSessionDto
 }
 
@@ -295,7 +304,13 @@ function cloneValue<T>(value: T): T {
 }
 
 export async function fetchRemoteReaderSnapshot(): Promise<WebReaderSnapshotDto> {
-  return cloneValue({ articles, feeds, session })
+  return cloneValue({
+    articles,
+    feeds,
+    scope: WEB_SCOPE_CONTRACT,
+    scopeSummary: summarizeWebScopeRequirements(),
+    session,
+  })
 }
 
 export async function fetchRemoteArticleDetail(articleId: string): Promise<ArticleDetailDto> {

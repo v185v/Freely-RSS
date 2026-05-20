@@ -2759,3 +2759,34 @@ Step 60 已将 `SyncEvent` 限定为用户可携带状态、订阅组织和自�
 - The current remote-client mock is not a sync engine, auth system, or persistence layer. It exists to stabilize the Web UI contract before real remote API wiring.
 - Web read-only article details may show synchronized user state, annotations, attachments, and future derived artifacts, but generating or mutating those records should require a later explicit remote API design.
 - Step 78 should keep the Web scope constrained to the already-defined remote access entry and should not expand into local feed fetching, full offline cache management, complex rule editing, or deep system integration.
+
+## 2026-05-20 ASCII Addendum XLII
+
+### Step 78 Architecture Insights
+
+- Step 78 converts the Web scope boundary into an executable contract. The contract lists what the first Web entry may do and what must stay deferred, so the boundary is no longer only documented in prose.
+- `WEB_SCOPE_CONTRACT` is intentionally owned by `apps/web`, because it constrains the Web shell's product surface. It is not part of `shared-types`, the desktop reader shell, sync-engine, or the server because it does not define cross-platform DTOs or remote API protocol.
+- The contract separates `allowedOperationIds` from `deferredOperationIds`. This makes desktop-only capabilities such as local feed fetching, local SQLite access, Tauri commands, OPML import/export, AI generation, Webhook dispatch, knowledge-base export, local REST API access, and media cache management explicit deferred work instead of accidental omissions.
+- The `requirements` list is a lightweight requirement ledger for the first Web entry. It can mark each capability as `in-scope` or `deferred` and state whether it blocks the initial Web entry. Step 78 requires zero blockers and zero scope violations.
+- Scope validation is deliberately simple and local. `summarizeWebScopeRequirements` checks the declared requirement list against the allowed/deferred sets; it does not authenticate users, authorize API calls, enforce server permissions, or replace remote policy checks.
+- The remote client now carries the scope contract and summary with synchronized reader snapshots. That keeps scope diagnostics near the same facade that will later be replaced by real remote API calls.
+- The Web reader now retrieves article details through `fetchRemoteArticleDetail` rather than importing the mock detail map directly. This keeps UI composition behind the remote-client abstraction and avoids coupling the app to mock storage internals.
+- No database schema migration was added. Step 78 is a Web client contract and test-boundary step; it does not touch SQLite, Rust crates, sync-server persistence, Tauri command registration, or desktop local stores.
+
+### Step 78 File Responsibilities
+
+- `apps/web/src/web-scope.ts`: owns the Web scope contract for Stage 11 Step 78. It defines `WEB_ALLOWED_OPERATION_IDS`, `WEB_DEFERRED_OPERATION_IDS`, typed operation ids, `WebRequirement`, `WebScopeContract`, `WebScopeSummary`, the concrete `WEB_SCOPE_CONTRACT`, and `summarizeWebScopeRequirements`.
+- `apps/web/src/remote-client.ts`: continues to own synchronized mock reader data and now also returns `scope` plus `scopeSummary` from `fetchRemoteReaderSnapshot`. It remains a read-only facade and does not gain mutation, desktop bridge, storage, or feed-fetching responsibilities.
+- `apps/web/src/web-app.tsx`: owns the visual Web reader composition and now consumes both snapshot and detail data through remote-client fetch functions. It rejects scope violations before normal reader rendering and exposes `data-scope-mode` / `data-scope-blockers` for non-visual diagnostics.
+- `apps/web/src/web-scope.test.ts`: owns contract-level regression coverage for the Step 78 boundary. It proves the initial requirement list has zero blockers, deferred desktop/out-of-scope operations remain deferred, and the remote client only exports read functions.
+- `apps/web/src/web-app.test.tsx`: owns UI-level regression coverage for the Web scope boundary. It asserts that the rendered shell advertises remote-sync mode with zero blockers and does not render desktop-only controls such as feed refresh, OPML import, AI generation, Webhook dispatch, or knowledge-base export.
+- `memory-bank/progress.md`: records the Step 78 implementation, verification results, status snapshot, and Step 79 handoff.
+- `memory-bank/architecture.md`: records the Step 78 boundary rationale, affected file responsibilities, and constraints for future Web expansion.
+
+### Step 78 Boundary Notes
+
+- The scope contract is a guardrail for first-Web-entry scope, not an authorization model. Future remote write APIs still need server-side auth, permission checks, sync conflict handling, and protocol-level validation.
+- Adding a new Web capability should update `WEB_SCOPE_CONTRACT` first, then tests, then implementation. A deferred operation should not silently become in-scope because a UI button or client helper was added.
+- `apps/web` must still avoid imports from `apps/desktop/src/features/reader-shell`, `apps/desktop/src-tauri`, `crates/feed-engine`, local SQLite stores, local REST routes, and desktop AI workflows.
+- Future Web write flows should enter through a remote API and sync boundary. They should not borrow desktop-only commands or local-first storage shortcuts.
+- Step 79 should start the mobile reading-priority shell while preserving platform boundaries: mobile can share DTOs and remote sync concepts, but should not inherit desktop-local fetching, full rules administration, local REST API exposure, or deep system integration in its first shell.

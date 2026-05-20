@@ -99,3 +99,13 @@
 - Verified the Step 74 work with `cargo test -p freelyrss-ai-adapter`, `cargo test -p freelyrss-core-domain ai_artifact_store`, `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml ai_insights`, `cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings`, `corepack pnpm --filter @freelyrss/desktop test -- --run reader-shell.test.tsx`, `corepack pnpm --filter @freelyrss/shared-types check`, `corepack pnpm run desktop:build`, `corepack pnpm run verify`, and `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle`.
 - Browser-checked the local desktop web shell at `http://localhost:1420/`; the AI panel rendered and `Generate insights` produced the expected summary, keywords, and provider metadata. The only console error observed was the existing missing `favicon.ico` 404.
 - Updated `memory-bank/progress.md` and `memory-bank/architecture.md` with the Step 74 implementation record, validation notes, file responsibilities, and Stage 10 Step 75 handoff.
+
+## 2026-05-20
+
+- Reviewed every file in `memory-bank/` and resumed from `memory-bank/progress.md`, whose latest tail record identified Stage 11 Step 78 as the next implementation target: keep the Web entry inside the remote synchronized-data boundary.
+- Added `apps/web/src/web-scope.ts` to define the Web allowed-operation list, deferred desktop/out-of-scope operation list, initial requirement ledger, and summary validation.
+- Updated `apps/web/src/remote-client.ts` so the synchronized reader snapshot now includes the Web scope contract and summary while remaining a read-only remote facade.
+- Updated `apps/web/src/web-app.tsx` so article detail loading goes through `fetchRemoteArticleDetail`, scope violations stop normal rendering, and `data-scope-mode` / `data-scope-blockers` expose the active contract for non-visual diagnostics.
+- Added `apps/web/src/web-scope.test.ts` and extended `apps/web/src/web-app.test.tsx` to prove the initial Web scope has no blockers, desktop-only capabilities stay deferred, the remote client only exposes read functions, and the UI does not render desktop-only controls.
+- Verified the Step 78 work with `corepack pnpm --filter @freelyrss/web test`, `corepack pnpm --filter @freelyrss/web build`, `corepack pnpm run format:check`, `corepack pnpm run lint`, `corepack pnpm run verify`, and `corepack pnpm run docs:links`.
+- Updated `memory-bank/progress.md` and `memory-bank/architecture.md` with the Step 78 implementation record, validation notes, architecture insights, file responsibilities, and Stage 11 Step 79 handoff.

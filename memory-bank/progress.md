@@ -2,11 +2,17 @@
 
 ## 当前状态
 
-- 阶段：阶段 10 Step 75 已完成，翻译与限定上下文问答已沿 `crates/ai-adapter` workflow -> 桌面 Tauri command -> `AIArtifactStore` -> `ArticleDetailDto.aiArtifacts` -> reader UI 的路径接入；整文/选段翻译和当前文章/当前来源/当前过滤结果问答都必须由用户显式触发。
-- 最后更新：2026-05-17
-- 风险状态：已从“Step 74 已实现摘要与关键词；下一步 Step 75 应继续通过 `AIArtifact` DTO 与 Tauri/adapter 工作流接入翻译/Q&A，禁止 React 直连 provider SDK 或 queue internals”推进到“Step 75 已完成翻译与限定上下文问答；下一步 Step 76 应实现 AI 隐私与开关控制，必须确保 AI 默认关闭、明确展示发送范围/Provider/缓存删除/重新生成入口，且关闭状态下打开阅读器不得触发任何 AI 请求”
+- 阶段：阶段 11 Step 78 已完成，Web 端已通过显式 scope contract 固化为远程同步数据访问入口；初始 Web 入口只允许读取远程 session、来源、文章队列、文章详情、同步状态与附件/批注元数据，桌面 SQLite、Tauri command、本地抓取、完整离线缓存、复杂规则编辑器、AI 生成、Webhook、知识库导出和本地 REST API 均标记为延后能力。
+- 最后更新：2026-05-20
+- 风险状态：已从“Step 77 已构建 Web 只读入口；下一步 Step 78 应继续扩展 Web 表面但不得越过远程同步数据边界”推进到“Step 78 已通过 `apps/web/src/web-scope.ts` 与测试固化 Web 边界；下一步 Step 79 应进入移动端阅读优先壳，继续只覆盖登录/同步、文章阅读、搜索、笔记和播客消费，不要把桌面本地抓取、复杂规则编辑或深度系统集成搬入移动端首期。”
 
-### 2026-05-17 状态快照（最新）
+### 2026-05-20 状态快照（最新）
+
+- 当前完成：阶段 11 Step 78 已完成，新增 `apps/web/src/web-scope.ts`，集中定义 Web 首期允许操作、延后操作、需求清单和 scope summary；`remote-client` 现在随远程 snapshot 返回 scope contract 与 summary；`web-app` 不再直接读取本地 mock detail map，而是通过 `fetchRemoteArticleDetail` 读取远程文章详情，并在入口 DOM 上暴露 `data-scope-mode="remote-sync-access"` 与 `data-scope-blockers="0"` 作为测试与调试信号。新增 Web scope 回归测试，证明桌面专属能力被显式延后、初始 Web 需求没有阻塞项或越界项，并且 remote client 只暴露读取函数。
+- 当前验证：`corepack pnpm --filter @freelyrss/web test`、`corepack pnpm --filter @freelyrss/web build`、`corepack pnpm run format:check`、`corepack pnpm run lint` 与 `corepack pnpm run verify` 全部通过。
+- 当前下一步：进入阶段 11 Step 79“构建移动端阅读优先壳”。应在 `apps/mobile` 中建立 React Native + Expo 基础应用，只先覆盖登录/同步、文章阅读、搜索、笔记和播客消费；不要在 Step 79 中实现桌面端本地抓取、完整规则编辑器、AI 生成控制台、知识库导出、Webhook、本地 REST API 或深度系统集成。
+
+### 2026-05-17 状态快照（历史：Step 75）
 
 - 当前完成：阶段 10 Step 75 已完成，新增 `AiArticleActionWorkflow`、`AiArticleTranslationRequest`、`AiArticleQuestionRequest` 与 `AiTranslationMode`，在 `AiTaskQueue` / `AiProviderRegistry` 上组装翻译和限定上下文问答任务；队列缓存指纹现在纳入 task properties，避免同一文本在不同翻译模式或问答 scope 下误命中缓存。桌面端新增 `generate_article_translation` 与 `answer_article_question` Tauri 命令，负责从 SQLite 加载授权文章/来源/当前过滤结果上下文、复用既有 `AIArtifactStore` 缓存、运行 deterministic mock provider、持久化 `translation` 与 `question-answer` artifact 并返回 DTO。Reader UI 新增显式翻译/问答面板，支持整文翻译、选段翻译、当前文章/当前来源/当前过滤结果 scope 选择、引用上下文显示和任务状态追踪。
 - 当前验证：`cargo test -p freelyrss-ai-adapter`、`cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml ai_`、`cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings`、`corepack pnpm --filter @freelyrss/desktop test -- --run reader-shell.test.tsx`、`corepack pnpm --filter @freelyrss/shared-types check`、`corepack pnpm --filter @freelyrss/desktop build`、`cargo fmt --all --check`、`cargo clippy --workspace --all-targets -- -D warnings`、`cargo test --workspace` 与 `corepack pnpm run verify` 全部通过。`desktop build` 仍出现既有 Vite 大 chunk 提示，但构建成功。
@@ -92,7 +98,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 10 Step 76 需要实现 AI 隐私与开关控制，同时保持 AI 默认关闭、显式触发和本地优先，不让阅读器打开、文章切换、同步、Webhook、知识库导出或本地 REST API 隐式触发模型调用，也不要绕过 `AIArtifact` 结果边界新增 kind-specific 缓存表。
+- 当前无阻塞；下一步风险点是阶段 11 Step 79 需要建立移动端阅读优先壳，同时保持移动端首期只覆盖同步入口、阅读、搜索、笔记和播客消费，不把桌面本地抓取、复杂规则编辑器、AI 生成、Webhook、知识库导出、本地 REST API 或深度系统集成提前搬入移动端。
 
 ## 本次执行记录
 
@@ -2157,3 +2163,44 @@
 - The remote client mock is a shell boundary, not a durable sync implementation. Real API wiring can replace it later, but the Web app should keep a read-only contract.
 - Future write-capable Web workflows, if any, should enter through an explicit remote API and sync boundary rather than being borrowed from desktop-only host commands.
 - Step 78 should continue expanding the Web surface only within the remote/synchronized-data contract defined here.
+
+## 2026-05-20 ASCII Addendum XLII
+
+### Stage 11 Step 78 Completed: Web scope boundary contract
+
+- Completed `implementation-plan.md` Stage 11 Step 78 by turning the Web boundary from a prose-only rule into an explicit TypeScript contract and regression-tested requirement list.
+- Added `apps/web/src/web-scope.ts`, which defines allowed Web operations, deferred desktop/out-of-scope operations, requirement records, and `summarizeWebScopeRequirements`.
+- The remote snapshot now includes the Web scope contract and summary so the Web shell can detect scope violations before rendering the normal reader surface.
+- The Web reader now loads article details through `fetchRemoteArticleDetail` instead of directly importing the detail map, keeping the UI on the same remote-client facade that later API wiring can replace.
+- Added DOM-level scope signals (`data-scope-mode` and `data-scope-blockers`) to make the current Web mode and blocking requirement count testable without adding visible in-app feature text.
+- Added tests proving the initial Web requirement list has no blockers or scope violations, desktop-only capabilities are explicitly deferred, the remote client only exports read functions, and the UI does not render desktop-only actions.
+- Kept Step 78 out of desktop Tauri commands, local SQLite stores, feed-engine fetchers, AI workflows, Webhook dispatch, knowledge-base export, local REST API routes, Rust crates, and database migrations. No schema migration was required.
+
+### Step 78 Verification
+
+- Passed `corepack pnpm --filter @freelyrss/web test`
+- Passed `corepack pnpm --filter @freelyrss/web build`
+- Passed `corepack pnpm run format:check`
+- Passed `corepack pnpm run lint`
+- Passed `corepack pnpm run verify`
+
+### Environment Notes
+
+- `corepack pnpm --filter @freelyrss/web build` completed successfully. No browser automation pass was run for Step 78 because the change is a contract/test boundary and the full Web build plus Testing Library coverage exercised the visible shell path.
+
+### Step 78 File Responsibilities
+
+- `apps/web/src/web-scope.ts`: owns the initial Web scope contract. It lists allowed remote-read operations, deferred desktop/out-of-scope operations, requirement records, and the summary function used to detect blockers or scope violations.
+- `apps/web/src/remote-client.ts`: now returns the Web scope contract and scope summary with the remote snapshot, while remaining a read-only synchronized data facade.
+- `apps/web/src/web-app.tsx`: now consumes article detail through `fetchRemoteArticleDetail`, rejects scope violations before normal rendering, and exposes non-visual scope mode/blocker attributes for tests and diagnostics.
+- `apps/web/src/web-scope.test.ts`: protects the Step 78 requirement boundary by asserting that deferred capabilities stay deferred, initial Web requirements have no blockers, and the remote client exposes only read functions.
+- `apps/web/src/web-app.test.tsx`: now verifies the rendered Web shell advertises remote-sync mode with zero blockers and does not expose desktop-only controls.
+- `memory-bank/progress.md`: records the completed Step 78 milestone, verification commands, current status snapshot, and Step 79 handoff.
+- `memory-bank/architecture.md`: records the Step 78 architecture insights, file responsibilities, and boundary notes.
+
+### Step 78 Boundary Notes
+
+- `WEB_SCOPE_CONTRACT` is a product/architecture guard, not an authorization system. Real Web API permissions, auth, and server policy must still be implemented at the remote API boundary when write-capable Web workflows are introduced.
+- The Web scope summary should stay conservative: a deferred operation becoming `in-scope` should fail tests until a later implementation step explicitly expands the Web contract.
+- The Web app may keep displaying synchronized state, annotations, attachments, and future derived artifact metadata, but generation, mutation, export, and deep system integration must enter through later explicit remote API designs.
+- Step 79 should begin the mobile reading-priority shell and preserve the same discipline: mobile first covers login/sync, reading, search, notes, and podcast consumption without importing desktop-only local host responsibilities.
