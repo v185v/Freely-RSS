@@ -2,5 +2,25 @@
   "name": "@freelyrss/mobile",
   "private": true,
   "version": "0.0.1",
-  "type": "module"
+  "type": "module",
+  "main": "expo/AppEntry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "check": "tsc --project tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@freelyrss/shared-types": "workspace:*",
+    "expo": "^55.0.25",
+    "react": "19.2.0",
+    "react-native": "0.83.6"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.15",
+    "typescript": "~5.9.3",
+    "vitest": "^4.1.7"
+  }
 }

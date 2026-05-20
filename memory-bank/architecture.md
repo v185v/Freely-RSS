@@ -2790,3 +2790,43 @@ Step 60 已将 `SyncEvent` 限定为用户可携带状态、订阅组织和自�
 - `apps/web` must still avoid imports from `apps/desktop/src/features/reader-shell`, `apps/desktop/src-tauri`, `crates/feed-engine`, local SQLite stores, local REST routes, and desktop AI workflows.
 - Future Web write flows should enter through a remote API and sync boundary. They should not borrow desktop-only commands or local-first storage shortcuts.
 - Step 79 should start the mobile reading-priority shell while preserving platform boundaries: mobile can share DTOs and remote sync concepts, but should not inherit desktop-local fetching, full rules administration, local REST API exposure, or deep system integration in its first shell.
+
+## 2026-05-20 ASCII Addendum XLIII
+
+### Step 79 Architecture Insights
+
+- Step 79 introduces `apps/mobile` as the first mobile client shell. It is intentionally a reading-priority surface over synchronized data, not a local-first desktop host and not a full administration console.
+- The mobile shell consumes account/session metadata, feed summaries, article rows, article details, synchronized annotations, and audio enclosure metadata through a mobile client facade. That facade is deterministic mock data for now, but its shape is compatible with future remote sync/API reads.
+- `MOBILE_SCOPE_CONTRACT` makes the first mobile boundary executable. It allows account login, synchronized snapshot reads, article reading, synchronized-library search, note capture UI, and podcast consumption UI, while explicitly deferring local feed fetching, desktop SQLite access, Tauri commands, complex rule editing, OPML import/export, AI generation controls, Webhook dispatch, knowledge-base export, local REST API access, and desktop cache eviction.
+- Mobile scope validation is deliberately local and lightweight. `summarizeMobileScopeRequirements` detects requirement/scope drift for tests, but it does not authenticate users, authorize server requests, resolve sync conflicts, or replace future remote API policy checks.
+- Search, tab filtering, active article fallback, note extraction, and audio attachment selection live in pure selectors. This keeps mobile behavior testable without a simulator and prevents the React Native component from becoming a monolith.
+- The note field in `App.tsx` is a mobile UI shell only. Durable note writes, sync-event generation, conflict handling, and offline mutation queues remain later remote-sync/mobile-storage work.
+- The podcast card exposes synchronized audio metadata and a disabled/enabled play affordance. Real audio playback, cache pinning, background recovery, system media controls, and platform sharing belong to Step 80.
+- Repository verification now treats mobile as a first-class workspace package. Mobile Vitest coverage and TypeScript checking are included in `verify`, while Expo Metro export is available as an explicit platform-bundle validation.
+- No Rust, SQLite, sync-server, or database schema changes were required. Step 79 is a mobile client shell and contract-boundary step.
+
+### Step 79 File Responsibilities
+
+- `apps/mobile/package.json`: owns the mobile package metadata, Expo entrypoint, app scripts (`start`, `android`, `ios`, `web`, `check`, `test`), SDK 55 aligned runtime dependencies, and local test/type-check dependencies.
+- `apps/mobile/app.json`: owns Expo app metadata for the FreelyRSS Mobile shell, including display name, slug, version, portrait orientation, UI style, new architecture flag, and minimal platform metadata.
+- `apps/mobile/tsconfig.json`: owns mobile TypeScript checking through Expo's base TypeScript configuration with strict project-local compilation and no emitted build artifacts.
+- `apps/mobile/vitest.config.ts`: owns mobile unit-test configuration. It runs scope and selector tests in Node so the boundary can be validated without requiring iOS/Android simulator availability.
+- `apps/mobile/App.tsx`: owns the Step 79 React Native presentation shell. It loads the synchronized snapshot, derives mobile view state, renders sync/account status, tab navigation, search, queue rows, article reading content, note draft UI, and podcast metadata without importing desktop UI, Tauri bridges, SQLite stores, feed fetchers, or AI workflows.
+- `apps/mobile/src/mobile-scope.ts`: owns the mobile reading-priority scope contract. It defines allowed and deferred operation ids, `MobileRequirement`, `MobileScopeContract`, `MobileScopeSummary`, the concrete `MOBILE_SCOPE_CONTRACT`, and `summarizeMobileScopeRequirements`.
+- `apps/mobile/src/mobile-client.ts`: owns the deterministic synchronized mobile snapshot facade. It defines `MobileSessionDto`, `MobileReaderSnapshotDto`, mock feed/article/detail data, synchronized note metadata, podcast attachment metadata, and read-only fetch functions.
+- `apps/mobile/src/mobile-selectors.ts`: owns pure mobile view derivation. It filters synchronized articles by search text, narrows tabs for notes and podcasts, selects the active article, computes unread/note/podcast counts, returns synchronized note text, and finds the primary audio attachment.
+- `apps/mobile/src/mobile-scope.test.ts`: owns contract regression coverage for the first mobile shell. It proves the initial requirement list has zero blockers, desktop-only capabilities stay deferred, and the mobile client exports only read functions.
+- `apps/mobile/src/mobile-selectors.test.ts`: owns selector regression coverage for synchronized reading, search, notes, and podcast metadata paths.
+- `package.json`: owns root mobile scripts (`mobile:dev`, `mobile:check`, `test:mobile`) and adds mobile test/type-check coverage to the repository `verify` chain.
+- `pnpm-lock.yaml`: records dependency resolution after `@freelyrss/mobile` gained Expo SDK 55, React Native, React, TypeScript, and Vitest dependencies.
+- `AGENTS.md`: records the mobile development and validation commands now that `apps/mobile` has an application shell.
+- `memory-bank/progress.md`: records the completed Step 79 milestone, validation commands, environment notes, and Step 80 handoff.
+- `memory-bank/architecture.md`: records the Step 79 mobile architecture boundary and file-level responsibilities.
+
+### Step 79 Boundary Notes
+
+- `apps/mobile` should remain mobile/sync oriented. It must not import from `apps/desktop/src/features/reader-shell`, `apps/desktop/src-tauri`, `crates/feed-engine`, local SQLite stores, local REST routes, desktop cache maintenance modules, or desktop AI workflows.
+- The current mobile client facade is not the sync engine, auth implementation, durable cache, media playback service, or persistence layer. Real wiring should replace it through an explicit remote API/sync boundary.
+- Mobile note creation should later emit authorized sync mutations through remote/mobile storage boundaries. It should not write desktop SQLite rows directly.
+- Mobile podcast support should progress in Step 80 through mobile platform media/cache APIs. It should not reuse desktop cache eviction, export, Webhook, OPML, or rule-admin code paths.
+- Adding a new mobile capability should update `MOBILE_SCOPE_CONTRACT` first, then tests, then implementation. Deferred desktop operations should not become in-scope because a UI affordance or helper was added.

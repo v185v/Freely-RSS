@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "FreelyRSS Mobile",
+    "slug": "freelyrss-mobile",
+    "version": "0.0.1",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#101411"
+      }
+    }
+  }
+}

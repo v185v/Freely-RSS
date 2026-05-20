@@ -27,6 +27,11 @@ Current repository-level commands:
 - `corepack pnpm run desktop:build` : type-check and build the desktop frontend shell
 - `corepack pnpm --filter @freelyrss/desktop tauri dev` : run the desktop application shell locally through Tauri
 - `corepack pnpm --filter @freelyrss/desktop tauri build -d --no-bundle` : validate the desktop shell end-to-end without generating installers
+- `corepack pnpm run web:dev` : start the Web synchronized reader entry in Vite dev mode
+- `corepack pnpm run web:build` : type-check and build the Web synchronized reader entry
+- `corepack pnpm run mobile:dev` : start the Expo mobile reading shell
+- `corepack pnpm run mobile:check` : type-check the Expo mobile reading shell
+- `corepack pnpm run test:mobile` : run mobile scope and selector regression tests
 - `corepack pnpm run format` : apply Biome formatting
 - `corepack pnpm run format:check` : run Biome formatting checks
 - `corepack pnpm run lint` : run Biome lint rules
@@ -38,7 +43,7 @@ Current repository-level commands:
 - `corepack pnpm run changeset:status` : preview package version bumps and release notes plan
 - `corepack pnpm run changeset:version` : apply version bumps and generate package changelogs
 
-`apps/web` and `apps/mobile` do not yet have scaffolded application build or run commands. Add those here once their app shells are introduced.
+`apps/mobile` currently validates the Expo shell with `mobile:check` and `test:mobile`; use Expo platform commands such as `corepack pnpm --filter @freelyrss/mobile ios` or `android` only when a simulator or device is available.
 
 ## Coding Style & Naming Conventions
 

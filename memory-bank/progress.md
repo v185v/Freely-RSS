@@ -2,11 +2,17 @@
 
 ## 当前状态
 
-- 阶段：阶段 11 Step 78 已完成，Web 端已通过显式 scope contract 固化为远程同步数据访问入口；初始 Web 入口只允许读取远程 session、来源、文章队列、文章详情、同步状态与附件/批注元数据，桌面 SQLite、Tauri command、本地抓取、完整离线缓存、复杂规则编辑器、AI 生成、Webhook、知识库导出和本地 REST API 均标记为延后能力。
+- 阶段：阶段 11 Step 79 已完成，移动端已建立 React Native + Expo 阅读优先壳；首期移动入口只覆盖登录/同步快照、文章阅读、搜索、笔记草稿/同步批注展示和播客附件消费入口，桌面 SQLite、Tauri command、本地抓取、复杂规则编辑、AI 生成、Webhook、知识库导出、本地 REST API 和桌面缓存逐出均标记为延后能力。
 - 最后更新：2026-05-20
-- 风险状态：已从“Step 77 已构建 Web 只读入口；下一步 Step 78 应继续扩展 Web 表面但不得越过远程同步数据边界”推进到“Step 78 已通过 `apps/web/src/web-scope.ts` 与测试固化 Web 边界；下一步 Step 79 应进入移动端阅读优先壳，继续只覆盖登录/同步、文章阅读、搜索、笔记和播客消费，不要把桌面本地抓取、复杂规则编辑或深度系统集成搬入移动端首期。”
+- 风险状态：已从“Step 78 已通过 `apps/web/src/web-scope.ts` 与测试固化 Web 边界；下一步 Step 79 应进入移动端阅读优先壳”推进到“Step 79 已通过 `apps/mobile/src/mobile-scope.ts`、`mobile-client.ts`、`mobile-selectors.ts` 与 Expo 入口固化移动端首期边界；下一步 Step 80 应在同一移动端边界内补齐离线缓存、音频播放、后台恢复和系统分享基础能力，不要引入复杂规则编辑器或桌面本地 host 职责。”
 
 ### 2026-05-20 状态快照（最新）
+
+- 当前完成：阶段 11 Step 79 已完成，`apps/mobile` 从占位包推进为 React Native + Expo 基础应用，新增 `App.tsx`、`app.json`、`tsconfig.json`、`vitest.config.ts` 和 `src/` 下的移动端 scope contract、同步快照 mock facade、选择器与回归测试。移动端 UI 现在呈现登录同步状态、阅读队列、搜索入口、文章阅读页、同步笔记展示/草稿输入和播客附件卡片；范围 contract 明确允许登录/同步、阅读、搜索、笔记和播客消费，并显式延后桌面本地抓取、SQLite/Tauri、本地 REST、复杂规则、AI 生成、Webhook、知识库导出和桌面缓存逐出。
+- 当前验证：`corepack pnpm --filter @freelyrss/mobile test`、`corepack pnpm --filter @freelyrss/mobile check`、`corepack pnpm run format:check`、`corepack pnpm run lint`、`corepack pnpm --filter @freelyrss/mobile exec expo export --platform ios --output-dir dist-mobile-check` 与 `corepack pnpm run verify` 全部通过。`dist-mobile-check` 为验证输出，已在验证后删除。
+- 当前下一步：进入阶段 11 Step 80“适配移动端缓存与媒体能力”。应补齐移动端离线缓存、音频播放、后台恢复和系统分享基础能力，但继续避免复杂规则编辑器、桌面本地抓取、桌面 SQLite/Tauri、本地 REST API、Webhook、知识库导出或 AI 生成控制台进入移动端首期边界。
+
+### 2026-05-20 状态快照（历史：Step 78）
 
 - 当前完成：阶段 11 Step 78 已完成，新增 `apps/web/src/web-scope.ts`，集中定义 Web 首期允许操作、延后操作、需求清单和 scope summary；`remote-client` 现在随远程 snapshot 返回 scope contract 与 summary；`web-app` 不再直接读取本地 mock detail map，而是通过 `fetchRemoteArticleDetail` 读取远程文章详情，并在入口 DOM 上暴露 `data-scope-mode="remote-sync-access"` 与 `data-scope-blockers="0"` 作为测试与调试信号。新增 Web scope 回归测试，证明桌面专属能力被显式延后、初始 Web 需求没有阻塞项或越界项，并且 remote client 只暴露读取函数。
 - 当前验证：`corepack pnpm --filter @freelyrss/web test`、`corepack pnpm --filter @freelyrss/web build`、`corepack pnpm run format:check`、`corepack pnpm run lint` 与 `corepack pnpm run verify` 全部通过。
@@ -2204,3 +2210,56 @@
 - The Web scope summary should stay conservative: a deferred operation becoming `in-scope` should fail tests until a later implementation step explicitly expands the Web contract.
 - The Web app may keep displaying synchronized state, annotations, attachments, and future derived artifact metadata, but generation, mutation, export, and deep system integration must enter through later explicit remote API designs.
 - Step 79 should begin the mobile reading-priority shell and preserve the same discipline: mobile first covers login/sync, reading, search, notes, and podcast consumption without importing desktop-only local host responsibilities.
+
+## 2026-05-20 ASCII Addendum XLIII
+
+### Stage 11 Step 79 Completed: mobile reading-priority shell
+
+- Completed `implementation-plan.md` Stage 11 Step 79 by turning `apps/mobile` from a placeholder package into a React Native + Expo shell focused on mobile reading workflows.
+- Added Expo app metadata, TypeScript configuration, Vitest configuration, and package scripts for `start`, platform dev entrypoints, `check`, and `test`.
+- Added `apps/mobile/src/mobile-scope.ts`, which defines the first mobile scope contract, allowed operations, deferred desktop/out-of-scope operations, requirement records, and `summarizeMobileScopeRequirements`.
+- Added `apps/mobile/src/mobile-client.ts`, a synchronized mobile snapshot facade that returns account/session metadata, feeds, article queue rows, article details, synchronized note metadata, and podcast enclosure metadata. It only exports read functions.
+- Added `apps/mobile/src/mobile-selectors.ts`, which keeps search, tab filtering, active-article selection, note extraction, and audio attachment selection testable outside the React Native view.
+- Added `apps/mobile/App.tsx`, a compact mobile reader shell that shows sign-in/sync state, unread/note/audio metrics, tabbed reading/search/notes/podcast views, a synchronized article queue, a focused article page, a note draft field, and a podcast episode card.
+- Added mobile regression tests proving the first mobile requirement list has no blockers or scope violations, desktop-only capabilities stay deferred, the client exposes only read functions, search reads synchronized snapshots, and note/podcast selectors surface the expected metadata.
+- Added root scripts for `mobile:dev`, `mobile:check`, and `test:mobile`, and extended `verify` so mobile tests and type-checking are part of the repository validation chain.
+- Kept Step 79 out of desktop Tauri commands, desktop SQLite stores, feed-engine fetchers, local REST routes, AI workflows, Webhook dispatch, knowledge-base export, complex rule administration, Rust crates, and database migrations. No schema migration was required.
+
+### Step 79 Verification
+
+- Passed `corepack pnpm install`
+- Passed `corepack pnpm --filter @freelyrss/mobile test`
+- Passed `corepack pnpm --filter @freelyrss/mobile check`
+- Passed `corepack pnpm run format:check`
+- Passed `corepack pnpm run lint`
+- Passed `corepack pnpm --filter @freelyrss/mobile exec expo export --platform ios --output-dir dist-mobile-check`
+- Passed `corepack pnpm run verify`
+
+### Environment Notes
+
+- `expo export --platform ios` generated a temporary `apps/mobile/dist-mobile-check` bundle for validation. The directory was deleted after the export passed.
+- Expo SDK 55 recommends `react-native` `0.83.6` and `react` `19.2.0`. The first attempt with the newer npm `react-native` `0.85.3` failed Metro bundling, so `apps/mobile/package.json` now follows the Expo bundled native module map.
+
+### Step 79 File Responsibilities
+
+- `apps/mobile/package.json`: declares the mobile workspace app, Expo entrypoint, dev/test/type-check scripts, SDK 55 aligned runtime dependencies, and local test dependencies.
+- `apps/mobile/app.json`: owns Expo app metadata for the initial FreelyRSS Mobile shell, including app name, slug, orientation, UI style, and basic platform metadata.
+- `apps/mobile/tsconfig.json`: owns mobile TypeScript checking through Expo's base configuration with strict project-local compilation.
+- `apps/mobile/vitest.config.ts`: owns the mobile unit-test configuration. Tests run in Node and focus on contracts/selectors rather than requiring a simulator.
+- `apps/mobile/App.tsx`: owns the Step 79 React Native presentation shell. It composes the synchronized snapshot, mobile tabs, search box, article queue, reader content, note draft field, and podcast card without importing desktop reader-shell internals.
+- `apps/mobile/src/mobile-scope.ts`: owns the mobile reading-priority scope contract. It lists allowed mobile operations, deferred desktop/out-of-scope operations, requirement records, and the scope summary function.
+- `apps/mobile/src/mobile-client.ts`: owns the deterministic synchronized mobile snapshot facade. It models login/sync state, feeds, articles, article details, annotations, and audio attachments while exposing only read functions.
+- `apps/mobile/src/mobile-selectors.ts`: owns pure mobile view derivation for search, tab filtering, active article fallback, unread/note/podcast counts, synchronized note text, and primary audio attachment selection.
+- `apps/mobile/src/mobile-scope.test.ts`: protects the mobile scope boundary by asserting zero blockers, deferred desktop capabilities, and read-only mobile client exports.
+- `apps/mobile/src/mobile-selectors.test.ts`: protects mobile reading/search/notes/podcast behavior against the synchronized snapshot facade.
+- `package.json`: adds root mobile scripts and extends the repository `verify` chain with mobile tests and mobile type-checking.
+- `pnpm-lock.yaml`: records the Expo SDK 55, React Native, React, TypeScript, and Vitest dependency graph for the mobile workspace package.
+- `memory-bank/progress.md`: records the completed Step 79 milestone, verification commands, environment notes, and Step 80 handoff.
+- `memory-bank/architecture.md`: records the Step 79 mobile architecture insights, file responsibilities, and boundary notes.
+
+### Step 79 Boundary Notes
+
+- `apps/mobile` is a mobile reading-priority client over synchronized data. It should not import from `apps/desktop/src/features/reader-shell`, `apps/desktop/src-tauri`, `crates/feed-engine`, local SQLite stores, local REST routes, or desktop AI workflows.
+- The mobile snapshot facade is not a sync engine, auth system, durable cache, or persistence layer. Real API wiring should replace it at a remote sync/API boundary without expanding the mobile shell into a desktop host.
+- The note draft field is a UI shell for Step 79. Durable note mutation and sync-event emission should enter through later explicit mobile API/sync work, not local SQLite writes.
+- The podcast card exposes synchronized audio metadata only. Step 80 should add real mobile cache/media behavior through mobile platform boundaries while keeping complex rule editing, OPML administration, Webhook dispatch, AI generation, and knowledge-base export deferred.
