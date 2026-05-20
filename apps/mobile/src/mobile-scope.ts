@@ -5,6 +5,10 @@ export const MOBILE_ALLOWED_OPERATION_IDS = [
   "search-synchronized-library",
   "note-capture",
   "podcast-consumption",
+  "offline-cache-read",
+  "mobile-audio-playback",
+  "background-media-resume",
+  "system-share-sheet",
 ] as const
 
 export const MOBILE_DEFERRED_OPERATION_IDS = [
@@ -81,6 +85,30 @@ export const MOBILE_SCOPE_CONTRACT: MobileScopeContract = {
     {
       id: "podcast-card",
       operationId: "podcast-consumption",
+      status: "in-scope",
+      blocksInitialShell: false,
+    },
+    {
+      id: "offline-cache-readiness",
+      operationId: "offline-cache-read",
+      status: "in-scope",
+      blocksInitialShell: false,
+    },
+    {
+      id: "mobile-audio-player",
+      operationId: "mobile-audio-playback",
+      status: "in-scope",
+      blocksInitialShell: false,
+    },
+    {
+      id: "background-media-resume",
+      operationId: "background-media-resume",
+      status: "in-scope",
+      blocksInitialShell: false,
+    },
+    {
+      id: "system-share-sheet",
+      operationId: "system-share-sheet",
       status: "in-scope",
       blocksInitialShell: false,
     },

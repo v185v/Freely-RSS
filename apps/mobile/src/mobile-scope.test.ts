@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 
 import * as mobileClient from "./mobile-client"
 import {
+  MOBILE_ALLOWED_OPERATION_IDS,
   MOBILE_DEFERRED_OPERATION_IDS,
   MOBILE_SCOPE_CONTRACT,
   summarizeMobileScopeRequirements,
@@ -16,6 +17,10 @@ describe("mobile scope contract", () => {
   })
 
   test("defers desktop-only and heavy administration capabilities", () => {
+    expect(MOBILE_ALLOWED_OPERATION_IDS).toContain("offline-cache-read")
+    expect(MOBILE_ALLOWED_OPERATION_IDS).toContain("mobile-audio-playback")
+    expect(MOBILE_ALLOWED_OPERATION_IDS).toContain("background-media-resume")
+    expect(MOBILE_ALLOWED_OPERATION_IDS).toContain("system-share-sheet")
     expect(MOBILE_DEFERRED_OPERATION_IDS).toContain("local-feed-fetching")
     expect(MOBILE_DEFERRED_OPERATION_IDS).toContain("desktop-sqlite-access")
     expect(MOBILE_DEFERRED_OPERATION_IDS).toContain("tauri-command-access")

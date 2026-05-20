@@ -2830,3 +2830,36 @@ Step 60 已将 `SyncEvent` 限定为用户可携带状态、订阅组织和自�
 - Mobile note creation should later emit authorized sync mutations through remote/mobile storage boundaries. It should not write desktop SQLite rows directly.
 - Mobile podcast support should progress in Step 80 through mobile platform media/cache APIs. It should not reuse desktop cache eviction, export, Webhook, OPML, or rule-admin code paths.
 - Adding a new mobile capability should update `MOBILE_SCOPE_CONTRACT` first, then tests, then implementation. Deferred desktop operations should not become in-scope because a UI affordance or helper was added.
+
+## 2026-05-20 ASCII Addendum XLIV
+
+### Step 80 Architecture Insights
+
+- Step 80 introduces a separate mobile platform capability boundary instead of folding cache, media, background resume, and sharing state into the synchronized data facade or the React Native component.
+- `apps/mobile/src/mobile-platform.ts` is intentionally local to the mobile app. It describes device-local cache records, cached attachment records, media sessions, background resume state, and share targets; it does not define cross-platform shared DTOs, desktop cache policy, sync payloads, or server API protocol.
+- `MOBILE_SCOPE_CONTRACT` now explicitly marks `offline-cache-read`, `mobile-audio-playback`, `background-media-resume`, and `system-share-sheet` as in-scope for the mobile client. This keeps Step 80 visible in the same contract that already defers desktop-only and administration-heavy capabilities.
+- The mobile client facade remains read-oriented. It now returns a platform snapshot and summary alongside synchronized reader data, but it still does not expose writes, desktop commands, local SQLite access, feed fetching, rule administration, export, AI, Webhook dispatch, or local REST routes.
+- Pure selectors translate the platform snapshot into UI-ready models. This keeps offline readiness, cached playback state, resume labels, and share payload construction testable without a simulator and prevents `App.tsx` from becoming the cache/media rules engine.
+- `App.tsx` uses React Native `AppState` and `Share` as shell-level platform integration points while leaving durable downloads, native audio service wiring, lock-screen controls, background task registration, and offline mutation queues behind future platform adapters.
+- The existing database schema remains sufficient. `Attachment.local_cache_path` already models device-local attachment cache paths, and the sync boundary already states that local cache paths stay local rather than entering `SyncEvent` payloads.
+- No Rust, SQLite, sync-server, Web, desktop, or database schema changes were required. Step 80 is a mobile platform-boundary and presentation-shell step.
+
+### Step 80 File Responsibilities
+
+- `apps/mobile/src/mobile-platform.ts`: owns the Step 80 mobile platform capability contract. It defines `MOBILE_PLATFORM_CAPABILITY_IDS`, typed capability ids, cached article records, cached attachment records, media session records, system share target records, background resume state, `MOBILE_PLATFORM_SNAPSHOT`, and `summarizeMobilePlatformReadiness`.
+- `apps/mobile/src/mobile-scope.ts`: owns mobile scope governance and now includes offline cache, mobile audio playback, background resume, and system share as allowed mobile operations with non-blocking requirements.
+- `apps/mobile/src/mobile-client.ts`: continues to own deterministic synchronized reader data and now also attaches `platform` plus `platformSummary` to `fetchMobileReaderSnapshot`. It remains a read-only facade and does not gain mutation, persistence, or desktop bridge responsibilities.
+- `apps/mobile/src/mobile-selectors.ts`: owns Step 80 mobile view derivation. It computes offline cache status, cached byte totals, primary audio playback state, resume progress labels, share payloads, and the new home metrics from snapshot data.
+- `apps/mobile/App.tsx`: owns Step 80 React Native presentation wiring. It renders offline readiness, background resume state, cached episode play/pause intent, and a user-triggered share action while keeping all durable platform work behind the snapshot/selector boundary.
+- `apps/mobile/src/mobile-scope.test.ts`: owns contract regression coverage for the expanded Step 80 mobile scope and deferred desktop-only capabilities.
+- `apps/mobile/src/mobile-selectors.test.ts`: owns regression coverage for Step 80 cache/media/share derivation, including platform readiness, cached podcast playback, background resume state, and share payload construction.
+- `memory-bank/progress.md`: records the Step 80 implementation, validation commands, environment notes, and Step 81 handoff.
+- `memory-bank/architecture.md`: records the Step 80 architecture boundary, affected file responsibilities, and constraints for future mobile platform work.
+
+### Step 80 Boundary Notes
+
+- The mobile platform snapshot is a facade, not durable storage. Future file downloads, cache pinning, audio playback services, background tasks, and offline mutation queues should implement this boundary rather than bypassing it from UI components.
+- Mobile-local cache paths remain local device facts. They must not be synchronized through `SyncEvent`, copied into remote sync-server business records, exposed through the local desktop REST API, or treated as WebDAV object keys.
+- System sharing is an explicit user action in the mobile shell. It must stay separate from Webhook automation, knowledge-base export, local REST API exposure, and background sync fanout.
+- Cached playback state belongs to the mobile platform boundary. It should not reuse desktop cache eviction, desktop reader-shell media UI, or desktop Tauri commands.
+- Step 81 should start Stage 12 parser regression work. Parser fixtures and feed-engine regression coverage should not depend on mobile platform state.

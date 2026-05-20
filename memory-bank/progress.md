@@ -2,11 +2,17 @@
 
 ## 当前状态
 
-- 阶段：阶段 11 Step 79 已完成，移动端已建立 React Native + Expo 阅读优先壳；首期移动入口只覆盖登录/同步快照、文章阅读、搜索、笔记草稿/同步批注展示和播客附件消费入口，桌面 SQLite、Tauri command、本地抓取、复杂规则编辑、AI 生成、Webhook、知识库导出、本地 REST API 和桌面缓存逐出均标记为延后能力。
+- 阶段：阶段 11 Step 80 已完成，移动端已在 React Native + Expo 阅读优先壳内补齐移动平台缓存与媒体能力边界；当前移动入口覆盖登录/同步快照、文章阅读、搜索、笔记草稿/同步批注展示、播客附件消费、离线缓存状态、缓存音频播放状态、后台恢复状态和系统分享入口，桌面 SQLite、Tauri command、本地抓取、复杂规则编辑、AI 生成、Webhook、知识库导出、本地 REST API 和桌面缓存逐出均保持延后。
 - 最后更新：2026-05-20
-- 风险状态：已从“Step 78 已通过 `apps/web/src/web-scope.ts` 与测试固化 Web 边界；下一步 Step 79 应进入移动端阅读优先壳”推进到“Step 79 已通过 `apps/mobile/src/mobile-scope.ts`、`mobile-client.ts`、`mobile-selectors.ts` 与 Expo 入口固化移动端首期边界；下一步 Step 80 应在同一移动端边界内补齐离线缓存、音频播放、后台恢复和系统分享基础能力，不要引入复杂规则编辑器或桌面本地 host 职责。”
+- 风险状态：已从“Step 79 已通过 `apps/mobile/src/mobile-scope.ts`、`mobile-client.ts`、`mobile-selectors.ts` 与 Expo 入口固化移动端首期边界；下一步 Step 80 应在同一移动端边界内补齐离线缓存、音频播放、后台恢复和系统分享基础能力”推进到“Step 80 已通过 `apps/mobile/src/mobile-platform.ts`、扩展后的 scope/client/selectors/UI 与测试固化移动端缓存/媒体/分享边界；下一步 Step 81 应进入 Stage 12 解析回归测试集，不要继续扩张移动端平台能力或引入桌面本地 host 职责。”
 
 ### 2026-05-20 状态快照（最新）
+
+- 当前完成：阶段 11 Step 80 已完成，新增 `apps/mobile/src/mobile-platform.ts`，集中定义移动端离线缓存、缓存附件、媒体会话、后台恢复、系统分享目标与平台 readiness summary；`MOBILE_SCOPE_CONTRACT` 现在显式允许 `offline-cache-read`、`mobile-audio-playback`、`background-media-resume` 和 `system-share-sheet`。`mobile-client` 随同步快照返回 platform/platformSummary，`mobile-selectors` 纯派生离线状态、播放恢复状态与分享 payload，`App.tsx` 展示离线缓存状态、后台恢复状态、缓存音频播放意图和系统分享入口。
+- 当前验证：`corepack pnpm --filter @freelyrss/mobile test`、`corepack pnpm --filter @freelyrss/mobile check`、`corepack pnpm run format:check`、`corepack pnpm run lint`、`corepack pnpm --filter @freelyrss/mobile exec expo export --platform ios --output-dir dist-mobile-check` 与 `corepack pnpm run verify` 全部通过。`dist-mobile-check` 为验证输出，已在验证后删除。
+- 当前下一步：进入阶段 12 Step 81“建立解析回归测试集”。应把真实世界 feed 样本固化为解析回归资产，覆盖常见成功路径和失败路径；不要在 Step 81 中继续扩张移动端缓存/媒体功能、桌面 UI 能力、AI、Webhook、知识库导出或本地 REST API。
+
+### 2026-05-20 状态快照（历史：Step 79）
 
 - 当前完成：阶段 11 Step 79 已完成，`apps/mobile` 从占位包推进为 React Native + Expo 基础应用，新增 `App.tsx`、`app.json`、`tsconfig.json`、`vitest.config.ts` 和 `src/` 下的移动端 scope contract、同步快照 mock facade、选择器与回归测试。移动端 UI 现在呈现登录同步状态、阅读队列、搜索入口、文章阅读页、同步笔记展示/草稿输入和播客附件卡片；范围 contract 明确允许登录/同步、阅读、搜索、笔记和播客消费，并显式延后桌面本地抓取、SQLite/Tauri、本地 REST、复杂规则、AI 生成、Webhook、知识库导出和桌面缓存逐出。
 - 当前验证：`corepack pnpm --filter @freelyrss/mobile test`、`corepack pnpm --filter @freelyrss/mobile check`、`corepack pnpm run format:check`、`corepack pnpm run lint`、`corepack pnpm --filter @freelyrss/mobile exec expo export --platform ios --output-dir dist-mobile-check` 与 `corepack pnpm run verify` 全部通过。`dist-mobile-check` 为验证输出，已在验证后删除。
@@ -104,7 +110,7 @@
 
 ## 当前阻塞
 
-- 当前无阻塞；下一步风险点是阶段 11 Step 79 需要建立移动端阅读优先壳，同时保持移动端首期只覆盖同步入口、阅读、搜索、笔记和播客消费，不把桌面本地抓取、复杂规则编辑器、AI 生成、Webhook、知识库导出、本地 REST API 或深度系统集成提前搬入移动端。
+- 当前无阻塞；下一步风险点是阶段 12 Step 81 需要建立解析回归测试集，同时保持该步骤聚焦真实 feed 样本、解析成功/失败路径和 feed-engine 回归覆盖，不把移动端平台能力、桌面 UI、AI、Webhook、知识库导出或本地 REST API 继续塞进解析测试阶段。
 
 ## 本次执行记录
 
@@ -2263,3 +2269,50 @@
 - The mobile snapshot facade is not a sync engine, auth system, durable cache, or persistence layer. Real API wiring should replace it at a remote sync/API boundary without expanding the mobile shell into a desktop host.
 - The note draft field is a UI shell for Step 79. Durable note mutation and sync-event emission should enter through later explicit mobile API/sync work, not local SQLite writes.
 - The podcast card exposes synchronized audio metadata only. Step 80 should add real mobile cache/media behavior through mobile platform boundaries while keeping complex rule editing, OPML administration, Webhook dispatch, AI generation, and knowledge-base export deferred.
+
+## 2026-05-20 ASCII Addendum XLIV
+
+### Stage 11 Step 80 Completed: mobile cache and media capability boundary
+
+- Completed `implementation-plan.md` Stage 11 Step 80 by adding a mobile platform capability boundary for offline cache readiness, cached audio playback state, background resume state, and user-initiated system sharing.
+- Added `apps/mobile/src/mobile-platform.ts`, which defines mobile platform capability ids, cached article records, cached attachment records, media session records, share target records, a deterministic platform snapshot, and `summarizeMobilePlatformReadiness`.
+- Expanded `MOBILE_SCOPE_CONTRACT` so `offline-cache-read`, `mobile-audio-playback`, `background-media-resume`, and `system-share-sheet` are explicit in-scope mobile capabilities while desktop-local fetching, desktop SQLite/Tauri access, local REST routes, OPML administration, complex rule editing, Webhook dispatch, knowledge-base export, AI controls, and desktop cache eviction remain deferred.
+- Extended the mobile synchronized snapshot with `platform` and `platformSummary`, and marked the podcast enclosure with a mobile-local cache path so the shell can distinguish cached playback from streaming metadata.
+- Expanded mobile selectors with pure derivation for offline article counts, resumable audio counts, per-article offline cache status, primary audio playback state, and system share payload construction.
+- Updated `apps/mobile/App.tsx` to show offline cache status, background resume status, cached episode playback intent, and a system share action while keeping article reading, search, notes, and podcast consumption in the mobile shell.
+- Added regression coverage for the Step 80 scope expansion, platform readiness summary, cached podcast playback derivation, background resume derivation, and share payload construction.
+- Kept Step 80 out of desktop Tauri commands, desktop SQLite stores, feed-engine fetchers, local REST routes, AI workflows, Webhook dispatch, knowledge-base export, complex rule administration, Rust crates, and database migrations. No schema migration was required.
+
+### Step 80 Verification
+
+- Passed `corepack pnpm --filter @freelyrss/mobile test`
+- Passed `corepack pnpm --filter @freelyrss/mobile check`
+- Passed `corepack pnpm run format:check`
+- Passed `corepack pnpm run lint`
+- Passed `corepack pnpm --filter @freelyrss/mobile exec expo export --platform ios --output-dir dist-mobile-check`
+- Passed `corepack pnpm run verify`
+
+### Environment Notes
+
+- `expo export --platform ios` generated a temporary `apps/mobile/dist-mobile-check` bundle for validation. The directory was deleted after the export passed.
+- Step 80 uses a deterministic mobile platform facade plus React Native `AppState` and `Share` integration in the shell. Durable file downloads, native audio service wiring, background task registration, and sync mutations remain later mobile platform implementations behind the same boundary.
+
+### Step 80 File Responsibilities
+
+- `apps/mobile/src/mobile-platform.ts`: owns the Step 80 mobile platform capability contract. It defines offline cache records, cached attachment records, media session records, share targets, background resume state, the deterministic platform snapshot, and readiness summary.
+- `apps/mobile/src/mobile-scope.ts`: now includes mobile cache/media/share capabilities in the allowed operation set and requirements ledger while preserving deferred desktop/out-of-scope operations.
+- `apps/mobile/src/mobile-client.ts`: now returns `platform` and `platformSummary` with the synchronized reader snapshot and marks the sample podcast enclosure as cached through a mobile-local cache path.
+- `apps/mobile/src/mobile-selectors.ts`: owns pure mobile cache/media/share derivation, including offline cache status, primary audio playback status, resume labels, and system share payload construction.
+- `apps/mobile/App.tsx`: owns the Step 80 React Native presentation wiring for offline cache status, background resume status, cached playback intent, and the user-triggered share action.
+- `apps/mobile/src/mobile-scope.test.ts`: protects the expanded mobile scope contract and continues to assert desktop-only capabilities remain deferred.
+- `apps/mobile/src/mobile-selectors.test.ts`: protects platform summary, offline cache, cached audio playback, background resume, and share payload derivation.
+- `memory-bank/progress.md`: records the completed Step 80 milestone, verification commands, environment notes, and Step 81 handoff.
+- `memory-bank/architecture.md`: records the Step 80 mobile platform architecture insights, file responsibilities, and boundary notes.
+
+### Step 80 Boundary Notes
+
+- `apps/mobile/src/mobile-platform.ts` is a mobile platform facade, not the sync engine, auth system, desktop cache-maintenance layer, or durable filesystem implementation.
+- Mobile cache paths remain device-local facts. They must not be copied into `SyncEvent` payloads, remote API business records, WebDAV object names, or desktop cache eviction plans.
+- System sharing remains user-initiated from the mobile shell. It should not become background Webhook dispatch, knowledge-base export, local REST exposure, or sync-server fanout.
+- Future durable downloads, native audio engine integration, lock-screen media controls, background tasks, and offline mutation queues should implement the Step 80 platform boundary rather than importing desktop host responsibilities.
+- Step 81 should move to Stage 12 parser regression fixtures and tests. It should not continue expanding mobile capabilities until the parsing regression suite is validated.

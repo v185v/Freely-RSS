@@ -6,6 +6,12 @@ import type {
 } from "@freelyrss/shared-types"
 
 import {
+  MOBILE_PLATFORM_SNAPSHOT,
+  type MobilePlatformSnapshot,
+  type MobilePlatformSummary,
+  summarizeMobilePlatformReadiness,
+} from "./mobile-platform"
+import {
   MOBILE_SCOPE_CONTRACT,
   type MobileScopeContract,
   type MobileScopeSummary,
@@ -22,6 +28,8 @@ export interface MobileSessionDto {
 export interface MobileReaderSnapshotDto {
   articles: ArticleListItemDto[]
   feeds: FeedSummaryDto[]
+  platform: MobilePlatformSnapshot
+  platformSummary: MobilePlatformSummary
   scope: MobileScopeContract
   scopeSummary: MobileScopeSummary
   session: MobileSessionDto
@@ -299,7 +307,7 @@ const articleDetails: Record<string, ArticleDetailDto> = {
         mimeType: "audio/mpeg",
         duration: 1320,
         size: 44_200_000,
-        localCachePath: null,
+        localCachePath: "mobile-cache/media/article-mobile-podcast.mp3",
       },
     ],
     annotations: [],
@@ -315,6 +323,8 @@ export async function fetchMobileReaderSnapshot(): Promise<MobileReaderSnapshotD
   return cloneValue({
     articles,
     feeds,
+    platform: MOBILE_PLATFORM_SNAPSHOT,
+    platformSummary: summarizeMobilePlatformReadiness(),
     scope: MOBILE_SCOPE_CONTRACT,
     scopeSummary: summarizeMobileScopeRequirements(),
     session,

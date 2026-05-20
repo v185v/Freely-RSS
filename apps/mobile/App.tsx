@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react"
 import {
   ActivityIndicator,
+  AppState,
+  type AppStateStatus,
   Pressable,
   SafeAreaView,
   ScrollView,
+  Share,
   StatusBar,
   StyleSheet,
   Text,
@@ -16,6 +19,9 @@ import { fetchMobileArticleDetail, fetchMobileReaderSnapshot } from "./src/mobil
 import {
   type MobileTabId,
   buildMobileHomeModel,
+  buildMobileOfflineCacheModel,
+  buildMobileSharePayload,
+  buildPrimaryAudioPlaybackModel,
   getPrimaryAudioAttachment,
   getSyncedNoteText,
 } from "./src/mobile-selectors"
@@ -52,6 +58,9 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<MobileTabId>("today")
   const [articleDetail, setArticleDetail] = useState<ArticleDetailDto | null>(null)
   const [draftNote, setDraftNote] = useState("")
+  const [lastAppState, setLastAppState] = useState<AppStateStatus>(AppState.currentState)
+  const [playbackIntent, setPlaybackIntent] = useState<"idle" | "paused" | "playing">("idle")
+  const [sharedAt, setSharedAt] = useState<string | null>(null)
   const [searchText, setSearchText] = useState("")
   const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null)
   const [snapshot, setSnapshot] = useState<Awaited<
@@ -69,6 +78,14 @@ export default function App() {
 
     return () => {
       active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", setLastAppState)
+
+    return () => {
+      subscription.remove()
     }
   }, [])
 
@@ -91,6 +108,8 @@ export default function App() {
     fetchMobileArticleDetail(model.activeArticleId).then((detail) => {
       if (active) {
         setArticleDetail(detail)
+        setPlaybackIntent("idle")
+        setSharedAt(null)
       }
     })
 
@@ -118,7 +137,19 @@ export default function App() {
   }
 
   const activeAudio = getPrimaryAudioAttachment(articleDetail)
+  const offlineModel = buildMobileOfflineCacheModel(articleDetail, snapshot.platform)
+  const playbackModel = buildPrimaryAudioPlaybackModel(articleDetail, snapshot.platform)
+  const sharePayload = buildMobileSharePayload(articleDetail, snapshot.platform)
   const syncedNote = getSyncedNoteText(articleDetail)
+
+  const handleShareArticle = () => {
+    if (!sharePayload) {
+      return
+    }
+
+    setSharedAt(new Date().toISOString())
+    void Share.share(sharePayload)
+  }
 
   return (
     <SafeAreaView style={styles.shell}>
@@ -152,12 +183,39 @@ export default function App() {
             <Text style={styles.statusValue}>{model.podcastCount}</Text>
             <Text style={styles.statusLabel}>Audio</Text>
           </View>
+          <View style={styles.statusCard}>
+            <Text style={styles.statusValue}>{model.offlineReadyCount}</Text>
+            <Text style={styles.statusLabel}>Offline</Text>
+          </View>
         </View>
 
         <View style={styles.accountCard}>
           <Text style={styles.accountLabel}>Signed in</Text>
           <Text style={styles.accountValue}>{snapshot.session.accountEmail}</Text>
           <Text style={styles.accountMeta}>{snapshot.session.deviceName}</Text>
+        </View>
+
+        <View style={styles.capabilityGrid}>
+          <View style={styles.capabilityCard}>
+            <Text style={styles.capabilityLabel}>Offline cache</Text>
+            <Text style={styles.capabilityValue}>
+              {offlineModel?.statusLabel ?? "Select an article"}
+            </Text>
+            <Text style={styles.capabilityMeta}>
+              {offlineModel?.articleCachePath ?? "No local article payload"}
+            </Text>
+          </View>
+          <View style={styles.capabilityCard}>
+            <Text style={styles.capabilityLabel}>Background resume</Text>
+            <Text style={styles.capabilityValue}>
+              {playbackModel?.backgroundResumeAvailable ? "Armed" : "Not available"}
+            </Text>
+            <Text style={styles.capabilityMeta}>
+              {playbackModel
+                ? `${playbackModel.resumeLabel} / app ${lastAppState}`
+                : `No media session / app ${lastAppState}`}
+            </Text>
+          </View>
         </View>
 
         <View style={styles.tabRow}>
@@ -241,13 +299,50 @@ export default function App() {
               <View style={styles.audioCard}>
                 <Text style={styles.panelTitle}>Podcast</Text>
                 <Text style={styles.panelText}>
-                  {activeAudio
-                    ? `${activeAudio.mimeType ?? "Audio"} / ${formatDuration(activeAudio.duration)}`
+                  {activeAudio && playbackModel
+                    ? `${playbackModel.statusLabel} / ${activeAudio.mimeType ?? "Audio"} / ${formatDuration(activeAudio.duration)}`
                     : "No audio enclosure synchronized for this article."}
                 </Text>
-                <Pressable disabled={!activeAudio} style={styles.playButton}>
-                  <Text style={styles.playText}>{activeAudio ? "Play episode" : "No episode"}</Text>
+                {playbackModel ? (
+                  <Text style={styles.panelText}>
+                    Resume {playbackModel.resumeLabel} / {playbackModel.progressPercent}% complete
+                  </Text>
+                ) : null}
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={!playbackModel?.canPlay}
+                  onPress={() =>
+                    setPlaybackIntent((current) => (current === "playing" ? "paused" : "playing"))
+                  }
+                  style={[styles.playButton, !playbackModel?.canPlay && styles.playButtonDisabled]}
+                >
+                  <Text style={styles.playText}>
+                    {playbackIntent === "playing"
+                      ? "Pause episode"
+                      : playbackModel?.canPlayOffline
+                        ? "Play cached episode"
+                        : "Play episode"}
+                  </Text>
                 </Pressable>
+              </View>
+              <View style={styles.shareCard}>
+                <Text style={styles.panelTitle}>Share</Text>
+                <Text style={styles.panelText}>
+                  {sharePayload
+                    ? "System share sheet is ready for this article."
+                    : "No synchronized share target for this article."}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={!sharePayload}
+                  onPress={handleShareArticle}
+                  style={[styles.shareButton, !sharePayload && styles.playButtonDisabled]}
+                >
+                  <Text style={styles.shareText}>Share article</Text>
+                </Pressable>
+                {sharedAt ? (
+                  <Text style={styles.panelText}>Shared {formatDate(sharedAt)}</Text>
+                ) : null}
               </View>
             </>
           ) : (
@@ -316,6 +411,36 @@ const styles = StyleSheet.create({
     gap: 8,
     padding: 14,
   },
+  capabilityCard: {
+    backgroundColor: "#e8f2ea",
+    borderRadius: 8,
+    flex: 1,
+    minWidth: 150,
+    padding: 14,
+  },
+  capabilityGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  capabilityLabel: {
+    color: "#5f665f",
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "uppercase",
+  },
+  capabilityMeta: {
+    color: "#59645d",
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 6,
+  },
+  capabilityValue: {
+    color: "#141a16",
+    fontSize: 17,
+    fontWeight: "900",
+    marginTop: 4,
+  },
   header: {
     alignItems: "center",
     flexDirection: "row",
@@ -372,6 +497,9 @@ const styles = StyleSheet.create({
     minHeight: 44,
     justifyContent: "center",
     paddingHorizontal: 14,
+  },
+  playButtonDisabled: {
+    opacity: 0.45,
   },
   playText: {
     color: "#f9f3e7",
@@ -435,6 +563,25 @@ const styles = StyleSheet.create({
     backgroundColor: "#101411",
     flex: 1,
   },
+  shareButton: {
+    alignItems: "center",
+    backgroundColor: "#7fe2c0",
+    borderRadius: 8,
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  shareCard: {
+    backgroundColor: "#edf1ff",
+    borderRadius: 8,
+    gap: 8,
+    padding: 14,
+  },
+  shareText: {
+    color: "#101411",
+    fontSize: 14,
+    fontWeight: "900",
+  },
   statusCard: {
     backgroundColor: "#1b211c",
     borderColor: "#2f3a31",
@@ -445,6 +592,7 @@ const styles = StyleSheet.create({
   },
   statusGrid: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 10,
   },
   statusLabel: {
