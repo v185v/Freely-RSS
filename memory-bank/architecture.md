@@ -2950,3 +2950,33 @@ Step 60 已将 `SyncEvent` 限定为用户可携带状态、订阅组织和自�
 - Article body bytes and attachment content remain lazy encrypted blob concerns. They should not be inlined into the Step 83 event fixture or compared as part of the article-state projection.
 - Future conflict tests can add folders, feeds, tags, rules, and smart folders, but should keep local-only facts and generated projections out of the sync-event payload boundary.
 - Step 84 should establish performance baselines against realistic local data volumes. It should not turn the concurrency regression into a benchmark or use it as a substitute for performance measurement.
+
+## 2026-05-21 ASCII Addendum XLVIII
+
+### Step 84 Architecture Insights
+
+- Step 84 introduces a dedicated performance-baseline crate instead of embedding large-library timing assertions into `core-domain`, `feed-engine`, `content-pipeline`, or desktop UI tests. This keeps performance budgets cross-module while preserving each business crate's narrower ownership.
+- The baseline scenario is deterministic and local: 100 feeds, 10,000 articles, a 120-row queue window, 2000 FTS hits, a 1000-article bulk read-state update, 25 content-extraction documents, and a 100-feed cold-fetch pass.
+- The measured paths map directly to current product budgets: startup/open-and-count `<= 1.5s`, search `<= 500ms`, 1000-row bulk update `<= 2s`, 100-feed cold fetch `<= 30s`, plus queue-window, extraction, and memory-proxy guardrails.
+- The queue-window metric intentionally validates scroll-sized data access rather than full-list materialization. UI virtualization remains in the desktop shell, while indexed local data retrieval remains a SQLite/query concern.
+- The memory metric is currently a portable text-payload proxy over the fixed 10,000-article fixture. Native process RSS/heap telemetry can be added later by the desktop host, but this test keeps repository verification cross-platform and deterministic.
+- The cold-fetch metric uses the real `FeedFetcher`, default parser, default normalizer, and SQLite repository with local fixture RSS bytes. It validates ingestion throughput without depending on live network timing.
+- No database schema migration was required. The existing Feed/Article/UserState/FTS schema and indexes are sufficient for the baseline; Step 84 adds coverage and budget enforcement only.
+
+### Step 84 Related File Roles
+
+- `crates/performance-baseline/Cargo.toml`: owns the workspace package definition for the dedicated performance-baseline crate. It keeps dependencies on `freelyrss-core-domain`, `freelyrss-content-pipeline`, `freelyrss-feed-engine`, `rusqlite`, and `tempfile` in dev scope so production crates do not depend on the baseline harness.
+- `crates/performance-baseline/src/lib.rs`: owns reusable Step 84 fixture sizes, timing budgets, memory budget, `BaselineUnit`, and `BaselineObservation`. It is a small shared test helper surface for performance assertions, not an application feature module.
+- `crates/performance-baseline/tests/step84_baseline.rs`: owns the executable baseline. It seeds the large SQLite fixture, measures repeated startup/query/search/update operations, bounds text payload size, exercises content extraction, and runs 100 local cold-feed fetches through the real feed-engine ingestion stack.
+- `Cargo.lock`: records the new `freelyrss-performance-baseline` package and path dependencies so `cargo test --workspace`, `cargo clippy --workspace`, and repository verification resolve the same package graph for every developer.
+- `memory-bank/progress.md`: records Step 84 completion, observed metric values, validation commands, environment notes, file responsibilities, and the Step 85 handoff.
+- `memory-bank/architecture.md`: records Step 84 architecture insights, related file roles, and future boundary constraints.
+- `progress.md`: keeps the repository-root progress log aligned with the memory-bank record for developers who start from the root file.
+
+### Step 84 Boundary Notes
+
+- `freelyrss-performance-baseline` is a test harness. Runtime code should not import it, and performance telemetry/UI should not be implemented inside it.
+- Future baselines may add platform-specific host measurements, but OS-specific memory APIs should stay behind optional host-level code rather than making the current cross-platform Rust test brittle.
+- The large-library fixture is synthetic test data. It should not become app seed data, parser regression input, sync payload content, or a release demo database.
+- Performance thresholds should remain product budgets. If they become too tight for normal debug verification, move micro-benchmarks to an explicit benchmark command rather than making `verify` flaky.
+- Step 85 should document release and operations workflows on top of the now-validated test chain. It should not add new product behavior.

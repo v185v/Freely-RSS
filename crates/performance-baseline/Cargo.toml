@@ -1,0 +1,16 @@
+[package]
+name = "freelyrss-performance-baseline"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+version.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dev-dependencies]
+freelyrss-content-pipeline = { path = "../content-pipeline" }
+freelyrss-core-domain = { path = "../core-domain" }
+freelyrss-feed-engine = { path = "../feed-engine" }
+rusqlite = { version = "0.37.0", features = ["bundled"] }
+tempfile = "3.20.0"

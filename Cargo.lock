@@ -386,6 +386,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "freelyrss-performance-baseline"
+version = "0.1.0"
+dependencies = [
+ "freelyrss-content-pipeline",
+ "freelyrss-core-domain",
+ "freelyrss-feed-engine",
+ "rusqlite",
+ "tempfile",
+]
+
+[[package]]
 name = "freelyrss-rule-engine"
 version = "0.1.0"
 dependencies = [

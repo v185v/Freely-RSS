@@ -2,9 +2,15 @@
 
 ## 当前状态
 
-- 阶段：阶段 12 Step 81 已完成，`crates/feed-engine` 已拥有 manifest 驱动的解析回归测试集；当前回归资产覆盖 RSS、Atom、JSON Feed、HTML feed discovery、富媒体、重复文章、缺失字段、长文、多语言、legacy RSS 0.91，以及 malformed XML、unsupported XML root、unsupported JSON Feed version、invalid JSON 等失败路径。
-- 最后更新：2026-05-20
-- 风险状态：已从“Step 80 已通过 `apps/mobile/src/mobile-platform.ts`、扩展后的 scope/client/selectors/UI 与测试固化移动端缓存/媒体/分享边界；下一步 Step 81 应进入 Stage 12 解析回归测试集，不要继续扩张移动端平台能力或引入桌面本地 host 职责”推进到“Step 81 已通过 `crates/feed-engine/tests/fixtures/manifest.json`、新增 invalid fixtures、`fixture_catalog.rs`、`parser_fixtures.rs` 和解析器回退修正固化解析回归集；下一步 Step 82 应建立桌面端端到端测试，围绕添加订阅源、抓取、阅读、状态标记、搜索和导出验证核心离线链路。”
+- 阶段：阶段 12 Step 84 已完成，新增 `crates/performance-baseline`，以固定 100 个订阅源 / 10,000 篇文章数据集覆盖启动、队列窗口、FTS 搜索、1000 篇批量标记已读、正文提取、100 源冷抓取吞吐和文本载荷内存代理基线。
+- 最后更新：2026-05-21
+- 风险状态：已从“Step 83 已通过 `crates/sync-engine/tests/concurrency.rs` 固化多设备同步并发收敛回归；下一步 Step 84 应建立性能基线，不要把同步并发测试扩展为服务器传输或桌面 E2E”推进到“Step 84 已通过 `freelyrss-performance-baseline` 固化大库性能预算；下一步 Step 85 应完成发布与运维文档，聚焦构建、打包、数据目录、备份恢复、日志位置和故障处理，不要继续扩张功能面。”
+
+### 2026-05-21 状态快照（最新：Step 84）
+
+- 当前完成：阶段 12 Step 84 已完成，新增 `crates/performance-baseline` 专用测试 crate。`step84_baseline.rs` 在本地 SQLite 中生成 100 个 feed 和 10,000 篇文章，重复测量启动打开、120 行队列窗口、FTS 搜索 2000 个命中、1000 篇批量标记已读、25 篇正文提取、100 个 feed 冷抓取，以及 10,000 篇文章文本载荷预算。
+- 当前验证：`cargo test -p freelyrss-performance-baseline`、`cargo fmt --all --check`、`cargo clippy -p freelyrss-performance-baseline --all-targets -- -D warnings`、`cargo test -p freelyrss-performance-baseline -- --nocapture` 和 `corepack pnpm run verify` 全部通过。`--nocapture` 观测值为：启动 3 ms、队列窗口 42 ms、FTS 搜索 10 ms、1000 篇批量标记已读 8 ms、文本载荷 4,024,000 bytes、25 篇正文提取 16 ms、100 源冷抓取 1266 ms。
+- 当前下一步：进入阶段 12 Step 85“完成发布与运维文档”。应把构建命令、测试命令、打包方式、数据目录、备份恢复、日志位置和常见故障处理写入仓库文档；不要在 Step 85 中继续扩张性能测试、同步协议、AI、Web/mobile 功能或桌面 UI 行为。
 
 ### 2026-05-20 状态快照（最新）
 
@@ -2441,3 +2447,44 @@
 - `SyncMergeState` is the out-of-order conflict policy model. `SyncReplayState` is the ordered event-log projector. Future tests should preserve that distinction instead of expecting replay to resolve arbitrary out-of-order device batches.
 - The test fixture is deterministic local test data, not a remote protocol fixture, seed database, or production conflict manifest.
 - Step 84 should move to performance baselines for large local datasets and should not broaden Step 83 into server transport, desktop E2E, Web/mobile scope, AI, integration, or parser-regression work.
+
+## 2026-05-21 ASCII Addendum XLVIII
+
+### Stage 12 Step 84 Completed: performance baseline regression
+
+- Completed `implementation-plan.md` Stage 12 Step 84 by adding a dedicated `freelyrss-performance-baseline` workspace crate for repeatable large-library performance budgets.
+- Added a fixed baseline scenario with 100 feeds and 10,000 articles. The scenario measures startup/open-and-count, queue-window retrieval, FTS search, 1000-article bulk read-state update, text payload memory budget, content extraction, and 100-feed cold-fetch throughput.
+- The baseline intentionally spans `core-domain` SQLite/FTS, `content-pipeline` extraction, and `feed-engine` parser/normalizer/SQLite repository flow without moving these concerns into a UI shell, sync engine, or production runtime module.
+- Current observed values from `cargo test -p freelyrss-performance-baseline -- --nocapture`: startup 3 ms vs 1500 ms budget, queue window 42 ms vs 500 ms, FTS search 10 ms vs 500 ms, bulk mark read 8 ms vs 2000 ms, text payload 4,024,000 bytes vs 67,108,864 bytes, content extraction 16 ms vs 1500 ms, 100-feed cold fetch 1266 ms vs 30,000 ms.
+- Kept Step 84 inside deterministic local tests. No desktop UI behavior, Web/mobile client, sync-server route, WebDAV transport, AI workflow, integration adapter, or database schema migration was changed.
+
+### Step 84 Verification
+
+- Passed `cargo test -p freelyrss-performance-baseline`
+- Passed `cargo fmt --all --check`
+- Passed `cargo clippy -p freelyrss-performance-baseline --all-targets -- -D warnings`
+- Passed `cargo test -p freelyrss-performance-baseline -- --nocapture`
+- Passed `corepack pnpm run verify`
+
+### Environment Notes
+
+- The baseline uses elapsed wall-clock assertions in Rust debug test mode, so thresholds are intentionally product-level budgets rather than micro-benchmark targets.
+- The memory metric is a portable text-payload budget over the seeded 10,000-article fixture. It avoids OS-specific process RSS APIs while still bounding the amount of article text held in the fixed large-library scenario.
+- The cold-fetch baseline uses local deterministic RSS bodies and the real `FeedFetcher` + `DefaultFeedParser` + `DefaultFeedNormalizer` + `SqliteFeedRepository` path. It does not require live network access.
+
+### Step 84 File Responsibilities
+
+- `crates/performance-baseline/Cargo.toml`: declares the dedicated Step 84 test crate and limits cross-module dependencies to test scope: `core-domain`, `content-pipeline`, `feed-engine`, `rusqlite`, and `tempfile`.
+- `crates/performance-baseline/src/lib.rs`: owns reusable Step 84 constants, large-library fixture sizes, performance budgets, and `BaselineObservation` reporting/assertion helpers. It is not a production runtime module.
+- `crates/performance-baseline/tests/step84_baseline.rs`: owns the executable performance baseline. It seeds 100 feeds and 10,000 articles, repeats timing-sensitive operations, asserts each budget, prints observed values when run with `--nocapture`, and validates fetch/extraction/database paths without live services.
+- `Cargo.lock`: records the new workspace package entry for `freelyrss-performance-baseline` and its local path dependencies so workspace verification remains reproducible.
+- `memory-bank/progress.md`: records the completed Step 84 milestone, observed metrics, validation commands, environment notes, changed-file responsibilities, and Step 85 handoff.
+- `memory-bank/architecture.md`: records the Step 84 architecture insights, related file roles, and boundary notes.
+- `progress.md`: records a concise root-level Step 84 execution note for developers who check the repository root log first.
+
+### Step 84 Boundary Notes
+
+- Performance baselines are stability tests, not production telemetry. Future runtime observability should add explicit host metrics rather than reading from this test crate.
+- The baseline crate may depend on multiple local crates because it validates cross-module product budgets; individual business crates should not grow reverse dependencies on it.
+- The queue-window test validates the indexed local data path for scroll-sized windows. It does not replace browser rendering or virtualizer tests.
+- Step 85 should move to release and operations documentation. It should not add new performance dimensions unless a release-doc validation gap proves a missing command or baseline.

@@ -122,3 +122,8 @@
 - The new regression sends merge out-of-order per-device batches, sends replay cursor-ordered batches with multiple page sizes, repeats duplicate deliveries, and asserts both paths converge to the same final article projection and cursor.
 - Verified the Step 83 work with `cargo test -p freelyrss-sync-engine concurrent_article_batches_converge_across_merge_and_replay_runs`, `cargo test -p freelyrss-sync-engine`, `cargo fmt --all --check`, `cargo clippy -p freelyrss-sync-engine --all-targets -- -D warnings`, and `corepack pnpm run verify`.
 - Updated `memory-bank/progress.md` and `memory-bank/architecture.md` with the Step 83 implementation record, validation notes, architecture insights, related file responsibilities, and Stage 12 Step 84 handoff.
+- Re-read all `memory-bank/` files and resumed from Stage 12 Step 84: performance baseline coverage.
+- Added `crates/performance-baseline` as a dedicated test crate for fixed large-library budgets across SQLite/FTS, content extraction, and feed ingestion.
+- The Step 84 regression seeds 100 feeds and 10,000 articles, then measures startup/open, 120-row queue windows, 2000-hit FTS search, 1000-article bulk mark-read, text payload size, 25-document extraction, and 100-feed cold fetch throughput.
+- Verified the Step 84 work with `cargo test -p freelyrss-performance-baseline`, `cargo fmt --all --check`, `cargo clippy -p freelyrss-performance-baseline --all-targets -- -D warnings`, `cargo test -p freelyrss-performance-baseline -- --nocapture`, and `corepack pnpm run verify`.
+- Updated `memory-bank/progress.md` and `memory-bank/architecture.md` with the Step 84 implementation record, observed metrics, architecture insights, file responsibilities, and Stage 12 Step 85 handoff.
