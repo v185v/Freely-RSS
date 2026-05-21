@@ -2897,3 +2897,27 @@ Step 60 已将 `SyncEvent` 限定为用户可携带状态、订阅组织和自�
 - Unsupported XML should fail clearly unless it is actually an HTML/XHTML discovery document. This keeps feed health diagnostics accurate and prevents XML-adjacent formats from disappearing into a no-feed discovery result.
 - Parser regression tests should stay focused on feed parsing, discovery, and normalization. They should not grow into desktop E2E, sync replay, content extraction, AI, Webhook, export, or mobile platform tests.
 - Step 82 should layer desktop end-to-end checks on top of the existing app shell and fixed test data without weakening the feed-engine fixture boundary.
+
+## 2026-05-21 ASCII Addendum XLVI
+
+### Step 82 Architecture Insights
+
+- Step 82 adds desktop end-to-end coverage at the reader-shell boundary. It validates the user-visible offline reader chain through the same React app composition, router state, query client, source pane, queue pane, reader pane, task/state controls, search highlighting, and export cards that the desktop shell already uses.
+- The E2E fixture enters through OPML import because that is the current desktop shell path for adding a subscription source. Manual refresh remains a shell-level mock mutation, and an empty imported feed now receives one deterministic fetched article so the scenario can continue into reading, state updates, search, and export.
+- The fetched article generator is intentionally scoped to `mock-data.ts`. It is not a parser, transport, repository, Tauri command, SQLite migration, or feed-engine fixture. Real network fetching and durable persistence remain owned by `crates/feed-engine`, `crates/core-domain`, and desktop host commands.
+- The test is deterministic and local. It does not depend on live feeds, remote sync, WebDAV, AI providers, integration adapters, native Tauri windows, browser APIs beyond jsdom, or device-specific storage.
+- No database schema migration was added. The existing schema remains unchanged, including the durable `Feed`, `Article`, `UserState`, `Annotation`, `Attachment`, `AIArtifact`, and `SyncEvent` tables plus the FTS/search structures. Step 82 changes desktop test coverage and mock shell data only.
+
+### Step 82 File Responsibilities
+
+- `apps/desktop/src/features/reader-shell/desktop-offline-reader.e2e.test.tsx`: owns the Step 82 desktop E2E regression. It renders `App` with the normal desktop router/query-client wiring, resets shell state between runs, imports an OPML feed, refreshes that feed, waits for the generated article to appear in the queue and reader, changes read/starred state, searches deterministic body text, and verifies selected-article Markdown and HTML exports.
+- `apps/desktop/src/features/reader-shell/mock-data.ts`: owns the deterministic mock repository behavior used by the E2E scenario. `createFetchedArticleForEmptyFeed` materializes one article row and article detail for an empty refreshed feed, preserving display-title propagation, initial `UserState`, canonical/original URLs, extracted/raw content, and article-detail shape without touching durable stores or parser fixtures.
+- `memory-bank/progress.md`: records Step 82 completion, verification commands, environment notes, changed-file responsibilities, and the next Step 83 handoff.
+- `memory-bank/architecture.md`: records the Step 82 boundary rationale and file-level responsibilities for future maintainers.
+
+### Step 82 Boundary Notes
+
+- Desktop E2E coverage should stay focused on user-level reader workflows. It should not absorb feed parser fixture validation, SQLite migration checks, native Tauri command tests, sync replay/concurrency tests, AI provider tests, Web/mobile scope tests, or performance baselines.
+- The empty-feed refresh fixture is a mock-shell convenience for deterministic E2E coverage. Future real fetch work should continue to use the feed-engine parser/normalizer/repository pipeline rather than copying this helper into production transport or storage code.
+- If the desktop shell gains a dedicated manual add-source form, Step 82 can move the first action from OPML import to that form while keeping the rest of the regression path unchanged.
+- Step 83 should test synchronization concurrency and convergence at the sync-engine/protocol level. It should not depend on jsdom reader-shell state or the Step 82 mock fetched article.

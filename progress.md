@@ -109,3 +109,11 @@
 - Added `apps/web/src/web-scope.test.ts` and extended `apps/web/src/web-app.test.tsx` to prove the initial Web scope has no blockers, desktop-only capabilities stay deferred, the remote client only exposes read functions, and the UI does not render desktop-only controls.
 - Verified the Step 78 work with `corepack pnpm --filter @freelyrss/web test`, `corepack pnpm --filter @freelyrss/web build`, `corepack pnpm run format:check`, `corepack pnpm run lint`, `corepack pnpm run verify`, and `corepack pnpm run docs:links`.
 - Updated `memory-bank/progress.md` and `memory-bank/architecture.md` with the Step 78 implementation record, validation notes, architecture insights, file responsibilities, and Stage 11 Step 79 handoff.
+
+## 2026-05-21
+
+- Reviewed every file in `memory-bank/` and resumed from `memory-bank/progress.md`, whose latest record identified Stage 12 Step 82 as the next implementation target: desktop end-to-end reader regression coverage.
+- Added `apps/desktop/src/features/reader-shell/desktop-offline-reader.e2e.test.tsx` to cover the desktop shell path for adding a source through OPML import, manually refreshing it, opening the fetched article, changing local article state, searching deterministic content, and exporting Markdown plus HTML.
+- Updated `apps/desktop/src/features/reader-shell/mock-data.ts` so refreshing an empty imported feed creates one deterministic mock article/detail pair for the E2E path without adding network, Tauri, SQLite, sync, or parser-fixture dependencies.
+- Verified the Step 82 work with `corepack pnpm --filter @freelyrss/desktop test -- src/features/reader-shell/desktop-offline-reader.e2e.test.tsx`, `corepack pnpm run desktop:build`, `corepack pnpm run format:check`, `corepack pnpm run lint`, and `corepack pnpm run verify`.
+- Updated `memory-bank/progress.md` and `memory-bank/architecture.md` with the Step 82 implementation record, validation notes, architecture insights, per-file responsibilities, and Stage 12 Step 83 handoff.

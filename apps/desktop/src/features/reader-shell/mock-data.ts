@@ -1808,6 +1808,87 @@ function syncFeedPresentation(nextFeed: FeedDto) {
   )
 }
 
+function createFetchedArticleForEmptyFeed(feed: FeedDto, fetchedAt: string) {
+  if (mockReaderState.articles.some((article) => article.feedId === feed.id)) {
+    return
+  }
+
+  const displayTitle = getFeedDisplayTitle(feed)
+  const articleId = `article-${slugifySegment(feed.id)}-latest`
+  const articleTitle = `Fetched item from ${displayTitle}`
+  const primaryUrl =
+    feed.siteUrl?.replace(/\/+$/g, "") || feed.feedUrl.replace(/\/+$/g, "") || "https://example.com"
+  const canonicalUrl = `${primaryUrl}/fetched-item`
+  const articleSummary =
+    "A deterministic offline e2e verification article created by the mock feed refresh path."
+  const articleState: UserStateDto = {
+    articleId,
+    readState: "unread",
+    starred: false,
+    liked: false,
+    importance: "normal",
+    readLater: false,
+    readingProgress: 0,
+    lastOpenedAt: null,
+  }
+
+  const article: ArticleListItemDto = {
+    id: articleId,
+    feedId: feed.id,
+    feedTitle: displayTitle,
+    title: articleTitle,
+    author: displayTitle,
+    summary: articleSummary,
+    searchSnippet: null,
+    publishedAt: fetchedAt,
+    thumbnail: null,
+    estimatedReadingMinutes: 4,
+    state: cloneValue(articleState),
+    tagIds: [],
+    attachmentCount: 0,
+  }
+
+  const detail: ArticleDetailDto = {
+    article: {
+      id: articleId,
+      feedId: feed.id,
+      sourceGuid: `mock-fetch-${feed.id}`,
+      title: articleTitle,
+      author: displayTitle,
+      summary: articleSummary,
+      contentRaw: `<article><h1>${articleTitle}</h1><p>${articleSummary}</p></article>`,
+      contentExtracted:
+        "This fetched article proves the desktop shell can add a subscription, refresh it, open the resulting queue item, update local reading state, search deterministic content, and export the selected reader view.",
+      canonicalUrl,
+      originalUrl: canonicalUrl,
+      publishedAt: fetchedAt,
+      fetchedAt,
+      language: "en",
+      thumbnail: null,
+      wordCount: 96,
+      contentHash: `sha256:${slugifySegment(articleId)}`,
+    },
+    feed: {
+      id: feed.id,
+      title: feed.title,
+      displayTitle,
+      siteUrl: feed.siteUrl,
+      icon: feed.icon,
+    },
+    state: cloneValue(articleState),
+    tags: [],
+    attachments: [],
+    annotations: [],
+    aiArtifacts: [],
+  }
+
+  mockReaderState.articles = [article, ...mockReaderState.articles]
+  mockReaderState.articleDetails = {
+    ...mockReaderState.articleDetails,
+    [articleId]: detail,
+  }
+}
+
 let mockReaderState = createInitialMockReaderState()
 
 export function resetMockReaderShellState(options?: {
@@ -1916,6 +1997,7 @@ export async function refreshMockFeed(feedId: FeedDto["id"]): Promise<ReaderShel
   }
 
   replaceFeed(nextFeed)
+  createFetchedArticleForEmptyFeed(nextFeed, now)
 
   return buildReaderShellSnapshot(mockReaderState)
 }

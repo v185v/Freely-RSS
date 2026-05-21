@@ -2367,3 +2367,38 @@
 - Adding a new supported feed format or edge case should update `manifest.json` first, then fixture files, then parser assertions. Scenario coverage should remain explicit.
 - The parser fallback rule should remain conservative: HTML discovery is for actual HTML/XHTML documents, while unsupported XML feed-like documents should surface parse errors for observability and feed health diagnostics.
 - Step 82 should build desktop end-to-end regression coverage around the core offline reader flow. It should not expand parser fixture scope further unless an E2E blocker reveals a concrete parser gap.
+
+## 2026-05-21 ASCII Addendum XLVI
+
+### Stage 12 Step 82 Completed: desktop end-to-end reader regression
+
+- Completed `implementation-plan.md` Stage 12 Step 82 by adding a desktop shell E2E regression that exercises the core offline reader path from source addition through export.
+- Added `apps/desktop/src/features/reader-shell/desktop-offline-reader.e2e.test.tsx`, which renders the real desktop `App` in jsdom and drives the shell through OPML source import, selecting the imported feed, manual refresh, reading the fetched queue item, changing local article state, searching deterministic article text, and exporting Markdown plus HTML.
+- Extended `apps/desktop/src/features/reader-shell/mock-data.ts` so refreshing an empty imported feed creates one deterministic fetched article in the mock repository. This gives the E2E scenario a real queue item without introducing live network access, Tauri command dependencies, or SQLite writes.
+- Kept Step 82 inside the desktop shell test boundary and mock repository. No feed-engine parser fixtures, Web/mobile clients, sync-server routes, AI workflows, integration adapters, Rust crates, or database schema migrations were changed.
+
+### Step 82 Verification
+
+- Passed `corepack pnpm --filter @freelyrss/desktop test -- src/features/reader-shell/desktop-offline-reader.e2e.test.tsx` (desktop package Vitest completed 7 files / 41 tests)
+- Passed `corepack pnpm run desktop:build`
+- Passed `corepack pnpm run format:check`
+- Passed `corepack pnpm run lint`
+- Passed `corepack pnpm run verify`
+
+### Environment Notes
+
+- The desktop E2E regression uses Testing Library and the existing deterministic shell mock instead of launching a native Tauri window. This keeps Step 82 runnable in the normal repository verification chain while still exercising the same React composition, router, query client, source pane, queue pane, reader pane, state mutation, search, and export surfaces.
+- `corepack pnpm run desktop:build` completed successfully. Vite emitted the existing large chunk warning for the desktop bundle; this is a build warning, not a test failure.
+
+### Step 82 File Responsibilities
+
+- `apps/desktop/src/features/reader-shell/desktop-offline-reader.e2e.test.tsx`: owns the Step 82 desktop end-to-end regression. It resets the mock reader state and reader view store, imports an OPML feed, refreshes it, verifies a fetched article appears, marks it read/starred, searches for a body term, and verifies Markdown/HTML export output for the selected article.
+- `apps/desktop/src/features/reader-shell/mock-data.ts`: owns the deterministic empty-feed refresh fixture used by Step 82. `createFetchedArticleForEmptyFeed` adds one mock article/detail pair only when a refreshed feed has no articles, while preserving the existing mock feed refresh behavior for already-populated feeds and the intentional failure path for `feed-empty-holding`.
+- `memory-bank/progress.md`: records the completed Step 82 milestone, validation commands, environment notes, and Step 83 handoff.
+- `memory-bank/architecture.md`: records the Step 82 architecture insights, file responsibilities, and boundary notes.
+
+### Step 82 Boundary Notes
+
+- The Step 82 E2E test is a desktop shell regression, not a replacement for native Tauri smoke testing, Playwright browser automation, or durable SQLite integration tests. Those can be added later if release validation requires native-window coverage.
+- The mock fetched article is test/development shell data. It must not be treated as a real feed parser, network fetcher, deduplication repository, or migration fixture.
+- Step 82 intentionally stops after the desktop offline reader path is validated. Step 83 should move to sync concurrency testing in `crates/sync-engine` / sync protocol boundaries rather than adding more desktop shell behavior.
