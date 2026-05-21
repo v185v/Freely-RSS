@@ -275,7 +275,7 @@ FTS：
 仓库级验证入口在 `package.json`：
 
 - `corepack pnpm run verify` 串联格式、lint、共享配置、共享类型、共享查询、桌面/Web/移动测试、Web build、移动 type-check、Rust fmt/clippy/test、文档链接和发布 runbook 覆盖。
-- GitHub Actions 当前包含 `docs-links` 和 `workspace-verify` 两个 job。
+- GitHub Actions 当前包含验证 CI 和发布构建两层：`.github/workflows/ci.yml` 负责文档与 workspace 验证，`.github/workflows/release-build.yml` 负责跨平台桌面 bundle 构建，并在 `main` push 成功后发布 SHA prerelease。
 - 发布运维文档由 `scripts/check-release-operations-doc.mjs` 检查必须保留的命令、路径和主题。
 - Markdown 本地链接由 `scripts/check-doc-links.mjs` 检查。
 
