@@ -127,3 +127,8 @@
 - The Step 84 regression seeds 100 feeds and 10,000 articles, then measures startup/open, 120-row queue windows, 2000-hit FTS search, 1000-article bulk mark-read, text payload size, 25-document extraction, and 100-feed cold fetch throughput.
 - Verified the Step 84 work with `cargo test -p freelyrss-performance-baseline`, `cargo fmt --all --check`, `cargo clippy -p freelyrss-performance-baseline --all-targets -- -D warnings`, `cargo test -p freelyrss-performance-baseline -- --nocapture`, and `corepack pnpm run verify`.
 - Updated `memory-bank/progress.md` and `memory-bank/architecture.md` with the Step 84 implementation record, observed metrics, architecture insights, file responsibilities, and Stage 12 Step 85 handoff.
+- Re-read all `memory-bank/` files again and resumed from Stage 12 Step 85: release and operations documentation.
+- Added `docs/release-operations.md` plus `scripts/check-release-operations-doc.mjs` so the repository now has a machine-checkable runbook for fresh checkout bootstrap, build/start commands, packaging, runtime data layout, backup and restore, logs, troubleshooting, and release handoff.
+- Added the `docs:release` script to `package.json`, wired it into `corepack pnpm run verify`, and added the release-doc check to `.github/workflows/ci.yml`.
+- Verified the Step 85 work with `corepack pnpm run docs:release`, `corepack pnpm run docs:links`, `corepack pnpm run format:check`, and `corepack pnpm run verify`.
+- Updated `memory-bank/progress.md` and `memory-bank/architecture.md` with the Step 85 implementation record, verification notes, architecture insights, file responsibilities, and Stage 12 Step 86 handoff.

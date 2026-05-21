@@ -19,6 +19,7 @@
     "mobile:check": "corepack pnpm --filter @freelyrss/mobile check",
     "test:mobile": "corepack pnpm --filter @freelyrss/mobile test",
     "docs:links": "node scripts/check-doc-links.mjs",
+    "docs:release": "node scripts/check-release-operations-doc.mjs",
     "format": "biome format --write .",
     "format:check": "biome check .",
     "lint": "biome lint .",
@@ -32,7 +33,7 @@
     "rust:fmt:check": "cargo fmt --all --check",
     "rust:clippy": "cargo clippy --workspace --all-targets -- -D warnings",
     "test:rust": "cargo test --workspace",
-    "verify": "corepack pnpm run format:check && corepack pnpm run lint && corepack pnpm run test:config && corepack pnpm run test:types && corepack pnpm run test:query && corepack pnpm run test:desktop && corepack pnpm run test:web && corepack pnpm run test:mobile && corepack pnpm run web:build && corepack pnpm run mobile:check && corepack pnpm run rust:fmt:check && corepack pnpm run rust:clippy && corepack pnpm run test:rust && corepack pnpm run docs:links"
+    "verify": "corepack pnpm run format:check && corepack pnpm run lint && corepack pnpm run test:config && corepack pnpm run test:types && corepack pnpm run test:query && corepack pnpm run test:desktop && corepack pnpm run test:web && corepack pnpm run test:mobile && corepack pnpm run web:build && corepack pnpm run mobile:check && corepack pnpm run rust:fmt:check && corepack pnpm run rust:clippy && corepack pnpm run test:rust && corepack pnpm run docs:links && corepack pnpm run docs:release"
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",

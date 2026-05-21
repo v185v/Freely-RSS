@@ -2,11 +2,17 @@
 
 ## 当前状态
 
-- 阶段：阶段 12 Step 84 已完成，新增 `crates/performance-baseline`，以固定 100 个订阅源 / 10,000 篇文章数据集覆盖启动、队列窗口、FTS 搜索、1000 篇批量标记已读、正文提取、100 源冷抓取吞吐和文本载荷内存代理基线。
+- 阶段：阶段 12 Step 85 已完成，新增 `docs/release-operations.md` 发布与运维手册，并用 `scripts/check-release-operations-doc.mjs` 将构建、测试、打包、数据目录、备份恢复、日志位置和常见故障处理纳入可验证文档覆盖。
 - 最后更新：2026-05-21
-- 风险状态：已从“Step 83 已通过 `crates/sync-engine/tests/concurrency.rs` 固化多设备同步并发收敛回归；下一步 Step 84 应建立性能基线，不要把同步并发测试扩展为服务器传输或桌面 E2E”推进到“Step 84 已通过 `freelyrss-performance-baseline` 固化大库性能预算；下一步 Step 85 应完成发布与运维文档，聚焦构建、打包、数据目录、备份恢复、日志位置和故障处理，不要继续扩张功能面。”
+- 风险状态：已从“Step 84 已通过 `freelyrss-performance-baseline` 固化大库性能预算；下一步 Step 85 应完成发布与运维文档，聚焦构建、打包、数据目录、备份恢复、日志位置和故障处理，不要继续扩张功能面”推进到“Step 85 已把发布运维 runbook 与文档覆盖校验接入仓库验证；下一步 Step 86 应做首发前架构回写，只记录最终边界、已落地 schema、延后功能和遗留风险，不再新增产品功能。”
 
-### 2026-05-21 状态快照（最新：Step 84）
+### 2026-05-21 状态快照（最新：Step 85）
+
+- 当前完成：阶段 12 Step 85 已完成，新增 `docs/release-operations.md` 作为未参与开发者可执行的发布运维手册，覆盖 fresh checkout、构建与启动、验证门禁、Tauri/Web/sync-server 打包、桌面 runtime 数据目录、SQLite 备份恢复、日志入口和常见故障处理。
+- 当前验证：`corepack pnpm run docs:release`、`corepack pnpm run docs:links`、`corepack pnpm run format:check` 与 `corepack pnpm run verify` 全部通过。`docs:release` 会检查 Step 85 必填主题、关键命令、数据路径、备份恢复和日志关键词没有被后续文档编辑删掉。
+- 当前下一步：进入阶段 12 Step 86“完成首发前架构回写”。应只回写最终模块边界、已落地 schema、被推迟功能和遗留风险；不要在 Step 86 中继续扩张发布脚本、性能基线、同步协议、AI、Web/mobile 功能或桌面 UI 行为。
+
+### 2026-05-21 状态快照（历史：Step 84）
 
 - 当前完成：阶段 12 Step 84 已完成，新增 `crates/performance-baseline` 专用测试 crate。`step84_baseline.rs` 在本地 SQLite 中生成 100 个 feed 和 10,000 篇文章，重复测量启动打开、120 行队列窗口、FTS 搜索 2000 个命中、1000 篇批量标记已读、25 篇正文提取、100 个 feed 冷抓取，以及 10,000 篇文章文本载荷预算。
 - 当前验证：`cargo test -p freelyrss-performance-baseline`、`cargo fmt --all --check`、`cargo clippy -p freelyrss-performance-baseline --all-targets -- -D warnings`、`cargo test -p freelyrss-performance-baseline -- --nocapture` 和 `corepack pnpm run verify` 全部通过。`--nocapture` 观测值为：启动 3 ms、队列窗口 42 ms、FTS 搜索 10 ms、1000 篇批量标记已读 8 ms、文本载荷 4,024,000 bytes、25 篇正文提取 16 ms、100 源冷抓取 1266 ms。
@@ -2488,3 +2494,43 @@
 - The baseline crate may depend on multiple local crates because it validates cross-module product budgets; individual business crates should not grow reverse dependencies on it.
 - The queue-window test validates the indexed local data path for scroll-sized windows. It does not replace browser rendering or virtualizer tests.
 - Step 85 should move to release and operations documentation. It should not add new performance dimensions unless a release-doc validation gap proves a missing command or baseline.
+
+## 2026-05-21 ASCII Addendum XLIX
+
+### Stage 12 Step 85 Completed: release operations documentation
+
+- Completed `implementation-plan.md` Stage 12 Step 85 by adding a repository-level release operations runbook for developers who did not participate in the implementation work.
+- Added `docs/release-operations.md` with fresh-checkout bootstrap, startup commands, build commands, verification gates, packaging flow, runtime data layout, backup and restore process, log locations, troubleshooting, and release checklist.
+- Added `scripts/check-release-operations-doc.mjs` and the `docs:release` package script so Step 85 documentation coverage is machine-checked instead of relying on a one-time manual read.
+- Wired the release-doc check into `corepack pnpm run verify` and the GitHub Actions docs job so future edits that remove required Step 85 content fail during normal validation.
+- Kept Step 85 inside documentation and validation tooling. No product runtime behavior, database schema, sync protocol, AI workflow, desktop UI, Web entry, or mobile shell behavior was changed.
+
+### Step 85 Verification
+
+- Passed `corepack pnpm run docs:release`
+- Passed `corepack pnpm run docs:links`
+- Passed `corepack pnpm run format:check`
+- Passed `corepack pnpm run verify`
+
+### Environment Notes
+
+- `docs:release` intentionally checks for required commands, paths, and operational topics rather than prose style. This keeps the release handoff guardrail stable while allowing future wording changes.
+- The runbook documents the current desktop `app_local_data_dir` based storage layout and notes that the desktop `logs/` directory exists even though rotating desktop file logging is not wired yet.
+- The restore procedure mirrors the existing `restore_database_from_backup` sidecar cleanup behavior, but the runbook calls out that there is no end-user restore command exposed yet.
+
+### Step 85 File Responsibilities
+
+- `docs/release-operations.md`: owns the release and operations runbook. It tells a fresh developer how to install dependencies, start each surface, run verification, package desktop/Web/sync-server outputs, locate runtime data, back up and restore SQLite data, find logs, and triage common failures.
+- `scripts/check-release-operations-doc.mjs`: owns the Step 85 release-doc coverage check. It fails if required headings, commands, data paths, backup keywords, log keywords, or sync-server configuration markers disappear from the runbook.
+- `package.json`: exposes `docs:release` and adds it to `verify` after Markdown link validation so normal repository verification protects the release runbook.
+- `.github/workflows/ci.yml`: runs the release runbook check in the docs job alongside Markdown local-link validation.
+- `memory-bank/progress.md`: records Step 85 completion, verification, file responsibilities, and the Step 86 handoff.
+- `memory-bank/architecture.md`: records Step 85 architecture insights, file roles, and release-doc boundary constraints.
+- `progress.md`: records a concise root-level Step 85 execution note for developers who check the repository root log first.
+
+### Step 85 Boundary Notes
+
+- The release operations runbook is operational documentation, not a deployment automation system. Future installer signing, notarization, EAS mobile release jobs, Docker images, and hosted sync infrastructure should add explicit automation after Step 85.
+- The document uses the Tauri app-local-data boundary as the source of truth for user data paths. Product code should continue to resolve these paths through host APIs instead of hard-coding platform directories.
+- `docs:release` is a coverage guardrail, not a substitute for a human dry run on a clean machine. Before a real release, a developer should still follow the runbook end to end.
+- Step 86 should perform the final pre-release architecture writeback. It should not create new application behavior unless that writeback exposes a concrete missing record that blocks release handoff.

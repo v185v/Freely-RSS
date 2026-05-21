@@ -2980,3 +2980,35 @@ Step 60 已将 `SyncEvent` 限定为用户可携带状态、订阅组织和自�
 - The large-library fixture is synthetic test data. It should not become app seed data, parser regression input, sync payload content, or a release demo database.
 - Performance thresholds should remain product budgets. If they become too tight for normal debug verification, move micro-benchmarks to an explicit benchmark command rather than making `verify` flaky.
 - Step 85 should document release and operations workflows on top of the now-validated test chain. It should not add new product behavior.
+
+## 2026-05-21 ASCII Addendum XLIX
+
+### Step 85 Architecture Insights
+
+- Step 85 adds an operational documentation layer rather than another runtime module. Release knowledge now lives in `docs/release-operations.md` and is validated by a small repository script, which keeps build, packaging, data-path, backup, restore, log, and troubleshooting procedures close to the code they describe.
+- The runbook treats the desktop Tauri `app.path().app_local_data_dir()` boundary as the source of truth for local user data. The architecture remains host-resolved: runtime code should keep deriving paths through Tauri and the storage module rather than hard-coding Windows, macOS, or Linux directories.
+- The documented data layout mirrors `apps/desktop/src-tauri/src/storage.rs`: database, migration backups, content cache, media cache, exports, and logs are separate managed directories. This preserves the earlier local-first storage boundary and gives operators clear backup priorities.
+- The backup guidance is aligned with the SQLite migration layer. Automatic migration snapshots stay in `database/backups/`, manual backups should use a consistent SQLite snapshot, and restore removes stale WAL/SHM sidecars before replacing the main database file.
+- Logging is documented as an operational boundary, not as a new telemetry feature. Desktop file logging is not yet implemented beyond the managed `logs/` directory, while the sync server currently emits to stdout/stderr for host-level capture.
+- CI now checks release runbook coverage in the docs job, and `corepack pnpm run verify` checks it through `docs:release`. This makes release documentation part of the normal quality gate without coupling it to application runtime code.
+- No database schema migration was required. Step 85 changes documentation and verification tooling only.
+
+### Step 85 Related File Roles
+
+- `docs/release-operations.md`: owns the release operations architecture surface. It documents dependency bootstrap, per-surface startup, verification gates, packaging outputs, desktop runtime storage layout, backup and restore procedure, log locations, troubleshooting, and the release checklist.
+- `scripts/check-release-operations-doc.mjs`: owns the machine-checkable Step 85 documentation contract. It asserts required headings, commands, paths, environment variables, backup markers, and restore markers are present in the runbook.
+- `package.json`: owns the `docs:release` script registration and wires that script into the workspace `verify` chain after Markdown link validation.
+- `.github/workflows/ci.yml`: owns CI coverage for the new release-doc guardrail by running `check-release-operations-doc.mjs` in the docs job.
+- `apps/desktop/src-tauri/src/storage.rs`: remains the implementation source for desktop data layout. Step 85 documents its database, backup, cache, export, and log directories but does not change storage behavior.
+- `crates/core-domain/src/sqlite/backup.rs`: remains the implementation source for SQLite backup/restore mechanics. Step 85 documents the existing snapshot naming and sidecar cleanup behavior but does not expose a new end-user restore command.
+- `apps/sync-server/src/main.rs`: remains the implementation source for sync-server startup behavior and `FREELYRSS_SYNC_BIND_ADDR`. Step 85 documents that operational knob without changing the server.
+- `memory-bank/progress.md`: records Step 85 completion, verification, file responsibilities, and Step 86 handoff.
+- `memory-bank/architecture.md`: records Step 85 architecture insights, related file roles, and future boundary constraints.
+- `progress.md`: keeps the repository-root progress log aligned with the memory-bank record.
+
+### Step 85 Boundary Notes
+
+- The release runbook should remain a human-operable guide. Installer signing, notarization, Docker images, hosted sync deployment, and mobile store release automation should be added as explicit later automation instead of being implied by prose.
+- The validation script should check coverage-critical terms, not overfit to wording. Future edits may reorganize the document, but they must preserve build, test, packaging, data directory, backup/restore, logs, and troubleshooting coverage.
+- Runtime telemetry should not be added inside `docs:release`. When desktop file logging or sync-server structured tracing is implemented, the runtime modules should change first and the runbook should then be updated to describe the new behavior.
+- Step 86 should be a final architecture/progress writeback pass. It should consolidate current boundaries and risks rather than adding new product behavior.
