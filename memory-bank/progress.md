@@ -2,9 +2,15 @@
 
 ## 当前状态
 
-- 阶段：阶段 12 Step 85 已完成，新增 `docs/release-operations.md` 发布与运维手册，并用 `scripts/check-release-operations-doc.mjs` 将构建、测试、打包、数据目录、备份恢复、日志位置和常见故障处理纳入可验证文档覆盖。
-- 最后更新：2026-05-21
-- 风险状态：已从“Step 84 已通过 `freelyrss-performance-baseline` 固化大库性能预算；下一步 Step 85 应完成发布与运维文档，聚焦构建、打包、数据目录、备份恢复、日志位置和故障处理，不要继续扩张功能面”推进到“Step 85 已把发布运维 runbook 与文档覆盖校验接入仓库验证；下一步 Step 86 应做首发前架构回写，只记录最终边界、已落地 schema、延后功能和遗留风险，不再新增产品功能。”
+- 阶段：阶段 12 Step 86 已完成，已完成首发前架构回写，记录最终模块边界、已落地 schema、延后功能、遗留风险和交接文件职责。
+- 最后更新：2026-05-22
+- 风险状态：已从“Step 85 已把发布运维 runbook 与文档覆盖校验接入仓库验证；下一步 Step 86 应做首发前架构回写，只记录最终边界、已落地 schema、延后功能和遗留风险，不再新增产品功能”推进到“Step 86 已完成收尾回写；当前不应继续隐式新增功能，后续工作应先按 `docs/release-operations.md` 做发布 dry run，并把新需求拆成新的实施计划或 issue。”
+
+### 2026-05-22 状态快照（最新：Step 86）
+
+- 当前完成：阶段 12 Step 86 已完成。`memory-bank/architecture.md` 现在记录首发前最终模块边界、已落地数据库 schema、延后功能、遗留风险与交接文件职责；`memory-bank/progress.md` 和根目录 `progress.md` 记录本次收尾工作，便于从 memory-bank 或仓库根目录接手。
+- 当前验证：`corepack pnpm run docs:links`、`corepack pnpm run format:check` 与 `corepack pnpm run verify` 全部通过。`verify` 覆盖 Biome 格式与 lint、共享配置/类型/查询测试、桌面/Web/移动端测试、Web build、移动端 type-check、Rust fmt/clippy/workspace tests、文档链接和发布 runbook 覆盖校验。
+- 当前下一步：阶段 12 已收尾。不要在没有新计划的情况下继续扩张发布脚本、性能基线、同步协议、AI、Web/mobile 功能或桌面 UI 行为。真实发布前应按 `docs/release-operations.md` 做一次人工 dry run，并把发现的问题进入新的任务记录。
 
 ### 2026-05-21 状态快照（最新：Step 85）
 
@@ -2534,3 +2540,34 @@
 - The document uses the Tauri app-local-data boundary as the source of truth for user data paths. Product code should continue to resolve these paths through host APIs instead of hard-coding platform directories.
 - `docs:release` is a coverage guardrail, not a substitute for a human dry run on a clean machine. Before a real release, a developer should still follow the runbook end to end.
 - Step 86 should perform the final pre-release architecture writeback. It should not create new application behavior unless that writeback exposes a concrete missing record that blocks release handoff.
+
+## 2026-05-22 ASCII Addendum L
+
+### Stage 12 Step 86 Completed: pre-release architecture writeback
+
+- Completed `implementation-plan.md` Stage 12 Step 86 by consolidating the final pre-release handoff into `memory-bank/architecture.md`, `memory-bank/progress.md`, and the root `progress.md`.
+- Updated the architecture record with final module boundaries, the landed SQLite schema and migration line, deferred capabilities, residual release risks, and file-responsibility notes for the handoff documents.
+- Kept Step 86 documentation-only. No desktop UI behavior, Rust runtime module, Web/mobile surface, sync protocol, AI workflow, integration adapter, database migration, dependency graph, CI workflow, or release script changed.
+
+### Step 86 Verification
+
+- Passed `corepack pnpm run docs:links`
+- Passed `corepack pnpm run format:check`
+- Passed `corepack pnpm run verify`
+
+### Environment Notes
+
+- Step 86 is a release-handoff checkpoint, not a new implementation milestone. Its verification relies on existing repository quality gates rather than adding a new test harness.
+- The validated release and operations procedure remains in `docs/release-operations.md`. A real release should still execute that runbook manually on a clean machine before tagging.
+
+### Step 86 File Responsibilities
+
+- `memory-bank/progress.md`: owns the detailed project-status ledger. It now marks Stage 12 Step 86 complete and records the final handoff state, verification gate, and no-more-implicit-feature-work boundary.
+- `memory-bank/architecture.md`: owns the durable architecture baseline. It now records the final module boundaries, landed schema, deferred functions, residual risks, and handoff file roles.
+- `progress.md`: owns the concise repository-root progress log for developers who start from the root instead of `memory-bank/`.
+
+### Step 86 Boundary Notes
+
+- Step 86 does not authorize new product behavior. Future work should start from a new plan, issue, or milestone rather than continuing the 86-step implementation plan implicitly.
+- The current schema is stable for the handoff, but future feature work must continue using embedded SQLite migrations and must not patch tables from host code or tests directly.
+- The release runbook, verification chain, and architecture/progress logs are now the primary handoff surface. Oral-only release knowledge should be treated as a documentation bug.

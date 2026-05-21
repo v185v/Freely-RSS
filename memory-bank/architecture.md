@@ -3012,3 +3012,87 @@ Step 60 已将 `SyncEvent` 限定为用户可携带状态、订阅组织和自�
 - The validation script should check coverage-critical terms, not overfit to wording. Future edits may reorganize the document, but they must preserve build, test, packaging, data directory, backup/restore, logs, and troubleshooting coverage.
 - Runtime telemetry should not be added inside `docs:release`. When desktop file logging or sync-server structured tracing is implemented, the runtime modules should change first and the runbook should then be updated to describe the new behavior.
 - Step 86 should be a final architecture/progress writeback pass. It should consolidate current boundaries and risks rather than adding new product behavior.
+
+## 2026-05-22 ASCII Addendum L
+
+### Step 86 Architecture Insights
+
+- Step 86 is the pre-release architecture writeback. It consolidates what has landed, what remains deferred, and where future developers should look first; it does not add runtime behavior.
+- The core offline boundary is now represented by the desktop shell, shared UI/types/query/config packages, Rust domain/storage/feed/content/rule/search crates, deterministic parser fixtures, SQLite migrations, FTS coverage, export paths, cache-policy records, and local verification.
+- The optional online boundary is represented by sync-engine primitives, encrypted sync-server routes, WebDAV object storage adapters, the local desktop REST boundary, the Web synchronized-reader entry, and integration-engine adapters. These are modular entry points, not replacements for the local database as the client-side source of truth.
+- The optional intelligent boundary is represented by `crates/ai-adapter`, desktop Tauri AI commands, cached `AIArtifact` storage, and explicit reader-shell actions. AI remains user-triggered and derived; it must not become a prerequisite for subscription, reading, search, export, or sync.
+- The platform split is intentional. Desktop remains the complete local-first host. Web remains a synchronized remote-access entry. Mobile remains a reading-priority shell with device-local cache/media/share boundaries and no desktop SQLite/Tauri responsibility.
+- The local schema line is landed through embedded SQLite migrations, not ad hoc host-side table creation. The current durable schema includes migration metadata, app metadata, Feed, Folder, Tag, FeedTag, ArticleTag, Article, Attachment, UserState, Annotation, Rule, SmartFolder, AIArtifact, SyncEvent, RuleAudit, feed health diagnostics, feed cache policy, dedup indexes, and article FTS/search structures.
+- No database migration was added in Step 86. Future schema changes must continue through `crates/core-domain/src/sqlite/migrations.rs` and a numbered SQL migration file.
+- Release validation now has three knowledge surfaces: implementation status in `memory-bank/progress.md`, architecture and boundary rationale in `memory-bank/architecture.md`, and executable release operations in `docs/release-operations.md`.
+
+### Step 86 Final Module Boundaries
+
+- Desktop runtime: owns local-first reading workflows, Tauri host integration, local SQLite access, reader shell UI, export UI, cache controls, local API exposure, and explicit AI/sync controls.
+- Shared packages: own cross-application TypeScript contracts, UI primitives, query-expression modeling, and configuration defaults. They must stay platform-neutral and must not import desktop host code.
+- Rust domain crates: own durable models, SQLite migrations/stores, feed fetch/parse/normalize/persist flow, content extraction, rule evaluation, search boundary, sync convergence, integration adapters, and AI provider/task abstractions.
+- Sync server: owns remote encrypted event/device/blob exchange. It must not become a business-read replica of the desktop SQLite schema.
+- Web client: owns synchronized-reader access through remote facades and scope checks. It must not implement local feed fetching, desktop cache maintenance, or native storage responsibilities.
+- Mobile client: owns reading-priority presentation, synchronized snapshot consumption, device-local cache/media/share facades, and mobile-specific selectors. It must not import desktop reader-shell, Tauri, local SQLite, feed-engine, or local REST responsibilities.
+- Documentation and verification scripts: own handoff reliability. They check links and release-runbook coverage but must not encode product behavior.
+
+### Step 86 Landed Schema Summary
+
+- `001_bootstrap_metadata.sql`: establishes schema migration and app metadata tables.
+- `002_core_business_tables.sql`: establishes the core Feed, Folder, Tag, Article, Attachment, UserState, Annotation, Rule, SmartFolder, AIArtifact, and SyncEvent business tables plus relation tables.
+- `003_core_business_indexes.sql`: adds primary query indexes and uniqueness/foreign-key support for the local-first reading model.
+- `004_article_search_fts.sql`: adds the FTS5 article search projection and synchronization triggers/stores.
+- `005_article_dedup_indexes.sql`: adds deduplication indexes around canonical/original URLs, source GUIDs, and content hashes.
+- `006_feed_health_diagnostics.sql`: adds feed error classification and health diagnostics fields.
+- `007_rule_audit_history.sql`: adds durable RuleAudit history for rule evaluation observability.
+- `008_feed_cache_policy.sql`: adds feed-level cache policy so cache behavior is persisted rather than UI-only.
+
+### Step 86 Deferred Capabilities
+
+- Release automation: installer signing, notarization, Docker images, hosted sync deployment, mobile store automation, and EAS release jobs remain outside the current repository automation.
+- Native release smoke tests: the desktop E2E regression runs in jsdom. Native Tauri-window smoke coverage can be added later if release validation requires it.
+- Desktop operational polish: rotating desktop file logging and an end-user restore command are not yet exposed, even though data/log directories and backup/restore mechanics are documented.
+- Production integrations: real hosted sync infrastructure, production account/auth operations, real provider SDK wiring, and third-party bridge credentials remain deployment/product work beyond the handoff.
+- Mobile durability: real file downloads, native audio service integration, lock-screen media controls, background task registration, and offline mutation queues remain behind the existing mobile platform boundary.
+- Web/mobile parity: Web and mobile intentionally do not carry the complete desktop-local administration surface.
+
+### Step 86 Residual Risks
+
+- The release runbook is machine-checked for coverage, but a real release still needs a human dry run on a clean machine.
+- Performance baselines use deterministic debug-test budgets, not production telemetry. Platform-specific runtime metrics should be added through host-level observability when needed.
+- Large desktop bundles still emit the known Vite chunk-size warning during successful builds; that is a packaging optimization risk, not a current verification failure.
+- Sync, AI, and integration boundaries are test-covered with deterministic providers/adapters. Production provider credentials, rate limits, deployment topology, and operational monitoring remain separate release-readiness risks.
+- Schema migrations are covered by tests, but future migrations must preserve backup/restore behavior and avoid test-only table creation shortcuts.
+
+### Step 86 File Responsibilities
+
+- `memory-bank/RSS-design-document.md`: owns the product-scope source of truth: positioning, principles, capabilities, data model, sync/AI/privacy guidance, risks, and product roadmap.
+- `memory-bank/tech-stack.md`: owns implementation-direction guidance: monorepo shape, Tauri/React/Rust/SQLite stack, testing choices, and technology tradeoffs.
+- `memory-bank/implementation-plan.md`: owns the 86-step execution checklist and the validation expectation for each step.
+- `memory-bank/progress.md`: owns the detailed current-state ledger and handoff notes. It should be the first file read after the design and architecture baselines.
+- `memory-bank/architecture.md`: owns the durable architecture baseline, schema baseline, milestone architecture addenda, module boundaries, and file-responsibility records.
+- `progress.md`: owns the concise root-level progress log for developers who begin at the repository root instead of `memory-bank/`.
+- `docs/release-operations.md`: owns the human-operable release runbook for bootstrap, startup, verification, packaging, data directories, backup/restore, logs, troubleshooting, and release checklist.
+- `scripts/check-doc-links.mjs`: owns local Markdown link validation across repository documentation.
+- `scripts/check-release-operations-doc.mjs`: owns machine-checkable coverage for the release operations runbook.
+- `package.json`: owns workspace-level JS/TS scripts, including development, build, test, docs, formatting, linting, and the `verify` chain.
+- `Cargo.toml`: owns the Rust workspace membership and shared Rust package metadata.
+- `pnpm-workspace.yaml` and `pnpm-lock.yaml`: own JS/TS package discovery and dependency resolution.
+- `.github/workflows/ci.yml`: owns CI execution of docs, JS/TS, and Rust quality gates.
+- `apps/desktop/`: owns the desktop local-first app shell, reader UI, Tauri host commands, local storage paths, local REST API boundary, and desktop verification.
+- `apps/web/`: owns the Web synchronized-reader entry and keeps Web scope inside remote-access boundaries.
+- `apps/mobile/`: owns the mobile reading-priority shell, mobile scope contract, platform cache/media/share facade, and mobile tests/type checks.
+- `apps/sync-server/`: owns encrypted remote sync API routes, in-memory/server state boundaries, sync models, startup behavior, and sync-server tests.
+- `packages/ui/`: owns reusable React UI primitives and theme styles shared across frontend surfaces.
+- `packages/shared-types/`: owns shared TypeScript DTOs, ids, enums, sync payload shapes, feed/article/organization types, and automation contracts.
+- `packages/shared-query/`: owns query AST, parser, normalization, serialization, JSON validation, and SQL-plan boundary used by search/rules/smart folders.
+- `packages/shared-config/`: owns runtime configuration defaults, environment loading, merge behavior, validation, and config errors.
+- `crates/core-domain/`: owns Rust domain models, SQLite migrations, records, stores, search store, backup/restore mechanics, AI artifact storage, rule audit storage, and sync event storage.
+- `crates/feed-engine/`: owns feed transport, parser dispatch, RSS/Atom/JSON Feed/HTML discovery parsing, normalization, fetching, SQLite persistence, and parser fixture regressions.
+- `crates/content-pipeline/`: owns HTML sanitization, extraction, content models, extraction errors, and content-pipeline exports.
+- `crates/rule-engine/`: owns rule query evaluation, action planning, rule audit payloads, and rule-engine error boundaries.
+- `crates/search-engine/`: reserves the search-engine crate boundary while current concrete FTS implementation remains in `core-domain`.
+- `crates/sync-engine/`: owns sync event envelopes, batching, replay, merge/conflict policy, retry decisions, encryption, WebDAV object adapter, and concurrency regressions.
+- `crates/integration-engine/`: owns integration adapter traits, registry/noop adapters, Webhook automation, knowledge-base export profiles/formats, and integration errors.
+- `crates/ai-adapter/`: owns AI provider traits, provider registry, retry policy, task queue, mock providers, article insight/action workflows, and AI error boundaries.
+- `crates/performance-baseline/`: owns deterministic large-library performance tests and product budget assertions; runtime code must not depend on it.

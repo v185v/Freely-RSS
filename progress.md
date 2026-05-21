@@ -132,3 +132,11 @@
 - Added the `docs:release` script to `package.json`, wired it into `corepack pnpm run verify`, and added the release-doc check to `.github/workflows/ci.yml`.
 - Verified the Step 85 work with `corepack pnpm run docs:release`, `corepack pnpm run docs:links`, `corepack pnpm run format:check`, and `corepack pnpm run verify`.
 - Updated `memory-bank/progress.md` and `memory-bank/architecture.md` with the Step 85 implementation record, verification notes, architecture insights, file responsibilities, and Stage 12 Step 86 handoff.
+
+## 2026-05-22
+
+- Reviewed every file in `memory-bank/` and resumed from `memory-bank/progress.md`, whose latest record identified Stage 12 Step 86 as the final pre-release architecture writeback.
+- Completed the Step 86 documentation-only handoff by updating `memory-bank/architecture.md` with final module boundaries, landed schema, deferred capabilities, residual risks, and handoff file responsibilities.
+- Updated `memory-bank/progress.md` so the current status points at Step 86 completion rather than Step 85, and recorded that future work should start from a new plan or issue instead of continuing the 86-step implementation plan implicitly.
+- Kept the step out of runtime code: no desktop UI, Rust crate, Web/mobile app, sync protocol, AI workflow, integration adapter, database migration, dependency graph, CI workflow, or release script was changed.
+- Verified the Step 86 handoff with `corepack pnpm run docs:links`, `corepack pnpm run format:check`, and `corepack pnpm run verify`.
