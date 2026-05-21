@@ -117,3 +117,8 @@
 - Updated `apps/desktop/src/features/reader-shell/mock-data.ts` so refreshing an empty imported feed creates one deterministic mock article/detail pair for the E2E path without adding network, Tauri, SQLite, sync, or parser-fixture dependencies.
 - Verified the Step 82 work with `corepack pnpm --filter @freelyrss/desktop test -- src/features/reader-shell/desktop-offline-reader.e2e.test.tsx`, `corepack pnpm run desktop:build`, `corepack pnpm run format:check`, `corepack pnpm run lint`, and `corepack pnpm run verify`.
 - Updated `memory-bank/progress.md` and `memory-bank/architecture.md` with the Step 82 implementation record, validation notes, architecture insights, per-file responsibilities, and Stage 12 Step 83 handoff.
+- Re-read all `memory-bank/` files and resumed from Stage 12 Step 83: sync concurrency testing.
+- Added `crates/sync-engine/tests/concurrency.rs` to simulate repeated multi-device concurrent article-state synchronization across `UserState`, `Annotation`, and `ArticleTag` events.
+- The new regression sends merge out-of-order per-device batches, sends replay cursor-ordered batches with multiple page sizes, repeats duplicate deliveries, and asserts both paths converge to the same final article projection and cursor.
+- Verified the Step 83 work with `cargo test -p freelyrss-sync-engine concurrent_article_batches_converge_across_merge_and_replay_runs`, `cargo test -p freelyrss-sync-engine`, `cargo fmt --all --check`, `cargo clippy -p freelyrss-sync-engine --all-targets -- -D warnings`, and `corepack pnpm run verify`.
+- Updated `memory-bank/progress.md` and `memory-bank/architecture.md` with the Step 83 implementation record, validation notes, architecture insights, related file responsibilities, and Stage 12 Step 84 handoff.

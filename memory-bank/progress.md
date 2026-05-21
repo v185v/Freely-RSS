@@ -2402,3 +2402,42 @@
 - The Step 82 E2E test is a desktop shell regression, not a replacement for native Tauri smoke testing, Playwright browser automation, or durable SQLite integration tests. Those can be added later if release validation requires native-window coverage.
 - The mock fetched article is test/development shell data. It must not be treated as a real feed parser, network fetcher, deduplication repository, or migration fixture.
 - Step 82 intentionally stops after the desktop offline reader path is validated. Step 83 should move to sync concurrency testing in `crates/sync-engine` / sync protocol boundaries rather than adding more desktop shell behavior.
+
+## 2026-05-21 ASCII Addendum XLVII
+
+### Stage 12 Step 83 Completed: sync concurrency convergence regression
+
+- Completed `implementation-plan.md` Stage 12 Step 83 by adding a sync-engine integration regression for repeated multi-device concurrent article-state synchronization.
+- Added `crates/sync-engine/tests/concurrency.rs`, which builds one deterministic event log from three devices over `article-alpha`, `article-beta`, and `article-gamma`. The scenario covers concurrent `user-state` changes, append-only annotations, `article-tag` attach/detach conflicts, duplicate event delivery, cursor advancement, and repeated runs with different delivery/page-size plans.
+- The merge path intentionally receives per-device batches out of chronological order so `SyncMergeState` must rely on field clocks, relation versions, and duplicate-event skipping. The replay path receives the same events through cursor-ordered `package_event_batch` pages so `SyncReplayState` remains a canonical event-log projection rather than an out-of-order conflict resolver.
+- Each run compares the projected merge state with the projected replay state and the expected final article projection. The test also confirms both cursors converge to the final event key after duplicate deliveries are skipped.
+- Kept Step 83 inside the sync-engine/protocol test boundary. No desktop shell, feed parser, Web/mobile client, sync-server route, WebDAV transport, AI workflow, integration adapter, local REST API, or database schema migration was changed.
+
+### Step 83 Verification
+
+- Passed `cargo test -p freelyrss-sync-engine concurrent_article_batches_converge_across_merge_and_replay_runs`
+- Passed `cargo test -p freelyrss-sync-engine`
+- Passed `cargo fmt --all --check`
+- Passed `cargo clippy -p freelyrss-sync-engine --all-targets -- -D warnings`
+- Passed `corepack pnpm run verify`
+
+### Environment Notes
+
+- The first post-edit `cargo fmt --all --check` run reported rustfmt-only import wrapping in the new integration test. `cargo fmt --all` was applied, then the final format check passed.
+- Step 83 uses plain sync-engine integration tests and does not require a running sync server, WebDAV endpoint, desktop Tauri host, browser automation, mobile simulator, or live network feed.
+
+### Step 83 File Responsibilities
+
+- `crates/sync-engine/tests/concurrency.rs`: owns the Step 83 sync concurrency regression. It constructs the multi-device event fixture, creates out-of-order merge delivery plans, creates cursor-ordered replay batches, repeats the same scenario with multiple page sizes, asserts duplicate batches are skipped, and compares final merge/replay article projections plus cursor convergence.
+- `crates/sync-engine/src/batch.rs`: remains the event envelope and cursor batching boundary consumed by the replay half of the regression. It is unchanged, but Step 83 relies on its `created_at + event id` ordering contract.
+- `crates/sync-engine/src/merge.rs`: remains the conflict-resolution policy model consumed by the merge half of the regression. It is unchanged, but Step 83 now protects its field clocks, reading-progress max rule, relation versions, tombstone-independent relation behavior, and duplicate-id handling against multi-device drift.
+- `crates/sync-engine/src/replay.rs`: remains the canonical event-log projection model consumed by the replay half of the regression. It is unchanged, but Step 83 now protects cursor-ordered replay from drifting away from the merge projection for supported sync-owned article state.
+- `memory-bank/progress.md`: records the completed Step 83 milestone, validation commands, environment notes, changed-file responsibilities, and Step 84 handoff.
+- `memory-bank/architecture.md`: records the Step 83 architecture insights, related file roles, and boundary notes.
+
+### Step 83 Boundary Notes
+
+- The Step 83 scenario uses only sync-owned portable state: `UserState`, `Annotation`, and `ArticleTag`. It does not synchronize `Article` rows, article body blobs, FTS projections, feed fetch diagnostics, local cache paths, task status, AI artifacts, or integration delivery history.
+- `SyncMergeState` is the out-of-order conflict policy model. `SyncReplayState` is the ordered event-log projector. Future tests should preserve that distinction instead of expecting replay to resolve arbitrary out-of-order device batches.
+- The test fixture is deterministic local test data, not a remote protocol fixture, seed database, or production conflict manifest.
+- Step 84 should move to performance baselines for large local datasets and should not broaden Step 83 into server transport, desktop E2E, Web/mobile scope, AI, integration, or parser-regression work.

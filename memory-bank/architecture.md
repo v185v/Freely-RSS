@@ -2921,3 +2921,32 @@ Step 60 已将 `SyncEvent` 限定为用户可携带状态、订阅组织和自�
 - The empty-feed refresh fixture is a mock-shell convenience for deterministic E2E coverage. Future real fetch work should continue to use the feed-engine parser/normalizer/repository pipeline rather than copying this helper into production transport or storage code.
 - If the desktop shell gains a dedicated manual add-source form, Step 82 can move the first action from OPML import to that form while keeping the rest of the regression path unchanged.
 - Step 83 should test synchronization concurrency and convergence at the sync-engine/protocol level. It should not depend on jsdom reader-shell state or the Step 82 mock fetched article.
+
+## 2026-05-21 ASCII Addendum XLVII
+
+### Step 83 Architecture Insights
+
+- Step 83 places synchronization concurrency coverage at the `crates/sync-engine` integration-test boundary. This is the right layer because the behavior under test is protocol-state convergence, not desktop UI behavior, sync-server routing, WebDAV object storage, or SQLite materialization.
+- The new regression deliberately separates conflict policy from canonical replay. `SyncMergeState` receives out-of-order per-device batches and must converge through field versions, relation versions, reading-progress policy, cursor advancement, and duplicate-event ids. `SyncReplayState` receives cursor-ordered batches and proves that the canonical event log projects to the same supported article state.
+- The final projection is intentionally narrow: synchronized article user state, synchronized annotations, and synchronized article-tag relationships. The test does not promote `Article` rows, article bodies, search-index rows, cache paths, diagnostics, task status, AI artifacts, or integration side effects into sync events.
+- Duplicate batch delivery is now part of the convergence contract. Both merge and replay paths must skip already-applied event ids without moving the final state away from the expected projection or regressing the cursor.
+- The repeated-run shape matters: varying merge delivery order and replay page size catches state drift that a single happy-path batch would miss while keeping the fixture deterministic and local.
+- No database schema migration was required. Step 83 adds regression coverage over existing sync-engine primitives and does not change the durable local schema, remote sync-server schema, encrypted payload shape, or shared TypeScript DTOs.
+
+### Step 83 Related File Roles
+
+- `crates/sync-engine/tests/concurrency.rs`: owns the Step 83 integration regression. It builds the multi-device event fixture, groups events into device delivery batches, packages cursor-ordered replay pages, repeats the same scenario with different delivery/page-size plans, checks duplicate delivery outcomes, projects merge/replay state into comparable article-state maps, and asserts final cursor convergence.
+- `crates/sync-engine/src/batch.rs`: owns `SyncEventEnvelope`, `SyncEventKey`, `SyncCursor`, `SyncEventBatch`, and `package_event_batch`. Step 83 uses this file's ordering and high-water cursor contract for replay-side batches.
+- `crates/sync-engine/src/merge.rs`: owns `SyncMergeState`, `MergedEntity`, `SyncMergeOutcome`, and `merge_event_batch`. Step 83 exercises its conflict semantics for user-state fields, reading progress, article-tag relation versions, duplicate ids, and cursor advancement under out-of-order device delivery.
+- `crates/sync-engine/src/replay.rs`: owns `SyncReplayState`, `SyncReplayOutcome`, and `replay_event_batch`. Step 83 exercises its ordered event-log projection for entity upserts, relationship attach/detach, duplicate ids, and cursor advancement.
+- `crates/sync-engine/src/lib.rs`: remains the public export surface that lets integration tests and future callers consume batch, merge, and replay primitives without importing private modules.
+- `memory-bank/progress.md`: records Step 83 completion, validation commands, environment notes, changed-file responsibilities, and the Step 84 handoff.
+- `memory-bank/architecture.md`: records Step 83 architecture insights, related file roles, and boundary constraints for future maintainers.
+
+### Step 83 Boundary Notes
+
+- Replay convergence is guaranteed here only for cursor-ordered event batches. Out-of-order multi-device delivery should continue to enter `merge_event_batch`, not `replay_event_batch`.
+- The sync-engine integration test remains transport-neutral. It must not require HTTP routes, WebDAV object keys, encrypted payload upload, server persistence, desktop Tauri commands, or local SQLite stores.
+- Article body bytes and attachment content remain lazy encrypted blob concerns. They should not be inlined into the Step 83 event fixture or compared as part of the article-state projection.
+- Future conflict tests can add folders, feeds, tags, rules, and smart folders, but should keep local-only facts and generated projections out of the sync-event payload boundary.
+- Step 84 should establish performance baselines against realistic local data volumes. It should not turn the concurrency regression into a benchmark or use it as a substitute for performance measurement.
