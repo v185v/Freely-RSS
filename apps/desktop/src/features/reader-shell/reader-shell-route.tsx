@@ -1312,14 +1312,10 @@ export function ReaderShellRoute() {
             quickViewSection={resolvedShellData.quickViewSection}
             smartFolderSection={{
               title: "Smart folders",
-              description:
-                "Saved shared-query definitions rendered beside quick views and regular folders.",
               rows: resolvedShellData.smartFolders.map((folder) => ({
                 id: folder.id,
                 kind: "view",
                 title: folder.name,
-                description: "Saved query backed by the shared query-definition contract.",
-                eyebrow: "smart folder",
                 meta: `${folder.unreadCount}/${folder.articleCount} unread`,
               })),
             }}

@@ -68,15 +68,11 @@ function buildFeedSourceRow(data: ReaderShellData, feedId: FeedId): SourceRow {
   }
 
   const feed = feedNode.feed
-  const detail =
-    feed.lastErrorMessage ?? feed.siteUrl ?? "No site URL or recent health detail available yet."
 
   return {
     id: feed.id,
     kind: "feed",
     title: feed.displayTitle,
-    description: detail,
-    eyebrow: feed.healthStatus,
     meta: `${feed.unreadCount}/${feed.totalCount} unread`,
   }
 }
@@ -91,18 +87,11 @@ function buildFolderSourceRow(data: ReaderShellData, folderId: FolderId): Source
   const feedIds = getFeedIdsForFolder(data, folderId)
   const articles = data.articles.filter((article) => feedIds.includes(article.feedId))
   const unreadCount = articles.filter((article) => article.state.readState !== "read").length
-  const childFolderCount = folderNode.childFolderIds.length
-  const feedCount = feedIds.length
 
   return {
     id: folderNode.folder.id,
     kind: "folder",
     title: folderNode.folder.name,
-    description:
-      childFolderCount > 0
-        ? `${feedCount} feeds across ${childFolderCount} nested group(s).`
-        : `${feedCount} feeds grouped under this folder.`,
-    eyebrow: "folder",
     meta: `${unreadCount}/${articles.length} unread`,
   }
 }
@@ -118,8 +107,6 @@ function buildSmartFolderSourceRow(data: ReaderShellData, smartFolderId: string)
     id: smartFolder.id,
     kind: "view",
     title: smartFolder.name,
-    description: "Saved query backed by the shared query-definition contract.",
-    eyebrow: "smart folder",
     meta: `${smartFolder.unreadCount}/${smartFolder.articleCount} unread`,
   }
 }

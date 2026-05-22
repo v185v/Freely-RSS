@@ -1048,31 +1048,24 @@ function buildQuickViewSection(state: MockReaderState) {
       id: "view-unread",
       kind: "view",
       title: "Unread desk",
-      description: "Cross-source unread queue for the main reading session.",
-      eyebrow: "view",
       meta: `${state.articles.filter((article) => article.state.readState !== "read").length} articles`,
     },
     {
       id: "view-reading",
       kind: "view",
       title: "Continue reading",
-      description: "Articles already in progress, regardless of source.",
-      eyebrow: "view",
       meta: `${state.articles.filter((article) => article.state.readState === "reading").length} articles`,
     },
     {
       id: "view-starred",
       kind: "view",
       title: "Starred focus",
-      description: "Saved items to protect from cleanup and revisit later.",
-      eyebrow: "view",
       meta: `${state.articles.filter((article) => article.state.starred).length} articles`,
     },
   ]
 
   return {
     title: "Quick views",
-    description: "Route-backed navigation entries that do not execute real queries yet.",
     rows: quickViewRows,
   }
 }

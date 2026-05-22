@@ -104,9 +104,7 @@ export interface ReaderCacheStatus {
 }
 
 export interface SourceRow {
-  description: string
   depth?: number
-  eyebrow: string
   id: string
   kind: "feed" | "folder" | "view"
   meta: string
@@ -114,7 +112,6 @@ export interface SourceRow {
 }
 
 export interface SourceSection {
-  description: string
   rows: SourceRow[]
   title: string
 }

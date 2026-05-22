@@ -129,10 +129,8 @@ export function QueuePane({
     >
       <Surface className="desktop-pane__surface desktop-pane__surface--queue">
         <div className="desktop-pane__header">
-          <p className="desktop-pane__eyebrow">Middle pane</p>
           <h2 id={headingId}>Article queue</h2>
           <p className="desktop-pane__focus-title">{activeSource.title}</p>
-          <p className="desktop-pane__description">{activeSource.description}</p>
         </div>
 
         <div className="desktop-pane__toolbar">

@@ -58,12 +58,10 @@ type SourcePaneProps = {
   paneId: string
   paneRef?: Ref<HTMLElement>
   quickViewSection: {
-    description: string
     rows: SourceRow[]
     title: string
   }
   smartFolderSection: {
-    description: string
     rows: SourceRow[]
     title: string
   }
@@ -124,46 +122,33 @@ export function SourcePane({
     >
       <Surface className="desktop-pane__surface desktop-pane__surface--nav">
         <div className="desktop-pane__header">
-          <p className="desktop-pane__eyebrow">Left pane</p>
           <h2 id={headingId}>Sources</h2>
-          <p className="desktop-pane__description">
-            Quick views stay route-backed, folder expansion remains local shell state, and feed
-            editing, cache defaults, and OPML portability now live beside source selection instead
-            of leaking into shared DTO assembly.
-          </p>
         </div>
 
         <div className="desktop-pane__scroll">
-          <ListSection description={quickViewSection.description} title={quickViewSection.title}>
+          <ListSection title={quickViewSection.title}>
             {quickViewSection.rows.map((row) => (
               <ListRow
                 active={row.id === activeSourceId}
                 aria-current={row.id === activeSourceId ? "page" : undefined}
                 className="desktop-source-row"
-                eyebrow={row.eyebrow}
                 key={row.id}
                 meta={row.meta}
                 onClick={() => onSelectSource(row.id)}
-                summary={row.description}
                 title={row.title}
               />
             ))}
           </ListSection>
 
-          <ListSection
-            description={smartFolderSection.description}
-            title={smartFolderSection.title}
-          >
+          <ListSection title={smartFolderSection.title}>
             {smartFolderSection.rows.map((row) => (
               <ListRow
                 active={row.id === activeSourceId}
                 aria-current={row.id === activeSourceId ? "page" : undefined}
                 className="desktop-source-row"
-                eyebrow={row.eyebrow}
                 key={row.id}
                 meta={row.meta}
                 onClick={() => onSelectSource(row.id)}
-                summary={row.description}
                 title={row.title}
               />
             ))}
@@ -181,7 +166,6 @@ export function SourcePane({
                 </Button>
               </div>
             }
-            description="Folder and feed placeholders shaped like the future left navigation tree."
             title="Subscription tree"
           >
             <ul className="desktop-tree">
@@ -213,10 +197,8 @@ export function SourcePane({
                         ? "desktop-source-row desktop-tree__row desktop-tree__row--folder"
                         : "desktop-source-row desktop-tree__row desktop-tree__row--feed"
                     }
-                    eyebrow={row.eyebrow}
                     meta={row.meta}
                     onClick={() => onSelectSource(row.id)}
-                    summary={row.description}
                     title={row.title}
                   />
                 </li>
