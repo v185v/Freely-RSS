@@ -68,6 +68,8 @@ flowchart TB
 
 - 桌面端是本地优先主机。Tauri 启动时会通过 `apps/desktop/src-tauri/src/storage.rs` 创建运行目录、初始化 SQLite，并通过 `local_api.rs` 启动 loopback-only、bearer-token、只读本地 REST API。
 - 桌面 UI 的主入口是 `apps/desktop/src/App.tsx` 和 `features/reader-shell/reader-shell-route.tsx`。它使用共享 UI、共享类型、共享查询模型、React Query、TanStack Router 和 Zustand。
+- 桌面 UI 采用经典三栏全屏布局：36px AppToolbar（品牌 + 全局搜索 + SettingsDropdown）在顶部，下方三栏（220px 源列表 / 300px 文章队列 / 弹性阅读面板）占满剩余视口高度。次要功能（同步、缓存、OPML、主题、密度）通过齿轮下拉菜单触达。
+- 桌面 UI 支持深色/浅色/高对比度三种主题（CSS 变量驱动），以及紧凑/舒适两种文章列表密度模式，均持久化到 localStorage。
 - 桌面 reader shell 目前仍保留 `mock-data.ts` 作为 UI/dev/test 数据源。`desktop-bridge.ts` 会优先尝试 Tauri durable 命令加载真实队列和 AI 结果，失败时回退到 mock。
 - 本地数据库是客户端业务事实来源。远程同步服务不得复制桌面完整业务 schema，也不得作为桌面 UI 主数据源。
 - Web 端是远程同步阅读入口，目前由 `apps/web/src/remote-client.ts` 提供 remote snapshot mock，显式禁止本地抓取、桌面 SQLite、Tauri 命令、本地 AI、本地 REST、缓存维护和复杂规则编辑。
