@@ -5,6 +5,7 @@ import type { ArticleListItemDto } from "@freelyrss/shared-types"
 import type {
   ReaderBaseThemeTone,
   ReaderContentMode,
+  ReaderDensityMode,
   ReaderFontFamily,
   ReaderFontScale,
   ReaderLineHeight,
@@ -15,9 +16,11 @@ import type {
 } from "./types"
 
 const READER_CONTENT_MODE_STORAGE_KEY = "freelyrss.reader-content-mode"
+const READER_DENSITY_STORAGE_KEY = "freelyrss.reader-density-mode"
 const READER_PRESENTATION_SETTINGS_STORAGE_KEY = "freelyrss.reader-presentation-settings"
 const READER_AI_ENABLED_STORAGE_KEY = "freelyrss.reader-ai-enabled"
 const DEFAULT_READER_CONTENT_MODE: ReaderContentMode = "extracted"
+const DEFAULT_READER_DENSITY_MODE: ReaderDensityMode = "comfortable"
 const DEFAULT_THEME_TONE: ReaderThemeTone = "midnight"
 const DEFAULT_BASE_THEME_TONE: ReaderBaseThemeTone = "midnight"
 const DEFAULT_READER_FONT_FAMILY: ReaderFontFamily = "editorial"
@@ -27,6 +30,10 @@ const DEFAULT_READER_MARGIN_MODE: ReaderMarginMode = "balanced"
 
 function isReaderContentMode(value: string | null): value is ReaderContentMode {
   return value === "extracted" || value === "raw"
+}
+
+function isReaderDensityMode(value: string | null): value is ReaderDensityMode {
+  return value === "compact" || value === "comfortable"
 }
 
 function isReaderThemeTone(value: unknown): value is ReaderThemeTone {
@@ -83,6 +90,39 @@ function clearPersistedReaderContentMode() {
 
   try {
     window.localStorage.removeItem(READER_CONTENT_MODE_STORAGE_KEY)
+  } catch {}
+}
+
+function readPersistedReaderDensityMode() {
+  if (typeof window === "undefined") {
+    return DEFAULT_READER_DENSITY_MODE
+  }
+
+  try {
+    const storedValue = window.localStorage.getItem(READER_DENSITY_STORAGE_KEY)
+    return isReaderDensityMode(storedValue) ? storedValue : DEFAULT_READER_DENSITY_MODE
+  } catch {
+    return DEFAULT_READER_DENSITY_MODE
+  }
+}
+
+function writePersistedReaderDensityMode(densityMode: ReaderDensityMode) {
+  if (typeof window === "undefined") {
+    return
+  }
+
+  try {
+    window.localStorage.setItem(READER_DENSITY_STORAGE_KEY, densityMode)
+  } catch {}
+}
+
+function clearPersistedReaderDensityMode() {
+  if (typeof window === "undefined") {
+    return
+  }
+
+  try {
+    window.localStorage.removeItem(READER_DENSITY_STORAGE_KEY)
   } catch {}
 }
 
@@ -205,6 +245,7 @@ type ReaderViewStore = {
   batchSelectedArticleIds: ArticleListItemDto["id"][]
   collapsedFolderIds: string[]
   clearBatchSelectedArticleIds: () => void
+  densityMode: ReaderDensityMode
   pruneBatchSelectedArticleIds: (visibleArticleIds: ArticleListItemDto["id"][]) => void
   readerFontFamily: ReaderFontFamily
   readerFontScale: ReaderFontScale
@@ -222,6 +263,7 @@ type ReaderViewStore = {
   setSearchText: (searchText: string) => void
   setBatchSelectedArticleIds: (articleIds: ArticleListItemDto["id"][]) => void
   setCollapsedFolderIds: (folderIds: string[]) => void
+  setDensityMode: (densityMode: ReaderDensityMode) => void
   setSortMode: (sortMode: ReaderSortMode) => void
   setStatusFilter: (statusFilter: ReaderStatusFilter) => void
   setThemeTone: (themeTone: ReaderThemeTone) => void
@@ -237,6 +279,7 @@ const readerViewDefaults = {
   baseThemeTone: DEFAULT_BASE_THEME_TONE,
   batchSelectedArticleIds: [] as ArticleListItemDto["id"][],
   collapsedFolderIds: [] as string[],
+  densityMode: DEFAULT_READER_DENSITY_MODE,
   readerFontFamily: DEFAULT_READER_FONT_FAMILY,
   readerFontScale: DEFAULT_READER_FONT_SCALE,
   readerContentMode: DEFAULT_READER_CONTENT_MODE,
@@ -286,6 +329,7 @@ const persistedReaderAiEnabled = readPersistedReaderAiEnabled()
 export const useReaderViewStore = create<ReaderViewStore>((set) => ({
   ...readerViewDefaults,
   baseThemeTone: persistedPresentationSettings.baseThemeTone,
+  densityMode: readPersistedReaderDensityMode(),
   readerContentMode: readPersistedReaderContentMode(),
   readerFontFamily: persistedPresentationSettings.fontFamily,
   readerFontScale: persistedPresentationSettings.fontScale,
@@ -353,6 +397,10 @@ export const useReaderViewStore = create<ReaderViewStore>((set) => ({
         : { batchSelectedArticleIds: nextSelectedArticleIds }
     }),
   setCollapsedFolderIds: (collapsedFolderIds) => set({ collapsedFolderIds }),
+  setDensityMode: (densityMode) => {
+    writePersistedReaderDensityMode(densityMode)
+    set({ densityMode })
+  },
   setSortMode: (sortMode) => set({ sortMode }),
   setStatusFilter: (statusFilter) => set({ statusFilter }),
   setThemeTone: (themeTone) =>
@@ -403,10 +451,15 @@ export const useReaderViewStore = create<ReaderViewStore>((set) => ({
 export function resetReaderViewStore(options?: {
   preservePersistedReaderAiEnabled?: boolean
   preservePersistedReaderContentMode?: boolean
+  preservePersistedReaderDensityMode?: boolean
   preservePersistedReaderPresentationSettings?: boolean
 }) {
   if (!options?.preservePersistedReaderContentMode) {
     clearPersistedReaderContentMode()
+  }
+
+  if (!options?.preservePersistedReaderDensityMode) {
+    clearPersistedReaderDensityMode()
   }
 
   if (!options?.preservePersistedReaderPresentationSettings) {
@@ -431,6 +484,9 @@ export function resetReaderViewStore(options?: {
   useReaderViewStore.setState({
     ...readerViewDefaults,
     baseThemeTone: nextPresentationSettings.baseThemeTone,
+    densityMode: options?.preservePersistedReaderDensityMode
+      ? readPersistedReaderDensityMode()
+      : DEFAULT_READER_DENSITY_MODE,
     readerContentMode: options?.preservePersistedReaderContentMode
       ? readPersistedReaderContentMode()
       : DEFAULT_READER_CONTENT_MODE,

@@ -19,6 +19,8 @@ export type ReaderStatusFilter = "all" | "unread" | "reading" | "readLater" | "s
 
 export type ReaderSortMode = "newest" | "oldest"
 
+export type ReaderDensityMode = "compact" | "comfortable"
+
 export type ReaderContentMode = "extracted" | "raw"
 
 export type ReaderAnnotationKind = Extract<AnnotationDto["type"], "highlight" | "note">
