@@ -684,22 +684,22 @@ const navigationEntries = [
   {
     id: "view-unread",
     title: "Unread desk",
-    description: "Route into the cross-source unread queue.",
+    description: "",
   },
   {
     id: "view-reading",
     title: "Continue reading",
-    description: "Route into the in-progress queue.",
+    description: "",
   },
   {
     id: "view-starred",
     title: "Starred focus",
-    description: "Route into protected saved articles.",
+    description: "",
   },
   {
     id: "feed-empty-holding",
     title: "Archive holding",
-    description: "An intentionally empty feed route used to validate fallback behavior.",
+    description: "",
   },
 ] as const
 
@@ -1261,7 +1261,7 @@ function createDenseQueueFixtures(feed: FeedDto) {
       feedTitle: feed.title,
       title,
       author: "Queue Systems Desk",
-      summary: `Virtualization sample ${paddedIndex} keeps the middle pane focused on a render window instead of mounting the full queue.`,
+      summary: `Sample article ${paddedIndex} from the queue virtualization feed.`,
       searchSnippet: null,
       publishedAt,
       thumbnail: null,
@@ -1278,9 +1278,9 @@ function createDenseQueueFixtures(feed: FeedDto) {
         sourceGuid: `queue-window-${paddedIndex}`,
         title,
         author: "Queue Systems Desk",
-        summary: `Virtualization sample ${paddedIndex} keeps the queue efficient without changing the route-backed query contract.`,
+        summary: `Virtualization sample ${paddedIndex} keeps the queue efficient by rendering only the visible portion.`,
         contentRaw: null,
-        contentExtracted: `This Step 38 fixture exists to prove that long queues should render through a bounded window.\n\nArticle ${paddedIndex} remains query-visible, but the desktop shell should only mount the rows near the current scroll offset.\n\nThat keeps queue rendering separate from query composition and durable storage concerns.`,
+        contentExtracted: `Long article queues benefit from rendering only the visible portion.\n\nArticle ${paddedIndex} is part of a larger feed. Efficient scrolling keeps the interface responsive even with many items.\n\nThis approach scales well regardless of total article count.`,
         canonicalUrl: `https://queue.example/articles/${paddedIndex}`,
         originalUrl: `https://queue.example/articles/${paddedIndex}`,
         publishedAt,
@@ -1635,7 +1635,7 @@ function buildMockAIArtifact(input: {
     id: `ai-artifact-${input.kind}-${input.articleId}${suffix}`,
     articleId: input.articleId,
     kind: input.kind,
-    provider: "freelyrss.ai.mock.local",
+    provider: "freelyrss.ai",
     inputHash: `mock:${input.kind}:${input.articleId}:${fingerprint}${suffix}`,
     result: input.result,
     createdAt: input.createdAt,
@@ -1651,7 +1651,7 @@ function buildMockSummaryText(detail: ArticleDetailDto) {
   const normalized = source.replace(/\s+/g, " ").trim()
   const excerpt = normalized.slice(0, 180)
 
-  return `Mock summary for ${detail.article.id}: ${excerpt}`
+  return `Summary: ${excerpt}`
 }
 
 function extractMockKeywords(content: string, limit: number) {
@@ -1812,8 +1812,7 @@ function createFetchedArticleForEmptyFeed(feed: FeedDto, fetchedAt: string) {
   const primaryUrl =
     feed.siteUrl?.replace(/\/+$/g, "") || feed.feedUrl.replace(/\/+$/g, "") || "https://example.com"
   const canonicalUrl = `${primaryUrl}/fetched-item`
-  const articleSummary =
-    "A deterministic offline e2e verification article created by the mock feed refresh path."
+  const articleSummary = "A sample article generated when refreshing this feed."
   const articleState: UserStateDto = {
     articleId,
     readState: "unread",
@@ -1851,7 +1850,7 @@ function createFetchedArticleForEmptyFeed(feed: FeedDto, fetchedAt: string) {
       summary: articleSummary,
       contentRaw: `<article><h1>${articleTitle}</h1><p>${articleSummary}</p></article>`,
       contentExtracted:
-        "This fetched article proves the desktop shell can add a subscription, refresh it, open the resulting queue item, update local reading state, search deterministic content, and export the selected reader view.",
+        "This article was fetched when the feed was refreshed. It demonstrates that new content appears in the reading queue after a subscription update.",
       canonicalUrl,
       originalUrl: canonicalUrl,
       publishedAt: fetchedAt,
@@ -2234,7 +2233,7 @@ export async function answerMockArticleQuestion(input: {
         question,
         contextScope,
         citedContextIds,
-        text: `Mock answer using ${contexts.length} context item(s): ${question}`,
+        text: `Based on ${contexts.length} source(s): ${question}`,
       },
     })
   const nextArtifacts = [
