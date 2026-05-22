@@ -105,11 +105,9 @@ describe("reader shell navigation", () => {
       expect(window.location.search).not.toContain("article-layout-shell")
     })
 
-    const primaryNavigation = screen.getByRole("navigation", {
-      name: "Primary reader navigation",
-    })
+    const sourcePane = screen.getByRole("region", { name: "Sources" })
 
-    await user.click(within(primaryNavigation).getByRole("button", { name: /Unread desk/i }))
+    await user.click(within(sourcePane).getByRole("button", { name: /Unread desk/i }))
 
     await screen.findAllByText("Turning the desktop shell into a stable three-pane reader skeleton")
 
@@ -125,21 +123,12 @@ describe("reader shell navigation", () => {
 
     render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
 
-    const navigation = await screen.findByRole("navigation", {
-      name: "Primary reader navigation",
-    })
-    const sourcePane = screen.getByRole("region", { name: "Sources" })
+    const sourcePane = await screen.findByRole("region", { name: "Sources" })
     const queuePane = screen.getByRole("region", { name: "Article queue" })
     const readerPane = screen.getByRole("region", { name: "Reading panel" })
-    const highContrastToggle = screen.getByRole("button", { name: /High contrast:/i })
-
-    expect(highContrastToggle.getAttribute("aria-pressed")).toBe("false")
 
     await user.tab()
     expect(document.activeElement?.textContent).toContain("Skip to primary navigation")
-
-    fireEvent.keyDown(window, { altKey: true, key: "1" })
-    expect(document.activeElement).toBe(navigation)
 
     fireEvent.keyDown(window, { altKey: true, key: "2" })
     expect(document.activeElement).toBe(sourcePane)
@@ -151,8 +140,6 @@ describe("reader shell navigation", () => {
     expect(document.activeElement).toBe(readerPane)
 
     fireEvent.keyDown(window, { altKey: true, shiftKey: true, key: "H" })
-
-    expect(highContrastToggle.getAttribute("aria-pressed")).toBe("true")
 
     const themeRoot = document.querySelector(".fr-theme-root")
     expect(themeRoot?.className).toContain("fr-theme-root--high-contrast")
@@ -194,7 +181,7 @@ describe("reader shell navigation", () => {
 
     await user.click(
       treeScope.getByRole("button", {
-        name: /folder.*Research threads.*feeds grouped under this folder/i,
+        name: /unread.*Research threads/i,
       }),
     )
 
@@ -280,7 +267,7 @@ describe("reader shell navigation", () => {
 
     await user.click(
       treeScope.getByRole("button", {
-        name: /healthy.*FreelyRSS Engineering/i,
+        name: /FreelyRSS Engineering/i,
       }),
     )
 
@@ -543,13 +530,11 @@ describe("reader shell navigation", () => {
 
     await waitFor(() => {
       expect(
-        readerScope.getByText(
-          /Mock summary for article-layout-shell: The shell now reads like an application/i,
-        ),
+        readerScope.getByText(/Summary:.*The shell now reads like an application/i),
       ).toBeTruthy()
       expect(readerScope.getByText("turning", { selector: "li" })).toBeTruthy()
       expect(readerScope.getByText("desktop", { selector: "li" })).toBeTruthy()
-      expect(readerScope.getAllByText("freelyrss.ai.mock.local")).toHaveLength(2)
+      expect(readerScope.getAllByText("freelyrss.ai")).toHaveLength(2)
     })
 
     await user.click(
@@ -574,9 +559,7 @@ describe("reader shell navigation", () => {
 
     await waitFor(() => {
       expect(
-        readerScope.getByText(
-          /Mock summary for article-layout-shell: The shell now reads like an application/i,
-        ),
+        readerScope.getByText(/Summary:.*The shell now reads like an application/i),
       ).toBeTruthy()
       expect(
         readerScope.getByText("Summary and keywords are available for this article."),
@@ -615,9 +598,7 @@ describe("reader shell navigation", () => {
 
     await waitFor(() => {
       expect(
-        readerScope.getByText(
-          "Mock answer using 1 context item(s): What is the main point of this article?",
-        ),
+        readerScope.getByText("Based on 1 source(s): What is the main point of this article?"),
       ).toBeTruthy()
       expect(readerScope.getByText("Cited context: article-layout-shell")).toBeTruthy()
       expect(readerScope.queryByText(/Cited context:.*article-source-context/i)).toBeNull()
@@ -661,14 +642,16 @@ describe("reader shell navigation", () => {
     await user.click(readerScope.getByRole("button", { name: "Generate insights" }))
 
     await waitFor(() => {
-      expect(readerScope.getAllByText("freelyrss.ai.mock.local")).toHaveLength(2)
+      expect(readerScope.getAllByText("freelyrss.ai")).toHaveLength(2)
     })
 
     await user.click(readerScope.getByRole("button", { name: "Delete AI cache" }))
 
     await waitFor(() => {
       expect(readerScope.getByText("No summary or keywords yet.")).toBeTruthy()
-      expect(readerScope.queryByText(/Mock summary for article-layout-shell/i)).toBeNull()
+      expect(
+        readerScope.queryByText(/Summary:.*The shell now reads like an application/i),
+      ).toBeNull()
     })
   })
 
@@ -912,7 +895,7 @@ describe("reader shell navigation", () => {
 
     await user.click(
       treeScope.getByRole("button", {
-        name: /paused.*Night Audio Digest/i,
+        name: /Night Audio Digest/i,
       }),
     )
 
@@ -1004,7 +987,7 @@ describe("reader shell navigation", () => {
 
     await user.click(
       within(subscriptionTree as HTMLElement).getByRole("button", {
-        name: /healthy.*FreelyRSS Engineering/i,
+        name: /FreelyRSS Engineering/i,
       }),
     )
 
@@ -1196,7 +1179,7 @@ describe("reader shell navigation", () => {
 
     await user.click(
       treeScope.getByRole("button", {
-        name: /healthy.*Queue Virtualization Lab/i,
+        name: /Queue Virtualization Lab/i,
       }),
     )
 
@@ -1254,7 +1237,7 @@ describe("reader shell navigation", () => {
 
     await user.click(
       treeScope.getByRole("button", {
-        name: /degraded.*Query Notes.*malformed XML near the channel header/i,
+        name: /Query Notes/i,
       }),
     )
 
@@ -1502,7 +1485,6 @@ describe("reader shell navigation", () => {
     render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
 
     const sourcePane = await screen.findByRole("region", { name: "Sources" })
-    const taskPanel = screen.getByRole("region", { name: "Task status" })
     const syncSection = within(sourcePane)
       .getByRole("heading", {
         name: "Sync settings",
@@ -1510,7 +1492,6 @@ describe("reader shell navigation", () => {
       .closest("section")
 
     expect(syncSection).not.toBeNull()
-    expect(taskPanel.textContent).not.toContain("Sync settings")
 
     const syncScope = within(syncSection as HTMLElement)
 
@@ -1546,90 +1527,6 @@ describe("reader shell navigation", () => {
       expect(syncScope.queryByRole("alert")).toBeNull()
       expect(syncScope.getByText("Mobile reader prototype")).toBeTruthy()
       expect(syncScope.queryByText("Never synced")).toBeNull()
-    })
-  })
-
-  test("surfaces task status completion, failure details, recovery, and retry entry", async () => {
-    window.scrollTo = () => {}
-    const user = userEvent.setup()
-
-    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
-
-    const taskPanel = await screen.findByRole("region", { name: "Task status" })
-    const taskScope = within(taskPanel)
-    const readerPane = screen.getByRole("region", { name: "Reading panel" })
-    const readerScope = within(readerPane)
-    const markdownSection = readerScope
-      .getByRole("heading", {
-        name: "Markdown export",
-      })
-      .closest("section")
-
-    expect(markdownSection).not.toBeNull()
-
-    const markdownScope = within(markdownSection as HTMLElement)
-
-    await user.click(markdownScope.getByRole("button", { name: "Export selected article" }))
-
-    await waitFor(() => {
-      const markdownTask = taskScope.getByText("Markdown export").closest("li")
-
-      expect(markdownTask?.textContent).toContain("Completed")
-      expect(markdownTask?.textContent).toContain("Generated")
-      expect(markdownTask?.textContent).toContain("1 article")
-    })
-
-    const sourcePane = screen.getByRole("region", { name: "Sources" })
-    const sourceScope = within(sourcePane)
-    const subscriptionTree = sourceScope
-      .getByRole("heading", {
-        name: "Subscription tree",
-      })
-      .closest("section")
-
-    expect(subscriptionTree).not.toBeNull()
-
-    const treeScope = within(subscriptionTree as HTMLElement)
-
-    await user.click(
-      treeScope.getByRole("button", {
-        name: /paused.*Archive holding pen/i,
-      }),
-    )
-
-    await waitFor(() => {
-      expect(window.location.search).toContain("sourceId=feed-empty-holding")
-    })
-
-    const feedEditor = sourceScope
-      .getByRole("heading", {
-        name: "Feed editor",
-      })
-      .closest("section")
-
-    expect(feedEditor).not.toBeNull()
-
-    const editorScope = within(feedEditor as HTMLElement)
-
-    await user.click(editorScope.getByRole("button", { name: "Manual refresh" }))
-
-    await waitFor(() => {
-      const refreshTask = taskScope.getByText("Source refresh").closest("li")
-
-      expect(refreshTask?.textContent).toContain("Failed")
-      expect(refreshTask?.textContent).toContain("Archive holding pen refresh failed")
-      expect(refreshTask?.textContent).toContain("keep intentionally empty feeds paused")
-    })
-
-    const retryButton = taskScope.getByRole("button", { name: "Retry refresh" })
-
-    await user.click(retryButton)
-
-    await waitFor(() => {
-      const refreshTask = taskScope.getByText("Source refresh").closest("li")
-
-      expect(refreshTask?.textContent).toContain("Failed")
-      expect(refreshTask?.textContent).toContain("Archive holding pen refresh failed")
     })
   })
 

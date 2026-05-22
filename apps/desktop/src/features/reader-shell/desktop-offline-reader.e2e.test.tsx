@@ -115,7 +115,9 @@ describe("desktop offline reader end-to-end", () => {
     })
 
     expect(
-      readerScope.getByText(/add a subscription, refresh it, open the resulting queue item/i),
+      readerScope.getByText(
+        /fetched when the feed was refreshed.*new content appears in the reading queue/i,
+      ),
     ).toBeTruthy()
 
     await user.click(readerScope.getByRole("button", { name: "Read" }))
@@ -142,16 +144,16 @@ describe("desktop offline reader end-to-end", () => {
     })
 
     fireEvent.change(queueScope.getByLabelText("Article view filter"), {
-      target: { value: "deterministic" },
+      target: { value: "demonstrates" },
     })
 
     await waitFor(() => {
       expect(queuePane.querySelectorAll(".desktop-article-row")).toHaveLength(1)
       expect(queuePane.querySelector(".desktop-queue__search-mark")?.textContent).toBe(
-        "deterministic",
+        "demonstrates",
       )
       expect(
-        readerScope.getByText("deterministic", { selector: ".desktop-reader__search-hit" }),
+        readerScope.getByText("demonstrates", { selector: ".desktop-reader__search-hit" }),
       ).toBeTruthy()
     })
 
