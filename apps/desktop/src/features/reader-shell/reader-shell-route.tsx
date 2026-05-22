@@ -7,22 +7,22 @@ import {
   useState,
 } from "react"
 
-import { Button, SplitLayout, Surface } from "@freelyrss/ui"
+import { Surface } from "@freelyrss/ui"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate, useSearch } from "@tanstack/react-router"
 
 import { SyncSettingsCard } from "../sync-settings/components/sync-settings-card"
 import {
   READER_LANDMARK_IDS,
-  READER_SHORTCUTS,
   READER_SHORTCUT_HINT_ID,
   type ReaderShortcutTarget,
   isEditableTarget,
 } from "./accessibility"
 import { buildReaderArticleQuery } from "./article-query"
-import { NavigationStrip } from "./components/navigation-strip"
+import { AppToolbar } from "./components/app-toolbar"
 import { QueuePane } from "./components/queue-pane"
 import { ReaderPane } from "./components/reader-pane"
+import { SettingsDropdown } from "./components/settings-dropdown"
 import { SourcePane } from "./components/source-pane"
 import { TaskStatusPanel } from "./components/task-status-panel"
 import {
@@ -718,14 +718,7 @@ export function ReaderShellRoute() {
   }, [handleGlobalShortcut])
 
   if (shellDataQuery.isPending) {
-    return (
-      <main className="desktop-shell">
-        <div className="desktop-loading">
-          <p className="desktop-shell__eyebrow">Stage 8 / Step 66</p>
-          <h1>Loading desktop synchronization settings and reader shell boundaries.</h1>
-        </div>
-      </main>
-    )
+    return <div className="desktop-loading">Loading...</div>
   }
 
   if (shellDataQuery.isError) {
@@ -1125,393 +1118,310 @@ export function ReaderShellRoute() {
         focuses the reading panel.
       </p>
 
-      <header className="desktop-shell__header">
-        <div className="desktop-shell__title-block">
-          <p className="desktop-shell__eyebrow">Stage 8 / Step 66</p>
-          <h1>The desktop shell now exposes synchronization settings.</h1>
-          <p className="desktop-shell__lead">
-            Route state still owns the active source and article, feature modules still own their
-            own mutation rules, and Step 66 adds a dedicated sync settings surface for account,
-            server, device, last-sync, and error status without putting key material or upload
-            scheduling into the reader task monitor.
-          </p>
-        </div>
-
-        <div className="desktop-shell__sidecar">
-          <Surface className="desktop-summary" compact>
-            <div className="desktop-summary__metrics">
-              <div>
-                <span className="desktop-summary__label">Sources</span>
-                <strong>{resolvedShellData.stats.feedCount}</strong>
-              </div>
-              <div>
-                <span className="desktop-summary__label">Visible</span>
-                <strong>{visibleArticles.length}</strong>
-              </div>
-              <div>
-                <span className="desktop-summary__label">Reading</span>
-                <strong>{resolvedShellData.stats.readingCount}</strong>
-              </div>
-            </div>
-
-            <div className="desktop-route-state">
-              <div>
-                <span className="desktop-summary__label">Route Source</span>
-                <strong>{routeState.sourceId}</strong>
-              </div>
-              <div>
-                <span className="desktop-summary__label">Selected Article</span>
-                <strong>{activeArticleId ?? "none"}</strong>
-              </div>
-            </div>
-
-            <p className="desktop-summary__note">
-              The queue still consumes one route-backed article query while cache configuration,
-              source editing, OPML portability, document export, batch operations, and task
-              reporting remain separate concerns. Step 66 keeps synchronization configuration in a
-              dedicated settings card instead of turning task status into account or transport
-              state.
-            </p>
-
-            <div className="desktop-shortcuts">
-              <div className="desktop-shortcuts__summary">
-                <span className="desktop-summary__label">Keyboard workflow</span>
-                <strong>
-                  Landmarks and reading commands now share one shell-level shortcut source.
-                </strong>
-              </div>
-
-              <ul className="desktop-shortcuts__list">
-                {READER_SHORTCUTS.map((shortcut) => (
-                  <li className="desktop-shortcuts__item" key={shortcut.key}>
-                    <span>{shortcut.key}</span>
-                    <span>{shortcut.description}</span>
-                  </li>
-                ))}
-              </ul>
-
-              <Button
-                aria-describedby={READER_SHORTCUT_HINT_ID}
-                aria-keyshortcuts="Alt+Shift+H"
-                aria-pressed={highContrastEnabled}
-                className={
-                  highContrastEnabled
-                    ? "desktop-shortcuts__toggle desktop-shortcuts__toggle--active"
-                    : "desktop-shortcuts__toggle"
-                }
-                onClick={toggleThemeTone}
-                size="sm"
-                tone={highContrastEnabled ? "neutral" : "ghost"}
-              >
-                High contrast: {highContrastEnabled ? "on" : "off"}
-              </Button>
-            </div>
-          </Surface>
-
-          <TaskStatusPanel
-            entries={taskStatusEntries}
-            onRetryTask={retryTask}
-            summary={taskStatusSummary}
+      <AppToolbar
+        onSearchChange={setSearchText}
+        searchValue={searchText}
+        settingsSlot={
+          <SettingsDropdown
+            densityMode={densityMode}
+            highContrastEnabled={highContrastEnabled}
+            onOpenCacheSettings={() => {}}
+            onOpenOpmlExport={() => {}}
+            onOpenOpmlImport={() => {}}
+            onOpenSyncSettings={() => {}}
+            onSetDensityMode={setDensityMode}
+            onSetThemeTone={setThemeTone}
+            onToggleThemeTone={toggleThemeTone}
+            themeTone={themeTone}
           />
-        </div>
-      </header>
-
-      <NavigationStrip
-        activeSourceId={routeState.sourceId}
-        describedBy={READER_SHORTCUT_HINT_ID}
-        entries={resolvedShellData.navigationEntries}
-        navigationId={READER_LANDMARK_IDS.navigation}
-        navigationRef={navigationRef}
-        onSelectSource={selectSource}
+        }
       />
 
-      <div className="desktop-workspace">
-        <SplitLayout>
-          <SourcePane
-            activeSourceId={routeState.sourceId}
-            activeFeed={activeFeed}
-            cacheCleanupErrorMessage={cacheCleanupErrorMessage}
-            cacheStatus={resolvedShellData.cacheStatus}
-            canCollapseFolders={subscriptionRows.some(
-              (row) => row.kind === "folder" && !row.isCollapsed,
-            )}
-            cacheSettings={resolvedShellData.cacheSettings}
-            cacheSettingsErrorMessage={cacheSettingsErrorMessage}
-            describedBy={READER_SHORTCUT_HINT_ID}
-            editorErrorMessage={editorErrorMessage}
-            exportErrorMessage={
-              exportOpmlMutation.error instanceof Error ? exportOpmlMutation.error.message : null
+      <div className="desktop-columns">
+        <SourcePane
+          activeSourceId={routeState.sourceId}
+          activeFeed={activeFeed}
+          cacheCleanupErrorMessage={cacheCleanupErrorMessage}
+          cacheStatus={resolvedShellData.cacheStatus}
+          canCollapseFolders={subscriptionRows.some(
+            (row) => row.kind === "folder" && !row.isCollapsed,
+          )}
+          cacheSettings={resolvedShellData.cacheSettings}
+          cacheSettingsErrorMessage={cacheSettingsErrorMessage}
+          describedBy={READER_SHORTCUT_HINT_ID}
+          editorErrorMessage={editorErrorMessage}
+          exportErrorMessage={
+            exportOpmlMutation.error instanceof Error ? exportOpmlMutation.error.message : null
+          }
+          exportReport={opmlExportResult?.report ?? null}
+          exportedOpml={opmlExportResult?.opmlText ?? null}
+          headingId={READER_LANDMARK_IDS.sourceHeading}
+          importErrorMessage={
+            importOpmlMutation.error instanceof Error ? importOpmlMutation.error.message : null
+          }
+          importReport={opmlImportReport}
+          isExportingOpml={exportOpmlMutation.isPending}
+          isImportingOpml={importOpmlMutation.isPending}
+          isRefreshingFeed={refreshFeedMutation.isPending}
+          isRunningCacheCleanup={runCacheCleanupMutation.isPending}
+          isSavingCacheSettings={saveCacheSettingsMutation.isPending}
+          isSavingFeed={saveFeedMutation.isPending}
+          onCollapseAllFolders={() => setCollapsedFolderIds(collapsibleFolderIds)}
+          onExportOpml={() => {
+            exportOpmlMutation.reset()
+            exportOpmlMutation.mutate()
+          }}
+          onImportOpml={(opmlText) => {
+            exportOpmlMutation.reset()
+            setOpmlExportResult(null)
+            importOpmlMutation.reset()
+            setOpmlImportReport(null)
+            importOpmlMutation.mutate(opmlText)
+          }}
+          onRefreshFeed={(feedId) => {
+            exportOpmlMutation.reset()
+            setOpmlExportResult(null)
+            importOpmlMutation.reset()
+            refreshFeedMutation.reset()
+            runCacheCleanupMutation.reset()
+            saveCacheSettingsMutation.reset()
+            saveFeedMutation.reset()
+            refreshFeedMutation.mutate(feedId)
+          }}
+          onRunCacheCleanup={() => {
+            exportOpmlMutation.reset()
+            setOpmlExportResult(null)
+            importOpmlMutation.reset()
+            refreshFeedMutation.reset()
+            saveFeedMutation.reset()
+            saveCacheSettingsMutation.reset()
+            runCacheCleanupMutation.reset()
+            runCacheCleanupMutation.mutate()
+          }}
+          onSaveCacheSettings={(settings) => {
+            exportOpmlMutation.reset()
+            setOpmlExportResult(null)
+            importOpmlMutation.reset()
+            refreshFeedMutation.reset()
+            runCacheCleanupMutation.reset()
+            saveFeedMutation.reset()
+            saveCacheSettingsMutation.reset()
+            saveCacheSettingsMutation.mutate(settings)
+          }}
+          onSelectSource={selectSource}
+          onSaveFeed={(input) => {
+            exportOpmlMutation.reset()
+            setOpmlExportResult(null)
+            importOpmlMutation.reset()
+            refreshFeedMutation.reset()
+            runCacheCleanupMutation.reset()
+            saveCacheSettingsMutation.reset()
+            saveFeedMutation.reset()
+            saveFeedMutation.mutate(input)
+          }}
+          onToggleFolderCollapsed={toggleFolderCollapsed}
+          paneId={READER_LANDMARK_IDS.source}
+          paneRef={sourcePaneRef}
+          quickViewSection={resolvedShellData.quickViewSection}
+          smartFolderSection={{
+            title: "Smart folders",
+            rows: resolvedShellData.smartFolders.map((folder) => ({
+              id: folder.id,
+              kind: "view",
+              title: folder.name,
+              meta: `${folder.unreadCount}/${folder.articleCount} unread`,
+            })),
+          }}
+          syncSettingsSlot={<SyncSettingsCard />}
+          subscriptionRows={subscriptionRows}
+        />
+
+        <QueuePane
+          activeArticleId={activeArticleId}
+          activeSource={activeSource}
+          availableBatchTags={resolvedShellData.tags}
+          batchOperationErrorMessage={batchOperationErrorMessage}
+          batchOperationResult={batchOperationResult}
+          densityMode={densityMode}
+          describedBy={READER_SHORTCUT_HINT_ID}
+          headingId={READER_LANDMARK_IDS.queueHeading}
+          isRunningBatchOperation={runBatchOperationMutation.isPending}
+          onClearBatchSelection={clearBatchSelectedArticleIds}
+          onRunBatchOperation={(command) => {
+            runBatchOperationMutation.reset()
+            setBatchOperationResult(null)
+            runBatchOperationMutation.mutate({
+              ...command,
+              articleIds: selectedBatchArticleIds,
+            })
+          }}
+          onSearchTextChange={setSearchText}
+          onSelectArticle={selectArticle}
+          onSelectAllVisibleBatchArticles={() => setBatchSelectedArticleIds(visibleArticleIds)}
+          onSetDensityMode={setDensityMode}
+          onSetSortMode={setSortMode}
+          onSetStatusFilter={setStatusFilter}
+          onToggleBatchArticleSelection={toggleBatchSelectedArticleId}
+          paneId={READER_LANDMARK_IDS.queue}
+          paneRef={queuePaneRef}
+          queryResetKey={resolvedArticleQuery.summary.jsonPreview}
+          querySummary={resolvedArticleQuery.summary}
+          searchText={searchText}
+          selectedBatchArticleIds={selectedBatchArticleIds}
+          sortMode={sortMode}
+          statusFilter={statusFilter}
+          visibleArticles={visibleArticles}
+        />
+
+        <ReaderPane
+          activeDetail={activeDetail}
+          annotationErrorMessage={annotationErrorMessage}
+          aiInsightErrorMessage={aiInsightErrorMessage}
+          aiQuestionErrorMessage={aiQuestionErrorMessage}
+          aiTranslationErrorMessage={aiTranslationErrorMessage}
+          articleStateErrorMessage={articleStateErrorMessage}
+          describedBy={READER_SHORTCUT_HINT_ID}
+          documentExportErrorMessage={documentExportErrorMessage}
+          documentExportResult={documentExportResult}
+          headingId={READER_LANDMARK_IDS.readerHeading}
+          isCreatingAnnotation={createAnnotationMutation.isPending}
+          isGeneratingAIInsights={generateArticleInsightsMutation.isPending}
+          isAnsweringAIQuestion={answerArticleQuestionMutation.isPending}
+          isDeletingAICache={deleteArticleAiCacheMutation.isPending}
+          isExportingDocument={exportDocumentMutation.isPending}
+          isExportingMarkdown={exportMarkdownMutation.isPending}
+          isGeneratingAITranslation={generateArticleTranslationMutation.isPending}
+          isReaderAIEnabled={readerAiEnabled}
+          isUpdatingArticleState={updateArticleStateMutation.isPending}
+          markdownExportErrorMessage={markdownExportErrorMessage}
+          markdownExportResult={markdownExportResult}
+          onCreateAnnotation={(input) => {
+            createAnnotationMutation.reset()
+            createAnnotationMutation.mutate(input)
+          }}
+          onGenerateAIInsights={() => {
+            if (!activeDetail || !readerAiEnabled) {
+              return
             }
-            exportReport={opmlExportResult?.report ?? null}
-            exportedOpml={opmlExportResult?.opmlText ?? null}
-            headingId={READER_LANDMARK_IDS.sourceHeading}
-            importErrorMessage={
-              importOpmlMutation.error instanceof Error ? importOpmlMutation.error.message : null
+
+            generateArticleInsightsMutation.reset()
+            generateArticleInsightsMutation.mutate(activeDetail.article.id)
+          }}
+          onAnswerAIQuestion={(input) => {
+            if (!activeDetail || !readerAiEnabled) {
+              return
             }
-            importReport={opmlImportReport}
-            isExportingOpml={exportOpmlMutation.isPending}
-            isImportingOpml={importOpmlMutation.isPending}
-            isRefreshingFeed={refreshFeedMutation.isPending}
-            isRunningCacheCleanup={runCacheCleanupMutation.isPending}
-            isSavingCacheSettings={saveCacheSettingsMutation.isPending}
-            isSavingFeed={saveFeedMutation.isPending}
-            onCollapseAllFolders={() => setCollapsedFolderIds(collapsibleFolderIds)}
-            onExportOpml={() => {
-              exportOpmlMutation.reset()
-              exportOpmlMutation.mutate()
-            }}
-            onImportOpml={(opmlText) => {
-              exportOpmlMutation.reset()
-              setOpmlExportResult(null)
-              importOpmlMutation.reset()
-              setOpmlImportReport(null)
-              importOpmlMutation.mutate(opmlText)
-            }}
-            onRefreshFeed={(feedId) => {
-              exportOpmlMutation.reset()
-              setOpmlExportResult(null)
-              importOpmlMutation.reset()
-              refreshFeedMutation.reset()
-              runCacheCleanupMutation.reset()
-              saveCacheSettingsMutation.reset()
-              saveFeedMutation.reset()
-              refreshFeedMutation.mutate(feedId)
-            }}
-            onRunCacheCleanup={() => {
-              exportOpmlMutation.reset()
-              setOpmlExportResult(null)
-              importOpmlMutation.reset()
-              refreshFeedMutation.reset()
-              saveFeedMutation.reset()
-              saveCacheSettingsMutation.reset()
-              runCacheCleanupMutation.reset()
-              runCacheCleanupMutation.mutate()
-            }}
-            onSaveCacheSettings={(settings) => {
-              exportOpmlMutation.reset()
-              setOpmlExportResult(null)
-              importOpmlMutation.reset()
-              refreshFeedMutation.reset()
-              runCacheCleanupMutation.reset()
-              saveFeedMutation.reset()
-              saveCacheSettingsMutation.reset()
-              saveCacheSettingsMutation.mutate(settings)
-            }}
-            onSelectSource={selectSource}
-            onSaveFeed={(input) => {
-              exportOpmlMutation.reset()
-              setOpmlExportResult(null)
-              importOpmlMutation.reset()
-              refreshFeedMutation.reset()
-              runCacheCleanupMutation.reset()
-              saveCacheSettingsMutation.reset()
-              saveFeedMutation.reset()
-              saveFeedMutation.mutate(input)
-            }}
-            onToggleFolderCollapsed={toggleFolderCollapsed}
-            paneId={READER_LANDMARK_IDS.source}
-            paneRef={sourcePaneRef}
-            quickViewSection={resolvedShellData.quickViewSection}
-            smartFolderSection={{
-              title: "Smart folders",
-              rows: resolvedShellData.smartFolders.map((folder) => ({
-                id: folder.id,
-                kind: "view",
-                title: folder.name,
-                meta: `${folder.unreadCount}/${folder.articleCount} unread`,
-              })),
-            }}
-            syncSettingsSlot={<SyncSettingsCard />}
-            subscriptionRows={subscriptionRows}
-          />
 
-          <QueuePane
-            activeArticleId={activeArticleId}
-            activeSource={activeSource}
-            availableBatchTags={resolvedShellData.tags}
-            batchOperationErrorMessage={batchOperationErrorMessage}
-            batchOperationResult={batchOperationResult}
-            densityMode={densityMode}
-            describedBy={READER_SHORTCUT_HINT_ID}
-            headingId={READER_LANDMARK_IDS.queueHeading}
-            isRunningBatchOperation={runBatchOperationMutation.isPending}
-            onClearBatchSelection={clearBatchSelectedArticleIds}
-            onRunBatchOperation={(command) => {
-              runBatchOperationMutation.reset()
-              setBatchOperationResult(null)
-              runBatchOperationMutation.mutate({
-                ...command,
-                articleIds: selectedBatchArticleIds,
-              })
-            }}
-            onSearchTextChange={setSearchText}
-            onSelectArticle={selectArticle}
-            onSelectAllVisibleBatchArticles={() => setBatchSelectedArticleIds(visibleArticleIds)}
-            onSetDensityMode={setDensityMode}
-            onSetSortMode={setSortMode}
-            onSetStatusFilter={setStatusFilter}
-            onToggleBatchArticleSelection={toggleBatchSelectedArticleId}
-            paneId={READER_LANDMARK_IDS.queue}
-            paneRef={queuePaneRef}
-            queryResetKey={resolvedArticleQuery.summary.jsonPreview}
-            querySummary={resolvedArticleQuery.summary}
-            searchText={searchText}
-            selectedBatchArticleIds={selectedBatchArticleIds}
-            sortMode={sortMode}
-            statusFilter={statusFilter}
-            visibleArticles={visibleArticles}
-          />
+            answerArticleQuestionMutation.reset()
+            answerArticleQuestionMutation.mutate({
+              articleId: activeDetail.article.id,
+              contextScope: input.contextScope,
+              question: input.question,
+            })
+          }}
+          onGenerateAITranslation={(input) => {
+            if (!activeDetail || !readerAiEnabled) {
+              return
+            }
 
-          <ReaderPane
-            activeDetail={activeDetail}
-            annotationErrorMessage={annotationErrorMessage}
-            aiInsightErrorMessage={aiInsightErrorMessage}
-            aiQuestionErrorMessage={aiQuestionErrorMessage}
-            aiTranslationErrorMessage={aiTranslationErrorMessage}
-            articleStateErrorMessage={articleStateErrorMessage}
-            describedBy={READER_SHORTCUT_HINT_ID}
-            documentExportErrorMessage={documentExportErrorMessage}
-            documentExportResult={documentExportResult}
-            headingId={READER_LANDMARK_IDS.readerHeading}
-            isCreatingAnnotation={createAnnotationMutation.isPending}
-            isGeneratingAIInsights={generateArticleInsightsMutation.isPending}
-            isAnsweringAIQuestion={answerArticleQuestionMutation.isPending}
-            isDeletingAICache={deleteArticleAiCacheMutation.isPending}
-            isExportingDocument={exportDocumentMutation.isPending}
-            isExportingMarkdown={exportMarkdownMutation.isPending}
-            isGeneratingAITranslation={generateArticleTranslationMutation.isPending}
-            isReaderAIEnabled={readerAiEnabled}
-            isUpdatingArticleState={updateArticleStateMutation.isPending}
-            markdownExportErrorMessage={markdownExportErrorMessage}
-            markdownExportResult={markdownExportResult}
-            onCreateAnnotation={(input) => {
-              createAnnotationMutation.reset()
-              createAnnotationMutation.mutate(input)
-            }}
-            onGenerateAIInsights={() => {
-              if (!activeDetail || !readerAiEnabled) {
-                return
-              }
+            generateArticleTranslationMutation.reset()
+            generateArticleTranslationMutation.mutate({
+              articleId: activeDetail.article.id,
+              mode: input.mode,
+              selectedText: input.selectedText,
+              targetLanguage: input.targetLanguage,
+            })
+          }}
+          onDeleteAICache={() => {
+            if (!activeDetail) {
+              return
+            }
 
-              generateArticleInsightsMutation.reset()
-              generateArticleInsightsMutation.mutate(activeDetail.article.id)
-            }}
-            onAnswerAIQuestion={(input) => {
-              if (!activeDetail || !readerAiEnabled) {
-                return
-              }
+            deleteArticleAiCacheMutation.reset()
+            deleteArticleAiCacheMutation.mutate(activeDetail.article.id)
+          }}
+          onExportDocumentBatch={(format) => {
+            exportDocumentMutation.reset()
+            setDocumentExportResult(null)
+            exportDocumentMutation.mutate({
+              articleIds: visibleArticles.map((article) => article.id),
+              format,
+              mode: "batch",
+              presentation: {
+                contentMode: readerContentMode,
+                fontFamily: readerFontFamily,
+                fontScale: readerFontScale,
+                lineHeight: readerLineHeight,
+                marginMode: readerMarginMode,
+                themeTone,
+              },
+              title: `${activeSource.title} ${format.toUpperCase()} export`,
+            })
+          }}
+          onExportDocumentSingle={(format) => {
+            if (!activeDetail) {
+              return
+            }
 
-              answerArticleQuestionMutation.reset()
-              answerArticleQuestionMutation.mutate({
-                articleId: activeDetail.article.id,
-                contextScope: input.contextScope,
-                question: input.question,
-              })
-            }}
-            onGenerateAITranslation={(input) => {
-              if (!activeDetail || !readerAiEnabled) {
-                return
-              }
+            exportDocumentMutation.reset()
+            setDocumentExportResult(null)
+            exportDocumentMutation.mutate({
+              articleIds: [activeDetail.article.id],
+              format,
+              mode: "single",
+              presentation: {
+                contentMode: readerContentMode,
+                fontFamily: readerFontFamily,
+                fontScale: readerFontScale,
+                lineHeight: readerLineHeight,
+                marginMode: readerMarginMode,
+                themeTone,
+              },
+            })
+          }}
+          onExportMarkdownBatch={() => {
+            exportMarkdownMutation.reset()
+            setMarkdownExportResult(null)
+            exportMarkdownMutation.mutate({
+              articleIds: visibleArticles.map((article) => article.id),
+              mode: "batch",
+              title: `${activeSource.title} Markdown export`,
+            })
+          }}
+          onExportMarkdownSingle={() => {
+            if (!activeDetail) {
+              return
+            }
 
-              generateArticleTranslationMutation.reset()
-              generateArticleTranslationMutation.mutate({
-                articleId: activeDetail.article.id,
-                mode: input.mode,
-                selectedText: input.selectedText,
-                targetLanguage: input.targetLanguage,
-              })
-            }}
-            onDeleteAICache={() => {
-              if (!activeDetail) {
-                return
-              }
-
-              deleteArticleAiCacheMutation.reset()
-              deleteArticleAiCacheMutation.mutate(activeDetail.article.id)
-            }}
-            onExportDocumentBatch={(format) => {
-              exportDocumentMutation.reset()
-              setDocumentExportResult(null)
-              exportDocumentMutation.mutate({
-                articleIds: visibleArticles.map((article) => article.id),
-                format,
-                mode: "batch",
-                presentation: {
-                  contentMode: readerContentMode,
-                  fontFamily: readerFontFamily,
-                  fontScale: readerFontScale,
-                  lineHeight: readerLineHeight,
-                  marginMode: readerMarginMode,
-                  themeTone,
-                },
-                title: `${activeSource.title} ${format.toUpperCase()} export`,
-              })
-            }}
-            onExportDocumentSingle={(format) => {
-              if (!activeDetail) {
-                return
-              }
-
-              exportDocumentMutation.reset()
-              setDocumentExportResult(null)
-              exportDocumentMutation.mutate({
-                articleIds: [activeDetail.article.id],
-                format,
-                mode: "single",
-                presentation: {
-                  contentMode: readerContentMode,
-                  fontFamily: readerFontFamily,
-                  fontScale: readerFontScale,
-                  lineHeight: readerLineHeight,
-                  marginMode: readerMarginMode,
-                  themeTone,
-                },
-              })
-            }}
-            onExportMarkdownBatch={() => {
-              exportMarkdownMutation.reset()
-              setMarkdownExportResult(null)
-              exportMarkdownMutation.mutate({
-                articleIds: visibleArticles.map((article) => article.id),
-                mode: "batch",
-                title: `${activeSource.title} Markdown export`,
-              })
-            }}
-            onExportMarkdownSingle={() => {
-              if (!activeDetail) {
-                return
-              }
-
-              exportMarkdownMutation.reset()
-              setMarkdownExportResult(null)
-              exportMarkdownMutation.mutate({
-                articleIds: [activeDetail.article.id],
-                mode: "single",
-              })
-            }}
-            onSetReaderContentMode={setReaderContentMode}
-            onSetReaderFontFamily={setReaderFontFamily}
-            onSetReaderFontScale={setReaderFontScale}
-            onSetReaderLineHeight={setReaderLineHeight}
-            onSetReaderMarginMode={setReaderMarginMode}
-            onSetReaderAIEnabled={setReaderAiEnabled}
-            onSetThemeTone={setThemeTone}
-            onUpdateArticleState={(input) => {
-              updateArticleStateMutation.reset()
-              updateArticleStateMutation.mutate(input)
-            }}
-            paneId={READER_LANDMARK_IDS.reader}
-            paneRef={readerPaneRef}
-            readerContentMode={readerContentMode}
-            readerFontFamily={readerFontFamily}
-            readerFontScale={readerFontScale}
-            readerLineHeight={readerLineHeight}
-            readerMarginMode={readerMarginMode}
-            searchHighlightTerms={resolvedArticleQuery.searchHighlightTerms}
-            themeTone={themeTone}
-            visibleArticleCount={visibleArticles.length}
-          />
-        </SplitLayout>
+            exportMarkdownMutation.reset()
+            setMarkdownExportResult(null)
+            exportMarkdownMutation.mutate({
+              articleIds: [activeDetail.article.id],
+              mode: "single",
+            })
+          }}
+          onSetReaderContentMode={setReaderContentMode}
+          onSetReaderFontFamily={setReaderFontFamily}
+          onSetReaderFontScale={setReaderFontScale}
+          onSetReaderLineHeight={setReaderLineHeight}
+          onSetReaderMarginMode={setReaderMarginMode}
+          onSetReaderAIEnabled={setReaderAiEnabled}
+          onSetThemeTone={setThemeTone}
+          onUpdateArticleState={(input) => {
+            updateArticleStateMutation.reset()
+            updateArticleStateMutation.mutate(input)
+          }}
+          paneId={READER_LANDMARK_IDS.reader}
+          paneRef={readerPaneRef}
+          readerContentMode={readerContentMode}
+          readerFontFamily={readerFontFamily}
+          readerFontScale={readerFontScale}
+          readerLineHeight={readerLineHeight}
+          readerMarginMode={readerMarginMode}
+          searchHighlightTerms={resolvedArticleQuery.searchHighlightTerms}
+          themeTone={themeTone}
+          visibleArticleCount={visibleArticles.length}
+        />
       </div>
     </main>
   )
