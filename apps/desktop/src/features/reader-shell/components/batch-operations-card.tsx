@@ -54,10 +54,7 @@ export function BatchOperationsCard({
   const canRunOperation = selectedArticleCount > 0 && !isRunning
 
   return (
-    <ListSection
-      description="Stage 7 Step 58 keeps multi-article changes on a queue selection boundary, with execution delegated to a batch mutation instead of export formatters or reader rendering."
-      title="Batch operations"
-    >
+    <ListSection description="Apply actions to multiple articles at once" title="Batch operations">
       <Surface className="desktop-batch" compact>
         <div className="desktop-batch__summary">
           <div>

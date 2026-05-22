@@ -34,10 +34,7 @@ export function DocumentExportCard({
   visibleArticleCount,
 }: DocumentExportCardProps) {
   return (
-    <ListSection
-      description="Stage 7 Step 57 keeps HTML and PDF output beside the Markdown formatter, with both formats consuming the same resolved article-detail inputs and current reader presentation settings."
-      title="HTML/PDF export"
-    >
+    <ListSection description="Export articles as HTML or PDF" title="HTML/PDF export">
       <Surface className="desktop-export desktop-document-export" compact>
         <label className="fr-field">
           <span className="fr-field__label">Exported document source</span>

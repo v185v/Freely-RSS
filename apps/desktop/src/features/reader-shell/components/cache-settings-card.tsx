@@ -80,10 +80,7 @@ export function CacheSettingsCard({
   }
 
   return (
-    <ListSection
-      description="Desktop-wide cache defaults stay separate from per-feed source metadata so eviction work can consume one stable settings contract later."
-      title="Cache settings"
-    >
+    <ListSection description="Configure content caching defaults" title="Cache settings">
       <Surface className="desktop-cache-settings" compact>
         <div className="desktop-cache-settings__summary">
           <div>
@@ -99,7 +96,7 @@ export function CacheSettingsCard({
         <div className="desktop-editor__form">
           <TextInput
             aria-label="Global cache limit (MB)"
-            hint="Future eviction work will consume this desktop-wide byte budget."
+            hint="Maximum disk space for cached content."
             label="Global cache limit (MB)"
             min={CACHE_LIMIT_STEP_MB}
             onChange={(event) => updateDraft("maxMegabytes", event.target.value)}

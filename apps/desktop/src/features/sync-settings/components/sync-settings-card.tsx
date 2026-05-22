@@ -82,19 +82,13 @@ export function SyncSettingsCard({
   }
 
   return (
-    <ListSection
-      description="Step 66 keeps account, server, device, and user-visible sync status in a dedicated settings surface. It does not store master keys, schedule uploads, or call WebDAV adapters."
-      title="Sync settings"
-    >
+    <ListSection description="Manage synchronization settings" title="Sync settings">
       <Surface aria-live="polite" className="desktop-sync-settings" compact>
         <div className="desktop-sync-settings__hero">
           <div>
             <span className="desktop-summary__label">Synchronization</span>
             <strong>{formatDesktopSyncStatus(settings.status)}</strong>
-            <p>
-              Client-held encryption remains outside this UI. This panel only captures the user
-              visible account/server configuration and device status needed before transport work.
-            </p>
+            <p>Configure your sync server, account, and connected devices.</p>
           </div>
           <span className={statusClassName(settings.status)}>
             {formatDesktopSyncStatus(settings.status)}
@@ -132,7 +126,7 @@ export function SyncSettingsCard({
 
           <TextInput
             aria-label="Sync server URL"
-            hint={`Use ${OFFICIAL_SYNC_SERVER_URL} for the current mock success path, or http://localhost for local server development.`}
+            hint={`Default: ${OFFICIAL_SYNC_SERVER_URL}`}
             label="Sync server URL"
             onChange={(event) => updateDraft("serverUrl", event.target.value)}
             placeholder={OFFICIAL_SYNC_SERVER_URL}
@@ -141,7 +135,7 @@ export function SyncSettingsCard({
 
           <TextInput
             aria-label="Sync account email"
-            hint="This is account metadata only; it is not a recovery secret and does not unlock event payloads."
+            hint="Email associated with your sync account."
             label="Account email"
             onChange={(event) => updateDraft("accountEmail", event.target.value)}
             placeholder="reader@example.com"

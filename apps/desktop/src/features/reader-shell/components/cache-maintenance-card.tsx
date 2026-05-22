@@ -62,10 +62,7 @@ export function CacheMaintenanceCard({
   const visibleCandidates = status.cleanupCandidates.slice(0, 4)
 
   return (
-    <ListSection
-      description="Cleanup honors the desktop-wide byte budget, uses per-feed cache policy as a hard boundary, and only applies LRU pressure to non-protected articles."
-      title="Cache cleanup"
-    >
+    <ListSection description="Free up disk space by removing cached content" title="Cache cleanup">
       <Surface className="desktop-cache-maintenance" compact>
         <div className="desktop-cache-maintenance__summary">
           <div>

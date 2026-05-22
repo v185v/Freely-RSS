@@ -42,10 +42,7 @@ export function OpmlImportCard({
   }
 
   return (
-    <ListSection
-      description="Stage 35 keeps OPML import in the desktop shell boundary: the shell accepts source structure, the mock repository writes the snapshot, and duplicate feed URLs are skipped instead of creating parallel source facts."
-      title="OPML import"
-    >
+    <ListSection description="Import subscriptions from OPML" title="OPML import">
       <Surface className="desktop-import" compact>
         <label className="fr-field">
           <span className="fr-field__label">OPML payload</span>

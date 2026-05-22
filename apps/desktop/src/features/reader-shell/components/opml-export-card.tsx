@@ -22,10 +22,7 @@ export function OpmlExportCard({
   textareaRef,
 }: OpmlExportCardProps) {
   return (
-    <ListSection
-      description="Stage 36 keeps OPML export in the desktop shell boundary: the shell asks for the current source tree snapshot, the mock repository serializes it into portable OPML, and the reader shell only presents the payload plus summary facts."
-      title="OPML export"
-    >
+    <ListSection description="Export subscriptions as OPML" title="OPML export">
       <Surface className="desktop-export" compact>
         <label className="fr-field">
           <span className="fr-field__label">Exported OPML</span>
@@ -38,10 +35,7 @@ export function OpmlExportCard({
             rows={12}
             value={exportedOpml ?? ""}
           />
-          <span className="fr-field__hint">
-            Export includes folders that still contain feed descendants plus every current feed URL
-            in the shell snapshot.
-          </span>
+          <span className="fr-field__hint">Export includes folders and all current feed URLs.</span>
         </label>
 
         {exportReport ? (

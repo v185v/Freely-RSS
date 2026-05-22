@@ -73,17 +73,10 @@ export function FeedEditorCard({
 
   if (!feed) {
     return (
-      <ListSection
-        description="Quick views and folders remain selectable, but edit controls only appear when a concrete feed is active."
-        title="Feed editor"
-      >
+      <ListSection description="Edit feed settings" title="Feed editor">
         <div className="desktop-empty-state desktop-empty-state--compact">
           <p className="desktop-empty-state__eyebrow">Selection required</p>
           <h3>Choose a feed to edit source metadata.</h3>
-          <p>
-            Step 34 keeps source editing in the desktop shell command layer instead of pushing it
-            into the fetch engine, shared DTO assembly, or base UI primitives.
-          </p>
         </div>
       </ListSection>
     )
@@ -135,10 +128,7 @@ export function FeedEditorCard({
   }
 
   return (
-    <ListSection
-      description="Feed edits stay route-adjacent in the shell, while the mock repository remains the only writer for source facts."
-      title="Feed editor"
-    >
+    <ListSection description="Edit feed settings" title="Feed editor">
       <Surface className="desktop-editor" compact>
         <div className="desktop-editor__summary">
           <div>
@@ -177,7 +167,7 @@ export function FeedEditorCard({
         <div className="desktop-editor__form">
           <TextInput
             aria-label="Source title"
-            hint="Renaming the feed title updates the shared display text consumed by the shell."
+            hint="Renaming the feed title updates the display name everywhere."
             label="Source title"
             onChange={(event) => updateDraft("title", event.target.value)}
             value={draft.title}
@@ -194,7 +184,7 @@ export function FeedEditorCard({
 
           <TextInput
             aria-label="Update interval (minutes)"
-            hint="Blank keeps the global default until real per-feed persistence arrives."
+            hint="Blank uses the global default interval."
             label="Update interval (minutes)"
             min={1}
             onChange={(event) => updateDraft("updateInterval", event.target.value)}
@@ -206,7 +196,7 @@ export function FeedEditorCard({
 
           <TextInput
             aria-label="Icon URL"
-            hint="Icon edits stay on the desktop-side source metadata path."
+            hint="Custom icon for this feed."
             label="Icon URL"
             onChange={(event) => updateDraft("icon", event.target.value)}
             placeholder="https://assets.example/icon.svg"

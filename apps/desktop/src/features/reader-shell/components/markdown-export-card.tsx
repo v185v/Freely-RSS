@@ -30,10 +30,7 @@ export function MarkdownExportCard({
   visibleArticleCount,
 }: MarkdownExportCardProps) {
   return (
-    <ListSection
-      description="Stage 7 Step 56 keeps Markdown serialization in a dedicated export boundary while the reader only presents the generated payload and summary facts."
-      title="Markdown export"
-    >
+    <ListSection description="Export articles as Markdown" title="Markdown export">
       <Surface className="desktop-export desktop-markdown-export" compact>
         <label className="fr-field">
           <span className="fr-field__label">Exported Markdown</span>
