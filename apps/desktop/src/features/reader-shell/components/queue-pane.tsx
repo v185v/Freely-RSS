@@ -17,6 +17,7 @@ import type {
   ReaderArticleQuerySummary,
   ReaderBatchOperationCommand,
   ReaderBatchOperationResult,
+  ReaderDensityMode,
   ReaderSortMode,
   ReaderStatusFilter,
   SourceRow,
@@ -29,6 +30,7 @@ type QueuePaneProps = {
   availableBatchTags: TagDto[]
   batchOperationErrorMessage: string | null
   batchOperationResult: ReaderBatchOperationResult | null
+  densityMode: ReaderDensityMode
   describedBy?: string
   headingId: string
   isRunningBatchOperation: boolean
@@ -37,6 +39,7 @@ type QueuePaneProps = {
   onSearchTextChange: (searchText: string) => void
   onSelectArticle: (articleId: string) => void
   onSelectAllVisibleBatchArticles: () => void
+  onSetDensityMode: (mode: ReaderDensityMode) => void
   onSetSortMode: (sortMode: ReaderSortMode) => void
   onSetStatusFilter: (statusFilter: ReaderStatusFilter) => void
   onToggleBatchArticleSelection: (articleId: ArticleListItemDto["id"]) => void
@@ -69,6 +72,7 @@ export function QueuePane({
   availableBatchTags,
   batchOperationErrorMessage,
   batchOperationResult,
+  densityMode,
   describedBy,
   headingId,
   isRunningBatchOperation,
@@ -77,6 +81,7 @@ export function QueuePane({
   onSearchTextChange,
   onSelectArticle,
   onSelectAllVisibleBatchArticles,
+  onSetDensityMode,
   onSetSortMode,
   onSetStatusFilter,
   onToggleBatchArticleSelection,
@@ -136,7 +141,6 @@ export function QueuePane({
         <div className="desktop-pane__toolbar">
           <TextInput
             aria-label="Article view filter"
-            hint='This shell-owned filter now accepts shared-query text syntax such as tag:product, feed="FreelyRSS Engineering", or (tag:search OR has:attachment).'
             label="Queue filter"
             onChange={handleSearchTextChange}
             placeholder='Try tag:product OR "offline first"'
@@ -192,6 +196,31 @@ export function QueuePane({
               </Button>
             </div>
           </fieldset>
+
+          <div className="density-toggle">
+            <button
+              className={
+                densityMode === "compact"
+                  ? "density-toggle__btn density-toggle__btn--active"
+                  : "density-toggle__btn"
+              }
+              onClick={() => onSetDensityMode("compact")}
+              type="button"
+            >
+              Compact
+            </button>
+            <button
+              className={
+                densityMode === "comfortable"
+                  ? "density-toggle__btn density-toggle__btn--active"
+                  : "density-toggle__btn"
+              }
+              onClick={() => onSetDensityMode("comfortable")}
+              type="button"
+            >
+              Comfortable
+            </button>
+          </div>
         </div>
 
         <Surface className="desktop-view-state" compact>
@@ -273,7 +302,7 @@ export function QueuePane({
                         <ListRow
                           active={activeArticleId === article.id}
                           aria-current={activeArticleId === article.id ? "page" : undefined}
-                          className="desktop-article-row"
+                          className={`desktop-article-row queue-item--${densityMode}`}
                           eyebrow={article.feedTitle}
                           meta={formatArticleMeta(article)}
                           onClick={() => onSelectArticle(article.id)}

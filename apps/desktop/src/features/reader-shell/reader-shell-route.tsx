@@ -148,6 +148,8 @@ export function ReaderShellRoute() {
   const setThemeTone = useReaderViewStore((state) => state.setThemeTone)
   const toggleFolderCollapsed = useReaderViewStore((state) => state.toggleFolderCollapsed)
   const toggleThemeTone = useReaderViewStore((state) => state.toggleThemeTone)
+  const densityMode = useReaderViewStore((state) => state.densityMode)
+  const setDensityMode = useReaderViewStore((state) => state.setDensityMode)
   const deferredSearchText = useDeferredValue(searchText)
   const [opmlImportReport, setOpmlImportReport] = useState<MockOpmlImportResult["report"] | null>(
     null,
@@ -1329,6 +1331,7 @@ export function ReaderShellRoute() {
             availableBatchTags={resolvedShellData.tags}
             batchOperationErrorMessage={batchOperationErrorMessage}
             batchOperationResult={batchOperationResult}
+            densityMode={densityMode}
             describedBy={READER_SHORTCUT_HINT_ID}
             headingId={READER_LANDMARK_IDS.queueHeading}
             isRunningBatchOperation={runBatchOperationMutation.isPending}
@@ -1344,6 +1347,7 @@ export function ReaderShellRoute() {
             onSearchTextChange={setSearchText}
             onSelectArticle={selectArticle}
             onSelectAllVisibleBatchArticles={() => setBatchSelectedArticleIds(visibleArticleIds)}
+            onSetDensityMode={setDensityMode}
             onSetSortMode={setSortMode}
             onSetStatusFilter={setStatusFilter}
             onToggleBatchArticleSelection={toggleBatchSelectedArticleId}
