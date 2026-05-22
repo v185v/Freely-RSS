@@ -895,19 +895,12 @@ export function ReaderPane({
     >
       <Surface className="desktop-pane__surface desktop-pane__surface--reader">
         <div className="desktop-pane__header">
-          <p className="desktop-pane__eyebrow">Right pane</p>
           <h2 id={headingId}>Reading panel</h2>
           {activeDetail ? (
             <p className="desktop-pane__focus-title">{activeDetail.article.title}</p>
           ) : (
             <p className="desktop-pane__focus-title">No article selected yet</p>
           )}
-          <p className="desktop-pane__description">
-            The selected article still comes from route state, and the reader still preserves the
-            Step 40 content-mode toggle plus the Step 42 attachment surface. Step 46 now adds
-            shell-side text selection, anchored highlights, and note creation without changing
-            article selection, shared DTO ownership, or durable SQLite persistence boundaries.
-          </p>
         </div>
 
         {activeDetail ? (
@@ -1238,12 +1231,6 @@ export function ReaderPane({
                   <div className="desktop-reader__state-controls-header">
                     <div>
                       <p className="desktop-reader__section-label">Article state</p>
-                      <p className="desktop-reader__state-note">
-                        Step 43 keeps article state writes inside the desktop shell command path.
-                        Step 44 reuses that same mutation boundary for keyboard commands, so the
-                        queue, quick views, feed counts, and current reader detail stay synchronized
-                        without introducing storage-backed persistence yet.
-                      </p>
                     </div>
                     <div className="desktop-reader__state-summary">
                       <span className="desktop-reader__fact-label">Pending write</span>
@@ -1422,28 +1409,11 @@ export function ReaderPane({
                   <div className="desktop-reader__presentation-header">
                     <div>
                       <p className="desktop-reader__section-label">Reading environment</p>
-                      <p className="desktop-reader__presentation-note">
-                        Step 45 keeps these preferences inside the desktop shell store. Theme, font,
-                        size, line height, and margin choices persist locally so the next app
-                        session reopens with the same reading posture.
-                      </p>
                     </div>
                     <div className="desktop-reader__presentation-summary">
                       <span className="desktop-reader__fact-label">Current profile</span>
                       <strong>{readerPresentationSummary}</strong>
                     </div>
-                  </div>
-
-                  <div className="desktop-reader__presentation-preview">
-                    <p className="desktop-reader__section-label">Preview</p>
-                    <h4 className="desktop-reader__presentation-title">
-                      Typography should stay shell-owned until durable reader preferences arrive.
-                    </h4>
-                    <p className="desktop-reader__presentation-sample">
-                      Selection, query scope, and article state still belong to their existing
-                      boundaries. Step 45 only makes the reading surface more comfortable and more
-                      accessible without promoting view preferences into shared contracts.
-                    </p>
                   </div>
 
                   <fieldset className="desktop-toolbar-group desktop-reader__control-group">
@@ -1572,12 +1542,6 @@ export function ReaderPane({
                   <div className="desktop-reader__body-header">
                     <div>
                       <p className="desktop-reader__section-label">Reading body</p>
-                      <p className="desktop-reader__body-note">
-                        Reader mode and reading presentation are both shell-local preferences. Step
-                        46 now keeps text-selection capture and annotation replay in the reader
-                        shell as well, while durable anchor storage still belongs to later
-                        `core-domain/sqlite` work.
-                      </p>
                     </div>
                     <div className="desktop-reader__body-meta">
                       <div>
@@ -1671,12 +1635,6 @@ export function ReaderPane({
                   <div className="desktop-reader__annotations-header">
                     <div>
                       <p className="desktop-reader__section-label">Highlights and notes</p>
-                      <p className="desktop-reader__annotations-note">
-                        Step 46 keeps annotation authoring in the desktop shell: select text from
-                        extracted mode, capture one paragraph-scoped anchor, and replay the
-                        resulting highlight or note from the resolved article detail without
-                        changing shared DTO ownership.
-                      </p>
                     </div>
                     <div className="desktop-reader__annotations-summary">
                       <span className="desktop-reader__fact-label">Anchored items</span>
@@ -1688,10 +1646,6 @@ export function ReaderPane({
                     <div className="desktop-reader__selection-header">
                       <div>
                         <p className="desktop-reader__section-label">Current selection</p>
-                        <p className="desktop-reader__selection-note">
-                          Selection capture is only enabled for extracted reader paragraphs so the
-                          shell can serialize one stable text anchor instead of raw markup ranges.
-                        </p>
                       </div>
                       <div className="desktop-reader__selection-meta">
                         <span className="desktop-reader__fact-label">Pending annotation</span>
@@ -1868,11 +1822,6 @@ export function ReaderPane({
                   <div className="desktop-reader__attachments-header">
                     <div>
                       <p className="desktop-reader__section-label">Attachments</p>
-                      <p className="desktop-reader__attachments-note">
-                        Step 42 makes attachment records visible in the reading panel. The shell
-                        still only renders one resolved article detail object; enclosure discovery
-                        and persistence remain below this boundary.
-                      </p>
                     </div>
                     <div className="desktop-reader__attachments-summary">
                       <span className="desktop-reader__fact-label">Visible attachments</span>
