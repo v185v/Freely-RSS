@@ -12,7 +12,6 @@ import { Surface } from "@freelyrss/ui"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate, useSearch } from "@tanstack/react-router"
 
-import { SyncSettingsCard } from "../sync-settings/components/sync-settings-card"
 import {
   READER_LANDMARK_IDS,
   READER_SHORTCUT_HINT_ID,
@@ -1142,85 +1141,13 @@ export function ReaderShellRoute() {
       <div className="desktop-columns">
         <SourcePane
           activeSourceId={routeState.sourceId}
-          activeFeed={activeFeed}
-          cacheCleanupErrorMessage={cacheCleanupErrorMessage}
-          cacheStatus={resolvedShellData.cacheStatus}
           canCollapseFolders={subscriptionRows.some(
             (row) => row.kind === "folder" && !row.isCollapsed,
           )}
-          cacheSettings={resolvedShellData.cacheSettings}
-          cacheSettingsErrorMessage={cacheSettingsErrorMessage}
           describedBy={READER_SHORTCUT_HINT_ID}
-          editorErrorMessage={editorErrorMessage}
-          exportErrorMessage={
-            exportOpmlMutation.error instanceof Error ? exportOpmlMutation.error.message : null
-          }
-          exportReport={opmlExportResult?.report ?? null}
-          exportedOpml={opmlExportResult?.opmlText ?? null}
           headingId={READER_LANDMARK_IDS.sourceHeading}
-          importErrorMessage={
-            importOpmlMutation.error instanceof Error ? importOpmlMutation.error.message : null
-          }
-          importReport={opmlImportReport}
-          isExportingOpml={exportOpmlMutation.isPending}
-          isImportingOpml={importOpmlMutation.isPending}
-          isRefreshingFeed={refreshFeedMutation.isPending}
-          isRunningCacheCleanup={runCacheCleanupMutation.isPending}
-          isSavingCacheSettings={saveCacheSettingsMutation.isPending}
-          isSavingFeed={saveFeedMutation.isPending}
           onCollapseAllFolders={() => setCollapsedFolderIds(collapsibleFolderIds)}
-          onExportOpml={() => {
-            exportOpmlMutation.reset()
-            exportOpmlMutation.mutate()
-          }}
-          onImportOpml={(opmlText) => {
-            exportOpmlMutation.reset()
-            setOpmlExportResult(null)
-            importOpmlMutation.reset()
-            setOpmlImportReport(null)
-            importOpmlMutation.mutate(opmlText)
-          }}
-          onRefreshFeed={(feedId) => {
-            exportOpmlMutation.reset()
-            setOpmlExportResult(null)
-            importOpmlMutation.reset()
-            refreshFeedMutation.reset()
-            runCacheCleanupMutation.reset()
-            saveCacheSettingsMutation.reset()
-            saveFeedMutation.reset()
-            refreshFeedMutation.mutate(feedId)
-          }}
-          onRunCacheCleanup={() => {
-            exportOpmlMutation.reset()
-            setOpmlExportResult(null)
-            importOpmlMutation.reset()
-            refreshFeedMutation.reset()
-            saveFeedMutation.reset()
-            saveCacheSettingsMutation.reset()
-            runCacheCleanupMutation.reset()
-            runCacheCleanupMutation.mutate()
-          }}
-          onSaveCacheSettings={(settings) => {
-            exportOpmlMutation.reset()
-            setOpmlExportResult(null)
-            importOpmlMutation.reset()
-            refreshFeedMutation.reset()
-            runCacheCleanupMutation.reset()
-            saveFeedMutation.reset()
-            saveCacheSettingsMutation.reset()
-            saveCacheSettingsMutation.mutate(settings)
-          }}
           onSelectSource={selectSource}
-          onSaveFeed={(input) => {
-            exportOpmlMutation.reset()
-            setOpmlExportResult(null)
-            importOpmlMutation.reset()
-            refreshFeedMutation.reset()
-            runCacheCleanupMutation.reset()
-            saveCacheSettingsMutation.reset()
-            saveFeedMutation.reset()
-            saveFeedMutation.mutate(input)
-          }}
           onToggleFolderCollapsed={toggleFolderCollapsed}
           paneId={READER_LANDMARK_IDS.source}
           paneRef={sourcePaneRef}
@@ -1231,10 +1158,9 @@ export function ReaderShellRoute() {
               id: folder.id,
               kind: "view",
               title: folder.name,
-              meta: `${folder.unreadCount}/${folder.articleCount} unread`,
+              meta: `${folder.unreadCount}/${folder.articleCount}`,
             })),
           }}
-          syncSettingsSlot={<SyncSettingsCard />}
           subscriptionRows={subscriptionRows}
         />
 

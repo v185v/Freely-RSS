@@ -683,22 +683,22 @@ const articleDetails: Record<string, ArticleDetailDto> = {
 const navigationEntries = [
   {
     id: "view-unread",
-    title: "Unread desk",
+    title: "未读",
     description: "",
   },
   {
     id: "view-reading",
-    title: "Continue reading",
+    title: "在读",
     description: "",
   },
   {
     id: "view-starred",
-    title: "Starred focus",
+    title: "收藏",
     description: "",
   },
   {
     id: "feed-empty-holding",
-    title: "Archive holding",
+    title: "归档",
     description: "",
   },
 ] as const
@@ -1047,25 +1047,25 @@ function buildQuickViewSection(state: MockReaderState) {
     {
       id: "view-unread",
       kind: "view",
-      title: "Unread desk",
-      meta: `${state.articles.filter((article) => article.state.readState !== "read").length} articles`,
+      title: "未读",
+      meta: `${state.articles.filter((article) => article.state.readState !== "read").length} 篇`,
     },
     {
       id: "view-reading",
       kind: "view",
-      title: "Continue reading",
-      meta: `${state.articles.filter((article) => article.state.readState === "reading").length} articles`,
+      title: "在读",
+      meta: `${state.articles.filter((article) => article.state.readState === "reading").length} 篇`,
     },
     {
       id: "view-starred",
       kind: "view",
-      title: "Starred focus",
-      meta: `${state.articles.filter((article) => article.state.starred).length} articles`,
+      title: "收藏",
+      meta: `${state.articles.filter((article) => article.state.starred).length} 篇`,
     },
   ]
 
   return {
-    title: "Quick views",
+    title: "快速视图",
     rows: quickViewRows,
   }
 }
@@ -1074,7 +1074,7 @@ function buildSmartFolders(state: MockReaderState): SmartFolderDto[] {
   const smartFolders: Array<Omit<SmartFolderDto, "articleCount" | "unreadCount">> = [
     {
       id: "smart-folder-recent-unread",
-      name: "Recent unread",
+      name: "最近未读",
       queryDefinition: serializeQueryDefinition(
         normalizeQueryDefinition(
           buildQueryDefinition({
@@ -1087,7 +1087,7 @@ function buildSmartFolders(state: MockReaderState): SmartFolderDto[] {
     },
     {
       id: "smart-folder-last-7-days-unread",
-      name: "Last 7 days unread",
+      name: "近 7 天未读",
       queryDefinition: serializeQueryDefinition({
         version: 1,
         root: {

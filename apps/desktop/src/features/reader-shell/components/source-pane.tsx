@@ -1,60 +1,18 @@
-import { type CSSProperties, type ReactNode, type Ref, useRef } from "react"
+import { type CSSProperties, type Ref, useRef } from "react"
 import { useTranslation } from "react-i18next"
 
 import type { FeedDto } from "@freelyrss/shared-types"
 import { Button, ListRow, ListSection, SplitPane, Surface } from "@freelyrss/ui"
 
-import type {
-  OpmlExportReport,
-  OpmlImportReport,
-  ReaderCacheSettings,
-  ReaderCacheStatus,
-  SourceRow,
-  SubscriptionTreeRow,
-} from "../types"
-import { CacheMaintenanceCard } from "./cache-maintenance-card"
-import { CacheSettingsCard } from "./cache-settings-card"
-import { FeedEditorCard } from "./feed-editor-card"
-import { OpmlExportCard } from "./opml-export-card"
-import { OpmlImportCard } from "./opml-import-card"
+import type { SourceRow, SubscriptionTreeRow } from "../types"
 
 type SourcePaneProps = {
   activeSourceId: string
-  activeFeed: FeedDto | null
-  cacheCleanupErrorMessage: string | null
-  cacheStatus: ReaderCacheStatus
   canCollapseFolders: boolean
-  cacheSettings: ReaderCacheSettings
-  cacheSettingsErrorMessage: string | null
   describedBy?: string
-  editorErrorMessage: string | null
-  exportErrorMessage: string | null
-  exportReport: OpmlExportReport | null
-  exportedOpml: string | null
   headingId: string
-  importErrorMessage: string | null
-  importReport: OpmlImportReport | null
-  isExportingOpml: boolean
-  isImportingOpml: boolean
-  isRefreshingFeed: boolean
-  isRunningCacheCleanup: boolean
-  isSavingCacheSettings: boolean
-  isSavingFeed: boolean
   onCollapseAllFolders: () => void
-  onExportOpml: () => void
-  onImportOpml: (opmlText: string) => void
-  onRefreshFeed: (feedId: FeedDto["id"]) => void
-  onRunCacheCleanup: () => void
-  onSaveCacheSettings: (settings: ReaderCacheSettings) => void
   onSelectSource: (sourceId: string) => void
-  onSaveFeed: (input: {
-    cachePolicy: FeedDto["cachePolicy"]
-    customName: string | null
-    feedId: FeedDto["id"]
-    icon: string | null
-    title: string
-    updateInterval: number | null
-  }) => void
   onToggleFolderCollapsed: (folderId: string) => void
   paneId: string
   paneRef?: Ref<HTMLElement>
@@ -66,50 +24,23 @@ type SourcePaneProps = {
     rows: SourceRow[]
     title: string
   }
-  syncSettingsSlot?: ReactNode
   subscriptionRows: SubscriptionTreeRow[]
 }
 
 export function SourcePane({
   activeSourceId,
-  activeFeed,
-  cacheCleanupErrorMessage,
-  cacheStatus,
   canCollapseFolders,
-  cacheSettings,
-  cacheSettingsErrorMessage,
   describedBy,
-  editorErrorMessage,
-  exportErrorMessage,
-  exportReport,
-  exportedOpml,
   headingId,
-  importErrorMessage,
-  importReport,
-  isExportingOpml,
-  isImportingOpml,
-  isRefreshingFeed,
-  isRunningCacheCleanup,
-  isSavingCacheSettings,
-  isSavingFeed,
   onCollapseAllFolders,
-  onExportOpml,
-  onImportOpml,
-  onRefreshFeed,
-  onRunCacheCleanup,
-  onSaveCacheSettings,
   onSelectSource,
-  onSaveFeed,
   onToggleFolderCollapsed,
   paneId,
   paneRef,
   quickViewSection,
   smartFolderSection,
-  syncSettingsSlot,
   subscriptionRows,
 }: SourcePaneProps) {
-  const importTextareaRef = useRef<HTMLTextAreaElement | null>(null)
-  const exportTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const { t } = useTranslation()
 
   return (
@@ -211,59 +142,11 @@ export function SourcePane({
               ))}
             </ul>
           </ListSection>
-
-          <FeedEditorCard
-            errorMessage={editorErrorMessage}
-            feed={activeFeed}
-            isRefreshing={isRefreshingFeed}
-            isSaving={isSavingFeed}
-            onRefreshFeed={onRefreshFeed}
-            onSaveFeed={onSaveFeed}
-          />
-
-          <CacheSettingsCard
-            errorMessage={cacheSettingsErrorMessage}
-            isSaving={isSavingCacheSettings}
-            onSaveSettings={onSaveCacheSettings}
-            settings={cacheSettings}
-          />
-
-          <CacheMaintenanceCard
-            errorMessage={cacheCleanupErrorMessage}
-            isRunning={isRunningCacheCleanup}
-            onRunCleanup={onRunCacheCleanup}
-            status={cacheStatus}
-          />
-
-          {syncSettingsSlot}
-
-          <OpmlImportCard
-            errorMessage={importErrorMessage}
-            importReport={importReport}
-            isImporting={isImportingOpml}
-            onImportOpml={onImportOpml}
-            textareaRef={importTextareaRef}
-          />
-
-          <OpmlExportCard
-            errorMessage={exportErrorMessage}
-            exportReport={exportReport}
-            exportedOpml={exportedOpml}
-            isExporting={isExportingOpml}
-            onGenerateOpml={onExportOpml}
-            textareaRef={exportTextareaRef}
-          />
         </div>
 
         <div className="desktop-pane__footer">
           <Button size="sm" tone="ghost">
             {t("source.addSource")}
-          </Button>
-          <Button onClick={() => importTextareaRef.current?.focus()} size="sm" tone="neutral">
-            {t("source.importOpml")}
-          </Button>
-          <Button onClick={() => exportTextareaRef.current?.focus()} size="sm" tone="ghost">
-            {t("source.exportOpml")}
           </Button>
         </div>
       </Surface>
