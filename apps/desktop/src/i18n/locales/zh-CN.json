@@ -40,6 +40,7 @@
     "exportOpml": "导出 OPML",
     "collapseGroups": "折叠分组",
     "subscriptionTree": "订阅列表",
+    "refresh": "刷新",
     "expandFolder": "展开 {{name}}",
     "collapseFolder": "折叠 {{name}}",
     "smartFolders": "智能文件夹"

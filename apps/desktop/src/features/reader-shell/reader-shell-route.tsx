@@ -390,10 +390,19 @@ export function ReaderShellRoute() {
   })
   const importOpmlMutation = useMutation({
     mutationFn: importMockOpml,
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       setOpmlImportReport(result.report)
       setOpmlExportResult(null)
       queryClient.setQueryData(readerShellQueryKey, result.shellData)
+      const newFeeds = result.shellData.feeds.filter((feed) => feed.healthStatus === "pending")
+      for (const feed of newFeeds) {
+        try {
+          const refreshed = await refreshMockFeed(feed.id)
+          queryClient.setQueryData(readerShellQueryKey, refreshed)
+        } catch {
+          // feed refresh failed, skip
+        }
+      }
     },
   })
   const exportOpmlMutation = useMutation({
@@ -1144,6 +1153,7 @@ export function ReaderShellRoute() {
           canCollapseFolders={subscriptionRows.some(
             (row) => row.kind === "folder" && !row.isCollapsed,
           )}
+          canRefresh={activeFeed !== null}
           describedBy={READER_SHORTCUT_HINT_ID}
           headingId={READER_LANDMARK_IDS.sourceHeading}
           onAddFeed={(url) => {
@@ -1153,6 +1163,9 @@ export function ReaderShellRoute() {
           }}
           onCollapseAllFolders={() => setCollapsedFolderIds(collapsibleFolderIds)}
           onImportOpml={(opmlText) => importOpmlMutation.mutate(opmlText)}
+          onRefreshFeed={() => {
+            if (activeFeed) refreshFeedMutation.mutate(activeFeed.id)
+          }}
           onSelectSource={selectSource}
           onToggleFolderCollapsed={toggleFolderCollapsed}
           paneId={READER_LANDMARK_IDS.source}

@@ -40,6 +40,7 @@
     "exportOpml": "Export OPML",
     "collapseGroups": "Collapse groups",
     "subscriptionTree": "Subscription tree",
+    "refresh": "Refresh",
     "expandFolder": "Expand {{name}}",
     "collapseFolder": "Collapse {{name}}",
     "smartFolders": "Smart folders"

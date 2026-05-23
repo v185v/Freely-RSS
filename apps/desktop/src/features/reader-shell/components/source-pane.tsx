@@ -9,11 +9,13 @@ import type { SourceRow, SubscriptionTreeRow } from "../types"
 type SourcePaneProps = {
   activeSourceId: string
   canCollapseFolders: boolean
+  canRefresh: boolean
   describedBy?: string
   headingId: string
   onAddFeed: (url: string) => void
   onCollapseAllFolders: () => void
   onImportOpml: (opmlText: string) => void
+  onRefreshFeed: () => void
   onSelectSource: (sourceId: string) => void
   onToggleFolderCollapsed: (folderId: string) => void
   paneId: string
@@ -32,11 +34,13 @@ type SourcePaneProps = {
 export function SourcePane({
   activeSourceId,
   canCollapseFolders,
+  canRefresh,
   describedBy,
   headingId,
   onAddFeed,
   onCollapseAllFolders,
   onImportOpml,
+  onRefreshFeed,
   onSelectSource,
   onToggleFolderCollapsed,
   paneId,
@@ -63,6 +67,11 @@ export function SourcePane({
       <Surface className="desktop-pane__surface desktop-pane__surface--nav">
         <div className="desktop-pane__header">
           <h2 id={headingId}>{t("source.title")}</h2>
+          {canRefresh && (
+            <button className="desktop-pane__header-action" onClick={onRefreshFeed} type="button">
+              {t("source.refresh")}
+            </button>
+          )}
         </div>
 
         <div className="desktop-pane__scroll">

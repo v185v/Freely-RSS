@@ -267,9 +267,27 @@ body,
 }
 
 .desktop-pane__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 10px 12px;
   flex-shrink: 0;
   border-bottom: 1px solid var(--fr-border);
+}
+
+.desktop-pane__header-action {
+  background: none;
+  border: none;
+  color: var(--fr-text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.desktop-pane__header-action:hover {
+  color: var(--fr-text-strong);
+  background: var(--fr-panel-soft);
 }
 .desktop-pane__header h2 {
   margin: 0;
