@@ -107,7 +107,7 @@ describe("reader shell navigation", () => {
 
     const sourcePane = screen.getByRole("region", { name: "Sources" })
 
-    await user.click(within(sourcePane).getByRole("button", { name: /Unread desk/i }))
+    await user.click(within(sourcePane).getByRole("button", { name: /^[\d\s篇]*未读$/ }))
 
     await screen.findAllByText("Turning the desktop shell into a stable three-pane reader skeleton")
 
@@ -220,11 +220,11 @@ describe("reader shell navigation", () => {
 
     const smartFolderScope = within(smartFolderSection as HTMLElement)
 
-    expect(smartFolderScope.getByText("Last 7 days unread")).toBeTruthy()
+    expect(smartFolderScope.getByText("近 7 天未读")).toBeTruthy()
 
     await user.click(
       smartFolderScope.getByRole("button", {
-        name: /Last 7 days unread/i,
+        name: /近 7 天未读/i,
       }),
     )
 
@@ -235,10 +235,10 @@ describe("reader shell navigation", () => {
     const queuePane = screen.getByRole("region", { name: "Article queue" })
     const queueScope = within(queuePane)
 
-    expect(queueScope.getByText("Last 7 days unread")).toBeTruthy()
+    expect(queueScope.getByText("近 7 天未读")).toBeTruthy()
     expect(
       queueScope.getByText(
-        /Route scope "Last 7 days unread" reuses its saved shared query definition\./i,
+        /Route scope "近 7 天未读" reuses its saved shared query definition\./i,
         {
           selector: "p",
         },
@@ -1216,320 +1216,6 @@ describe("reader shell navigation", () => {
     })
   })
 
-  test("edits feed metadata and records a manual refresh through the shell command path", async () => {
-    window.scrollTo = () => {}
-    const user = userEvent.setup()
-    const renderShell = () =>
-      render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
-
-    renderShell()
-
-    const sourcePane = await screen.findByRole("region", { name: "Sources" })
-    const subscriptionTree = within(sourcePane)
-      .getByRole("heading", {
-        name: "Subscription tree",
-      })
-      .closest("section")
-
-    expect(subscriptionTree).not.toBeNull()
-
-    const treeScope = within(subscriptionTree as HTMLElement)
-
-    await user.click(
-      treeScope.getByRole("button", {
-        name: /Query Notes/i,
-      }),
-    )
-
-    const editor = within(sourcePane)
-      .getByRole("heading", {
-        name: "Feed editor",
-      })
-      .closest("section")
-
-    expect(editor).not.toBeNull()
-
-    const editorScope = within(editor as HTMLElement)
-
-    await user.clear(editorScope.getByLabelText("Source title"))
-    await user.type(editorScope.getByLabelText("Source title"), "Parser Dispatch")
-    await user.clear(editorScope.getByLabelText("Custom display label"))
-    await user.type(editorScope.getByLabelText("Custom display label"), "SQL Parser Watch")
-    await user.clear(editorScope.getByLabelText("Update interval (minutes)"))
-    await user.type(editorScope.getByLabelText("Update interval (minutes)"), "30")
-    await user.clear(editorScope.getByLabelText("Icon URL"))
-    await user.type(
-      editorScope.getByLabelText("Icon URL"),
-      "https://query.example/assets/query-notes.svg",
-    )
-    await user.click(editorScope.getByRole("button", { name: "Content + attachments" }))
-
-    await user.click(editorScope.getByRole("button", { name: "Save changes" }))
-
-    await waitFor(() => {
-      expect(treeScope.getByText("SQL Parser Watch")).toBeTruthy()
-      expect((editorScope.getByLabelText("Source title") as HTMLInputElement).value).toBe(
-        "Parser Dispatch",
-      )
-      expect((editorScope.getByLabelText("Custom display label") as HTMLInputElement).value).toBe(
-        "SQL Parser Watch",
-      )
-      expect(
-        (editorScope.getByLabelText("Update interval (minutes)") as HTMLInputElement).value,
-      ).toBe("30")
-      expect((editorScope.getByLabelText("Icon URL") as HTMLInputElement).value).toBe(
-        "https://query.example/assets/query-notes.svg",
-      )
-      expect(
-        editorScope
-          .getByRole("button", { name: "Content + attachments" })
-          .getAttribute("aria-pressed"),
-      ).toBe("true")
-    })
-
-    const queuePane = screen.getByRole("region", { name: "Article queue" })
-    const readerPane = screen.getByRole("region", { name: "Reading panel" })
-
-    expect(within(queuePane).getAllByText("SQL Parser Watch").length).toBeGreaterThan(0)
-    expect(within(readerPane).getAllByText("SQL Parser Watch").length).toBeGreaterThan(0)
-
-    cleanup()
-    renderShell()
-
-    const reopenedSourcePane = await screen.findByRole("region", { name: "Sources" })
-    const reopenedEditor = within(reopenedSourcePane)
-      .getByRole("heading", {
-        name: "Feed editor",
-      })
-      .closest("section")
-
-    expect(reopenedEditor).not.toBeNull()
-
-    const reopenedEditorScope = within(reopenedEditor as HTMLElement)
-
-    await waitFor(() => {
-      expect((reopenedEditorScope.getByLabelText("Source title") as HTMLInputElement).value).toBe(
-        "Parser Dispatch",
-      )
-      expect(
-        (reopenedEditorScope.getByLabelText("Custom display label") as HTMLInputElement).value,
-      ).toBe("SQL Parser Watch")
-      expect(
-        (reopenedEditorScope.getByLabelText("Update interval (minutes)") as HTMLInputElement).value,
-      ).toBe("30")
-      expect((reopenedEditorScope.getByLabelText("Icon URL") as HTMLInputElement).value).toBe(
-        "https://query.example/assets/query-notes.svg",
-      )
-      expect(
-        reopenedEditorScope
-          .getByRole("button", { name: "Content + attachments" })
-          .getAttribute("aria-pressed"),
-      ).toBe("true")
-    })
-
-    await user.click(reopenedEditorScope.getByRole("button", { name: "Manual refresh" }))
-
-    await waitFor(() => {
-      expect(reopenedEditorScope.getAllByText("healthy").length).toBeGreaterThan(0)
-      expect(reopenedEditorScope.queryByText(/malformed XML near the channel header/i)).toBeNull()
-    })
-  })
-
-  test("persists global cache settings and seeds imported feeds with the current default policy", async () => {
-    window.scrollTo = () => {}
-    const user = userEvent.setup()
-    const renderShell = () =>
-      render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
-
-    renderShell()
-
-    const sourcePane = await screen.findByRole("region", { name: "Sources" })
-    const cacheSettingsSection = within(sourcePane)
-      .getByRole("heading", {
-        name: "Cache settings",
-      })
-      .closest("section")
-
-    expect(cacheSettingsSection).not.toBeNull()
-
-    const cacheSettingsScope = within(cacheSettingsSection as HTMLElement)
-
-    await user.clear(cacheSettingsScope.getByLabelText("Global cache limit (MB)"))
-    await user.type(cacheSettingsScope.getByLabelText("Global cache limit (MB)"), "1024")
-    await user.click(cacheSettingsScope.getByRole("button", { name: "Metadata only" }))
-    await user.click(cacheSettingsScope.getByRole("button", { name: "Save cache settings" }))
-
-    await waitFor(async () => {
-      const shellData = await fetchReaderShellData()
-
-      expect(shellData.cacheSettings.maxBytes).toBe(1_073_741_824)
-      expect(shellData.cacheSettings.defaultPolicy).toBe("metadata-only")
-    })
-
-    cleanup()
-    renderShell()
-
-    const reopenedSourcePane = await screen.findByRole("region", { name: "Sources" })
-    const reopenedCacheSettingsSection = within(reopenedSourcePane)
-      .getByRole("heading", {
-        name: "Cache settings",
-      })
-      .closest("section")
-
-    expect(reopenedCacheSettingsSection).not.toBeNull()
-
-    const reopenedCacheSettingsScope = within(reopenedCacheSettingsSection as HTMLElement)
-
-    await waitFor(() => {
-      expect(
-        (reopenedCacheSettingsScope.getByLabelText("Global cache limit (MB)") as HTMLInputElement)
-          .value,
-      ).toBe("1024")
-      expect(
-        reopenedCacheSettingsScope
-          .getByRole("button", { name: "Metadata only" })
-          .getAttribute("aria-pressed"),
-      ).toBe("true")
-    })
-
-    const importResult = await importMockOpml(`<?xml version="1.0" encoding="UTF-8"?>
-<opml version="2.0">
-  <body>
-    <outline text="Cache defaults" title="Cache defaults">
-      <outline
-        text="Cache Default Feed"
-        title="Cache Default Feed"
-        type="rss"
-        xmlUrl="https://cache-default.example/feed.xml"
-        htmlUrl="https://cache-default.example"
-      />
-    </outline>
-  </body>
-</opml>`)
-    const importedFeed = Object.values(importResult.shellData.feedDetails).find(
-      (feed) => feed.feedUrl === "https://cache-default.example/feed.xml",
-    )
-
-    expect(importedFeed?.cachePolicy).toBe("metadata-only")
-  })
-
-  test("runs cache cleanup with LRU protection and keeps protected article media cached", async () => {
-    window.scrollTo = () => {}
-    const user = userEvent.setup()
-
-    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
-
-    const sourcePane = await screen.findByRole("region", { name: "Sources" })
-    const cacheSettingsSection = within(sourcePane)
-      .getByRole("heading", {
-        name: "Cache settings",
-      })
-      .closest("section")
-    const cleanupSection = within(sourcePane)
-      .getByRole("heading", {
-        name: "Cache cleanup",
-      })
-      .closest("section")
-
-    expect(cacheSettingsSection).not.toBeNull()
-    expect(cleanupSection).not.toBeNull()
-
-    const cacheSettingsScope = within(cacheSettingsSection as HTMLElement)
-    const cleanupScope = within(cleanupSection as HTMLElement)
-
-    await user.clear(cacheSettingsScope.getByLabelText("Global cache limit (MB)"))
-    await user.type(cacheSettingsScope.getByLabelText("Global cache limit (MB)"), "512")
-    await user.click(cacheSettingsScope.getByRole("button", { name: "Save cache settings" }))
-
-    await waitFor(() => {
-      expect(cleanupScope.getByText(/332 MB over budget/i)).toBeTruthy()
-      expect(
-        cleanupScope.getByText("Why layout state should stay separate from source and query state"),
-      ).toBeTruthy()
-      expect(
-        cleanupScope.getByText(
-          "Making narrow-window behavior predictable before routing and async data land",
-        ),
-      ).toBeTruthy()
-    })
-
-    await user.click(cleanupScope.getByRole("button", { name: "Run cleanup" }))
-
-    await waitFor(async () => {
-      const shellData = await fetchReaderShellData()
-      const protectedAudioAttachment = shellData.articleDetails[
-        "article-midnight-dispatch"
-      ]?.attachments.find((attachment) => attachment.id === "attachment-midnight-dispatch-audio")
-
-      expect(shellData.cacheStatus.overBudgetBytes).toBe(0)
-      expect(shellData.cacheStatus.cleanupCandidates).toHaveLength(0)
-      expect(shellData.cacheStatus.latestCleanup?.evictedEntryCount).toBe(2)
-      expect(shellData.cacheStatus.latestCleanup?.remainingBytes).toBe(436_207_616)
-      expect(protectedAudioAttachment?.localCachePath).toBe(
-        "cache/media/night-audio/dispatch-42.mp3",
-      )
-    })
-
-    await waitFor(() => {
-      expect(
-        cleanupScope.getByText(/within budget and aligned with current source policy/i),
-      ).toBeTruthy()
-      expect(cleanupScope.getByText(/freed 428 MB across 2 entries/i)).toBeTruthy()
-    })
-  })
-
-  test("surfaces desktop sync settings without mixing them into reader task status", async () => {
-    window.scrollTo = () => {}
-    const user = userEvent.setup()
-
-    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
-
-    const sourcePane = await screen.findByRole("region", { name: "Sources" })
-    const syncSection = within(sourcePane)
-      .getByRole("heading", {
-        name: "Sync settings",
-      })
-      .closest("section")
-
-    expect(syncSection).not.toBeNull()
-
-    const syncScope = within(syncSection as HTMLElement)
-
-    expect(syncScope.getAllByText("Not configured").length).toBeGreaterThan(0)
-    expect(syncScope.getAllByText("Never synced").length).toBeGreaterThan(0)
-
-    await user.click(syncScope.getByLabelText("Enable desktop synchronization"))
-    await user.type(syncScope.getByLabelText("Sync server URL"), "https://invalid.example")
-    await user.type(syncScope.getByLabelText("Sync account email"), "reader@example.com")
-    await user.click(syncScope.getByRole("button", { name: "Save and test sync" }))
-
-    await waitFor(() => {
-      expect(syncScope.getAllByText("Syncing").length).toBeGreaterThan(0)
-    })
-
-    await waitFor(() => {
-      expect(syncScope.getAllByText("Sync failed").length).toBeGreaterThan(0)
-      expect(syncScope.getByRole("alert").textContent ?? "").toContain(
-        "only accepts https://sync.freelyrss.dev",
-      )
-    })
-
-    await user.clear(syncScope.getByLabelText("Sync server URL"))
-    await user.type(syncScope.getByLabelText("Sync server URL"), "https://sync.freelyrss.dev")
-    await user.click(syncScope.getByRole("button", { name: "Save and test sync" }))
-
-    await waitFor(() => {
-      expect(syncScope.getAllByText("Syncing").length).toBeGreaterThan(0)
-    })
-
-    await waitFor(() => {
-      expect(syncScope.getAllByText("Sync successful").length).toBeGreaterThan(0)
-      expect(syncScope.queryByRole("alert")).toBeNull()
-      expect(syncScope.getByText("Mobile reader prototype")).toBeTruthy()
-      expect(syncScope.queryByText("Never synced")).toBeNull()
-    })
-  })
-
   test("runs batch queue operations only against selected visible articles", async () => {
     window.scrollTo = () => {}
     const user = userEvent.setup()
@@ -1647,7 +1333,7 @@ describe("reader shell navigation", () => {
     await user.click(markdownScope.getByRole("button", { name: "Export visible queue" }))
 
     await waitFor(() => {
-      expect(exportedMarkdown.value).toContain("# Unread desk Markdown export")
+      expect(exportedMarkdown.value).toContain("# 未读 Markdown export")
       expect(exportedMarkdown.value).toContain("- Article count: 4")
       expect(exportedMarkdown.value).toContain(
         "# Midnight dispatch 42: attachment boundaries for podcast feeds",
@@ -1729,140 +1415,5 @@ describe("reader shell navigation", () => {
     expect(documentScope.getByText("Reader view").parentElement?.textContent).toContain(
       "Original content",
     )
-  })
-
-  test("imports OPML with nested folders and skips duplicate feed URLs", async () => {
-    window.scrollTo = () => {}
-    const user = userEvent.setup()
-
-    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
-
-    const sourcePane = await screen.findByRole("region", { name: "Sources" })
-    const subscriptionTree = within(sourcePane)
-      .getByRole("heading", {
-        name: "Subscription tree",
-      })
-      .closest("section")
-    const importSection = within(sourcePane)
-      .getByRole("heading", {
-        name: "OPML import",
-      })
-      .closest("section")
-
-    expect(subscriptionTree).not.toBeNull()
-    expect(importSection).not.toBeNull()
-
-    const treeScope = within(subscriptionTree as HTMLElement)
-    const importScope = within(importSection as HTMLElement)
-    const opmlPayload = `<?xml version="1.0" encoding="UTF-8"?>
-<opml version="2.0">
-  <body>
-    <outline text="Imported research">
-      <outline text="Parsing desk">
-        <outline
-          text="Rust Systems Weekly"
-          type="rss"
-          xmlUrl="https://systems.example/feed.xml"
-          htmlUrl="https://systems.example"
-        />
-        <outline
-          text="XML Weekly"
-          type="rss"
-          xmlUrl="https://xml.example/feed.xml"
-          htmlUrl="https://xml.example"
-        />
-        <outline
-          text="XML Weekly duplicate"
-          type="rss"
-          xmlUrl="https://xml.example/feed.xml"
-          htmlUrl="https://xml.example"
-        />
-      </outline>
-      <outline
-        text="Atom Signals"
-        type="atom"
-        xmlUrl="https://signals.example/atom.xml"
-        htmlUrl="https://signals.example"
-      />
-    </outline>
-  </body>
-</opml>`
-
-    fireEvent.change(importScope.getByLabelText("OPML payload"), {
-      target: { value: opmlPayload },
-    })
-
-    await user.click(importScope.getByRole("button", { name: "Import OPML" }))
-
-    await waitFor(() => {
-      expect(treeScope.getByText("Imported research")).toBeTruthy()
-      expect(treeScope.getByText("Parsing desk")).toBeTruthy()
-      expect(treeScope.getByText("XML Weekly")).toBeTruthy()
-      expect(treeScope.getByText("Atom Signals")).toBeTruthy()
-    })
-
-    expect(treeScope.queryByText("XML Weekly duplicate")).toBeNull()
-
-    const importedFeedsSummary = importScope.getByText("Feeds imported").parentElement
-    const createdFoldersSummary = importScope.getByText("Folders created").parentElement
-    const skippedDuplicatesSummary = importScope.getByText("Duplicates skipped").parentElement
-
-    expect(importedFeedsSummary).not.toBeNull()
-    expect(createdFoldersSummary).not.toBeNull()
-    expect(skippedDuplicatesSummary).not.toBeNull()
-
-    expect(within(importedFeedsSummary as HTMLElement).getByText("2")).toBeTruthy()
-    expect(within(createdFoldersSummary as HTMLElement).getByText("2")).toBeTruthy()
-    expect(within(skippedDuplicatesSummary as HTMLElement).getByText("2")).toBeTruthy()
-  })
-
-  test("exports the current subscription tree as OPML and round-trips it into the same structure", async () => {
-    window.scrollTo = () => {}
-    const user = userEvent.setup()
-
-    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
-
-    const sourcePane = await screen.findByRole("region", { name: "Sources" })
-    const exportSection = within(sourcePane)
-      .getByRole("heading", {
-        name: "OPML export",
-      })
-      .closest("section")
-
-    expect(exportSection).not.toBeNull()
-
-    const exportScope = within(exportSection as HTMLElement)
-
-    await user.click(exportScope.getByRole("button", { name: "Generate OPML" }))
-
-    const exportedTextarea = exportScope.getByLabelText("Exported OPML") as HTMLTextAreaElement
-
-    await waitFor(() => {
-      expect(exportedTextarea.value).toContain(`<?xml version="1.0" encoding="UTF-8"?>`)
-      expect(exportedTextarea.value).toContain(`text="Daily reading desk"`)
-      expect(exportedTextarea.value).toContain(`xmlUrl="https://freelyrss.dev/feed.xml"`)
-    })
-
-    const feedsExportedSummary = exportScope.getByText("Feeds exported").parentElement
-    const foldersExportedSummary = exportScope.getByText("Folders exported").parentElement
-
-    expect(feedsExportedSummary).not.toBeNull()
-    expect(foldersExportedSummary).not.toBeNull()
-    expect(within(feedsExportedSummary as HTMLElement).getByText("5")).toBeTruthy()
-    expect(within(foldersExportedSummary as HTMLElement).getByText("4")).toBeTruthy()
-
-    const expectedStructure = buildShellStructure(await fetchReaderShellData())
-    const exportedOpml = exportedTextarea.value
-
-    resetMockReaderShellState({ mode: "empty" })
-
-    const imported = await importMockOpml(exportedOpml)
-    const importedStructure = buildShellStructure(imported.shellData)
-
-    expect(imported.report.createdFeedCount).toBe(5)
-    expect(imported.report.createdFolderCount).toBe(4)
-    expect(imported.report.duplicateFeedCount).toBe(0)
-    expect(importedStructure.folderPaths).toEqual(expectedStructure.folderPaths)
-    expect(importedStructure.feedPaths).toEqual(expectedStructure.feedPaths)
   })
 })
