@@ -332,12 +332,12 @@ export interface ReaderArticleQuery {
 }
 
 export const READER_STATUS_FILTER_OPTIONS: Array<{
-  label: string
+  labelKey: string
   value: ReaderStatusFilter
 }> = [
-  { label: "All", value: "all" },
-  { label: "Unread", value: "unread" },
-  { label: "Reading", value: "reading" },
-  { label: "Read later", value: "readLater" },
-  { label: "Starred", value: "starred" },
+  { labelKey: "queue.filterAll", value: "all" },
+  { labelKey: "queue.filterUnread", value: "unread" },
+  { labelKey: "queue.filterReading", value: "reading" },
+  { labelKey: "queue.filterReadLater", value: "readLater" },
+  { labelKey: "queue.filterStarred", value: "starred" },
 ]

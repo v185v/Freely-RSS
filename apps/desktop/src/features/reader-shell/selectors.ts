@@ -73,7 +73,7 @@ function buildFeedSourceRow(data: ReaderShellData, feedId: FeedId): SourceRow {
     id: feed.id,
     kind: "feed",
     title: feed.displayTitle,
-    meta: `${feed.unreadCount}/${feed.totalCount} unread`,
+    meta: `${feed.unreadCount}/${feed.totalCount}`,
   }
 }
 
@@ -92,7 +92,7 @@ function buildFolderSourceRow(data: ReaderShellData, folderId: FolderId): Source
     id: folderNode.folder.id,
     kind: "folder",
     title: folderNode.folder.name,
-    meta: `${unreadCount}/${articles.length} unread`,
+    meta: `${unreadCount}/${articles.length}`,
   }
 }
 
@@ -107,7 +107,7 @@ function buildSmartFolderSourceRow(data: ReaderShellData, smartFolderId: string)
     id: smartFolder.id,
     kind: "view",
     title: smartFolder.name,
-    meta: `${smartFolder.unreadCount}/${smartFolder.articleCount} unread`,
+    meta: `${smartFolder.unreadCount}/${smartFolder.articleCount}`,
   }
 }
 
@@ -218,11 +218,10 @@ export function formatArticleMeta(article: ReaderShellData["articles"][number]) 
       ? ` · ${Math.round(article.state.readingProgress * 100)}%`
       : ""
   const readingTime =
-    article.estimatedReadingMinutes === null
-      ? "No estimate"
-      : `${article.estimatedReadingMinutes} min`
+    article.estimatedReadingMinutes === null ? "" : `${article.estimatedReadingMinutes} min`
 
-  return `${article.state.readState} · ${readingTime}${progress}`
+  const parts = [readingTime, progress].filter(Boolean).join("")
+  return parts || undefined
 }
 
 export function formatReaderProgress(progress: number) {

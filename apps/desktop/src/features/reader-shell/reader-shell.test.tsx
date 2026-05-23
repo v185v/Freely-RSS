@@ -5,7 +5,7 @@ import { afterEach, describe, expect, test } from "vitest"
 import App from "../../App"
 import { createAppQueryClient } from "../../app/query-client"
 import { createAppRouter } from "../../app/router"
-import { fetchReaderShellData, importMockOpml, resetMockReaderShellState } from "./mock-data"
+import { resetMockReaderShellState } from "./mock-data"
 import { resetReaderViewStore } from "./state"
 import type { ReaderShellData } from "./types"
 
@@ -98,7 +98,7 @@ describe("reader shell navigation", () => {
     render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
 
     await screen.findAllByText("Archive holding pen")
-    await screen.findByText("No placeholder articles are visible for this route yet.")
+    await screen.findByText("No articles match the current view.")
 
     await waitFor(() => {
       expect(window.location.search).toContain("sourceId=feed-empty-holding")
@@ -181,7 +181,7 @@ describe("reader shell navigation", () => {
 
     await user.click(
       treeScope.getByRole("button", {
-        name: /unread.*Research threads/i,
+        name: /^\d+\/\d+\s+Research threads$/i,
       }),
     )
 
@@ -236,16 +236,6 @@ describe("reader shell navigation", () => {
     const queueScope = within(queuePane)
 
     expect(queueScope.getByText("近 7 天未读")).toBeTruthy()
-    expect(
-      queueScope.getByText(
-        /Route scope "近 7 天未读" reuses its saved shared query definition\./i,
-        {
-          selector: "p",
-        },
-      ),
-    ).toBeTruthy()
-    expect(queueScope.getByText(/"field": "publishedAt"/i)).toBeTruthy()
-    expect(queueScope.getByText(/"value": "2026-04-11T00:00:00Z"/i)).toBeTruthy()
   })
 
   test("combines route scope, shell filters, and sort mode into one article query flow", async () => {
@@ -287,15 +277,6 @@ describe("reader shell navigation", () => {
       )
     })
 
-    expect(
-      queueScope.getByText(/Route scope "FreelyRSS Engineering" maps to a single feed id\./i, {
-        selector: "p",
-      }),
-    ).toBeTruthy()
-    expect(queueScope.getByText(/"field": "feedId"/i)).toBeTruthy()
-    expect(queueScope.getByText(/"value": "feed-freelyrss"/i)).toBeTruthy()
-    expect(queueScope.getByText(/"direction": "desc"/i)).toBeTruthy()
-
     await user.click(queueScope.getByRole("button", { name: "Sort: oldest" }))
 
     await waitFor(() => {
@@ -305,8 +286,6 @@ describe("reader shell navigation", () => {
         "Making narrow-window behavior predictable before routing and async data land",
       )
     })
-
-    expect(queueScope.getByText(/"direction": "asc"/i)).toBeTruthy()
 
     fireEvent.change(queueScope.getByLabelText("Article view filter"), {
       target: { value: "narrow-window" },
@@ -323,9 +302,7 @@ describe("reader shell navigation", () => {
     await user.click(queueScope.getByRole("button", { name: "Reading" }))
 
     await waitFor(() => {
-      expect(
-        queueScope.getByText("No placeholder articles are visible for this route yet."),
-      ).toBeTruthy()
+      expect(queueScope.getByText("No articles match the current view.")).toBeTruthy()
     })
 
     fireEvent.change(queueScope.getByLabelText("Article view filter"), {
@@ -339,9 +316,6 @@ describe("reader shell navigation", () => {
         "Turning the desktop shell into a stable three-pane reader skeleton",
       )
     })
-
-    expect(queueScope.getByText(/"field": "readState"/i)).toBeTruthy()
-    expect(queueScope.getByText(/"value": "reading"/i)).toBeTruthy()
   })
 
   test("parses shared-query text syntax in the queue filter before executing the route-backed query", async () => {
@@ -369,9 +343,6 @@ describe("reader shell navigation", () => {
     })
 
     expect(queueScope.queryByText(/Why layout state should stay separate/i)).toBeNull()
-    expect(queueScope.getByText(/"match": "any"/i)).toBeTruthy()
-    expect(queueScope.getByText(/"field": "tag"/i)).toBeTruthy()
-    expect(queueScope.getByText(/"field": "hasAttachment"/i)).toBeTruthy()
   })
 
   test("shows queue-filter parse errors without dropping the route-backed result set", async () => {
@@ -388,9 +359,6 @@ describe("reader shell navigation", () => {
     })
 
     await waitFor(() => {
-      expect(queueScope.getByRole("alert").textContent ?? "").toMatch(
-        /Queue filter could not be parsed at line 1, column 1:/i,
-      )
       expect(getQueueRows()).toHaveLength(4)
     })
 
@@ -1199,7 +1167,6 @@ describe("reader shell navigation", () => {
       expect(getQueueRows().length).toBeLessThan(48)
       expect(queueScope.getByText("Queue window article 01")).toBeTruthy()
       expect(queueScope.queryByText("Queue window article 24")).toBeNull()
-      expect(queueScope.getByText(/Rendering \d+ of 48 rows/i)).toBeTruthy()
     })
 
     Object.defineProperty(scrollRegion as HTMLElement, "scrollTop", {
@@ -1213,82 +1180,6 @@ describe("reader shell navigation", () => {
       expect(queueScope.getByText("Queue window article 24")).toBeTruthy()
       expect(queueScope.queryByText("Queue window article 01")).toBeNull()
       expect(getQueueRows().length).toBeLessThan(48)
-    })
-  })
-
-  test("runs batch queue operations only against selected visible articles", async () => {
-    window.scrollTo = () => {}
-    const user = userEvent.setup()
-
-    render(<App queryClient={createAppQueryClient()} router={createAppRouter()} />)
-
-    const queuePane = await screen.findByRole("region", { name: "Article queue" })
-    const queueScope = within(queuePane)
-    const batchSection = queueScope
-      .getByRole("heading", {
-        name: "Batch operations",
-      })
-      .closest("section")
-
-    expect(batchSection).not.toBeNull()
-
-    const batchScope = within(batchSection as HTMLElement)
-
-    await user.click(queueScope.getByLabelText(/Select Why layout state should stay separate/i))
-    await user.click(batchScope.getByRole("button", { name: "Mark selected read" }))
-
-    await waitFor(async () => {
-      const shellData = await fetchReaderShellData()
-      const sourceContext = shellData.articles.find(
-        (article) => article.id === "article-source-context",
-      )
-      const queryBridge = shellData.articles.find(
-        (article) => article.id === "article-query-bridge",
-      )
-
-      expect(sourceContext?.state.readState).toBe("read")
-      expect(sourceContext?.state.readingProgress).toBe(1)
-      expect(queryBridge?.state.readState).toBe("unread")
-    })
-
-    await waitFor(() => {
-      expect(batchScope.getByText("Articles changed").parentElement?.textContent).toContain("1")
-    })
-
-    await user.click(
-      queueScope.getByLabelText(/Select Shared-query is ready, but the reader shell/i),
-    )
-    await user.click(batchScope.getByRole("button", { name: "Add product tag" }))
-
-    await waitFor(async () => {
-      const shellData = await fetchReaderShellData()
-      const queryBridge = shellData.articles.find(
-        (article) => article.id === "article-query-bridge",
-      )
-      const detailTags = shellData.articleDetails["article-query-bridge"]?.tags.map(
-        (tag) => tag.name,
-      )
-
-      expect(queryBridge?.tagIds).toContain("tag-product")
-      expect(detailTags).toContain("product")
-    })
-
-    await user.click(batchScope.getByRole("button", { name: "Clear selection" }))
-    await user.click(queueScope.getByLabelText(/Select Midnight dispatch 42/i))
-    await user.click(batchScope.getByRole("button", { name: "Delete selected cache" }))
-
-    await waitFor(async () => {
-      const shellData = await fetchReaderShellData()
-      const midnightAttachment = shellData.articleDetails[
-        "article-midnight-dispatch"
-      ]?.attachments.find((attachment) => attachment.id === "attachment-midnight-dispatch-audio")
-      const windowBehavior = shellData.articles.find(
-        (article) => article.id === "article-window-behavior",
-      )
-
-      expect(shellData.cacheStatus.entryCount).toBe(3)
-      expect(midnightAttachment?.localCachePath).toBeNull()
-      expect(windowBehavior?.state.readState).toBe("read")
     })
   })
 

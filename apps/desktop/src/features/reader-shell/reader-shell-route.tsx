@@ -1167,35 +1167,18 @@ export function ReaderShellRoute() {
         <QueuePane
           activeArticleId={activeArticleId}
           activeSource={activeSource}
-          availableBatchTags={resolvedShellData.tags}
-          batchOperationErrorMessage={batchOperationErrorMessage}
-          batchOperationResult={batchOperationResult}
           densityMode={densityMode}
           describedBy={READER_SHORTCUT_HINT_ID}
           headingId={READER_LANDMARK_IDS.queueHeading}
-          isRunningBatchOperation={runBatchOperationMutation.isPending}
-          onClearBatchSelection={clearBatchSelectedArticleIds}
-          onRunBatchOperation={(command) => {
-            runBatchOperationMutation.reset()
-            setBatchOperationResult(null)
-            runBatchOperationMutation.mutate({
-              ...command,
-              articleIds: selectedBatchArticleIds,
-            })
-          }}
           onSearchTextChange={setSearchText}
           onSelectArticle={selectArticle}
-          onSelectAllVisibleBatchArticles={() => setBatchSelectedArticleIds(visibleArticleIds)}
           onSetDensityMode={setDensityMode}
           onSetSortMode={setSortMode}
           onSetStatusFilter={setStatusFilter}
-          onToggleBatchArticleSelection={toggleBatchSelectedArticleId}
           paneId={READER_LANDMARK_IDS.queue}
           paneRef={queuePaneRef}
           queryResetKey={resolvedArticleQuery.summary.jsonPreview}
-          querySummary={resolvedArticleQuery.summary}
           searchText={searchText}
-          selectedBatchArticleIds={selectedBatchArticleIds}
           sortMode={sortMode}
           statusFilter={statusFilter}
           visibleArticles={visibleArticles}
