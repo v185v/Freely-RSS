@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { useTranslation } from "react-i18next"
 
 import type { ReaderDensityMode, ReaderThemeTone } from "../types"
 
@@ -27,6 +28,7 @@ export function SettingsDropdown({
   onToggleThemeTone,
   themeTone,
 }: SettingsDropdownProps) {
+  const { t, i18n } = useTranslation()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -46,7 +48,7 @@ export function SettingsDropdown({
       <button
         aria-expanded={open}
         aria-haspopup="menu"
-        aria-label="Settings"
+        aria-label={t("settings.label")}
         className="settings-dropdown__trigger"
         onClick={() => setOpen(!open)}
         type="button"
@@ -56,7 +58,34 @@ export function SettingsDropdown({
       {open && (
         <div className="settings-dropdown__menu" role="menu">
           <div className="settings-dropdown__group">
-            <span className="settings-dropdown__group-label">Theme</span>
+            <span className="settings-dropdown__group-label">{t("settings.language")}</span>
+            <button
+              className="settings-dropdown__item"
+              onClick={() => {
+                i18n.changeLanguage("zh-CN")
+                localStorage.setItem("freelyrss.language", "zh-CN")
+                setOpen(false)
+              }}
+              role="menuitem"
+              type="button"
+            >
+              {t("settings.langZh")} {i18n.language === "zh-CN" && "✓"}
+            </button>
+            <button
+              className="settings-dropdown__item"
+              onClick={() => {
+                i18n.changeLanguage("en")
+                localStorage.setItem("freelyrss.language", "en")
+                setOpen(false)
+              }}
+              role="menuitem"
+              type="button"
+            >
+              {t("settings.langEn")} {i18n.language === "en" && "✓"}
+            </button>
+          </div>
+          <div className="settings-dropdown__group">
+            <span className="settings-dropdown__group-label">{t("settings.theme")}</span>
             <button
               className="settings-dropdown__item"
               onClick={() => {
@@ -66,7 +95,7 @@ export function SettingsDropdown({
               role="menuitem"
               type="button"
             >
-              Light {themeTone === "daylight" && "✓"}
+              {t("settings.themeLight")} {themeTone === "daylight" && "✓"}
             </button>
             <button
               className="settings-dropdown__item"
@@ -77,7 +106,7 @@ export function SettingsDropdown({
               role="menuitem"
               type="button"
             >
-              Dark {themeTone === "midnight" && "✓"}
+              {t("settings.themeDark")} {themeTone === "midnight" && "✓"}
             </button>
             <button
               className="settings-dropdown__item"
@@ -88,11 +117,11 @@ export function SettingsDropdown({
               role="menuitem"
               type="button"
             >
-              High contrast {highContrastEnabled && "✓"}
+              {t("settings.themeHighContrast")} {highContrastEnabled && "✓"}
             </button>
           </div>
           <div className="settings-dropdown__group">
-            <span className="settings-dropdown__group-label">Density</span>
+            <span className="settings-dropdown__group-label">{t("settings.density")}</span>
             <button
               className="settings-dropdown__item"
               onClick={() => {
@@ -102,7 +131,7 @@ export function SettingsDropdown({
               role="menuitem"
               type="button"
             >
-              Compact {densityMode === "compact" && "✓"}
+              {t("settings.densityCompact")} {densityMode === "compact" && "✓"}
             </button>
             <button
               className="settings-dropdown__item"
@@ -113,11 +142,11 @@ export function SettingsDropdown({
               role="menuitem"
               type="button"
             >
-              Comfortable {densityMode === "comfortable" && "✓"}
+              {t("settings.densityComfortable")} {densityMode === "comfortable" && "✓"}
             </button>
           </div>
           <div className="settings-dropdown__group">
-            <span className="settings-dropdown__group-label">Data</span>
+            <span className="settings-dropdown__group-label">{t("settings.data")}</span>
             <button
               className="settings-dropdown__item"
               onClick={() => {
@@ -127,7 +156,7 @@ export function SettingsDropdown({
               role="menuitem"
               type="button"
             >
-              Sync settings
+              {t("settings.syncSettings")}
             </button>
             <button
               className="settings-dropdown__item"
@@ -138,7 +167,7 @@ export function SettingsDropdown({
               role="menuitem"
               type="button"
             >
-              Cache management
+              {t("settings.cacheManagement")}
             </button>
             <button
               className="settings-dropdown__item"
@@ -149,7 +178,7 @@ export function SettingsDropdown({
               role="menuitem"
               type="button"
             >
-              Import OPML
+              {t("settings.importOpml")}
             </button>
             <button
               className="settings-dropdown__item"
@@ -160,7 +189,7 @@ export function SettingsDropdown({
               role="menuitem"
               type="button"
             >
-              Export OPML
+              {t("settings.exportOpml")}
             </button>
           </div>
         </div>

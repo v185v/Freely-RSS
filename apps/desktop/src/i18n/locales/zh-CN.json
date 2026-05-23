@@ -1,0 +1,73 @@
+{
+  "app": {
+    "name": "FreelyRSS",
+    "loading": "加载中...",
+    "queryFailed": "数据加载失败",
+    "queryFailedDetail": "无法加载阅读器数据，请重试。"
+  },
+  "toolbar": {
+    "searchLabel": "搜索文章",
+    "searchPlaceholder": "搜索文章...",
+    "syncActive": "同步中"
+  },
+  "settings": {
+    "label": "设置",
+    "theme": "主题",
+    "themeDark": "深色",
+    "themeLight": "浅色",
+    "themeHighContrast": "高对比度",
+    "density": "密度",
+    "densityCompact": "紧凑",
+    "densityComfortable": "舒适",
+    "data": "数据",
+    "syncSettings": "同步设置",
+    "cacheManagement": "缓存管理",
+    "importOpml": "导入 OPML",
+    "exportOpml": "导出 OPML",
+    "language": "语言",
+    "langZh": "中文",
+    "langEn": "English"
+  },
+  "source": {
+    "title": "订阅源",
+    "addSource": "添加订阅",
+    "importOpml": "导入 OPML",
+    "exportOpml": "导出 OPML",
+    "collapseGroups": "折叠分组",
+    "subscriptionTree": "订阅列表",
+    "expandFolder": "展开 {{name}}",
+    "collapseFolder": "折叠 {{name}}",
+    "smartFolders": "智能文件夹"
+  },
+  "queue": {
+    "title": "文章队列",
+    "filterLabel": "筛选文章",
+    "filterPlaceholder": "输入关键词或 tag:标签",
+    "viewPresets": "状态筛选",
+    "sortMode": "排序方式",
+    "sortNewest": "最新",
+    "sortOldest": "最早",
+    "compact": "紧凑",
+    "comfortable": "舒适",
+    "emptyTitle": "暂无文章",
+    "emptyMessage": "当前视图下没有文章。",
+    "rendering": "显示 {{visible}} / {{total}} 篇",
+    "articleQuery": "查询条件",
+    "selectAll": "全选",
+    "clearSelection": "取消选择",
+    "selected": "已选 {{count}} 篇"
+  },
+  "reader": {
+    "title": "阅读",
+    "noArticle": "选择一篇文章开始阅读",
+    "contentExtracted": "正文",
+    "contentRaw": "原文"
+  },
+  "skipLinks": {
+    "label": "跳转链接",
+    "navigation": "跳转到导航",
+    "sources": "跳转到订阅源",
+    "queue": "跳转到文章队列",
+    "reader": "跳转到阅读面板"
+  }
+}

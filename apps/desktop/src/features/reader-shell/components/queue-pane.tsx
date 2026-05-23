@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react"
 import type { ChangeEvent, Ref } from "react"
+import { useTranslation } from "react-i18next"
 
 import type { ArticleListItemDto, TagDto } from "@freelyrss/shared-types"
 import { Button, ListRow, ListSection, SplitPane, Surface, TextInput } from "@freelyrss/ui"
@@ -96,6 +97,7 @@ export function QueuePane({
   visibleArticles,
 }: QueuePaneProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const { t } = useTranslation()
   const selectedBatchArticleIdSet = new Set(selectedBatchArticleIds)
 
   function handleSearchTextChange(event: ChangeEvent<HTMLInputElement>) {
@@ -134,21 +136,21 @@ export function QueuePane({
     >
       <Surface className="desktop-pane__surface desktop-pane__surface--queue">
         <div className="desktop-pane__header">
-          <h2 id={headingId}>Article queue</h2>
+          <h2 id={headingId}>{t("queue.title")}</h2>
           <p className="desktop-pane__focus-title">{activeSource.title}</p>
         </div>
 
         <div className="desktop-pane__toolbar">
           <TextInput
-            aria-label="Article view filter"
-            label="Queue filter"
+            aria-label={t("queue.filterLabel")}
+            label={t("queue.filterLabel")}
             onChange={handleSearchTextChange}
-            placeholder='Try tag:product OR "offline first"'
+            placeholder={t("queue.filterPlaceholder")}
             value={searchText}
           />
 
           <fieldset className="desktop-toolbar-group">
-            <legend className="desktop-toolbar-group__legend">View filter presets</legend>
+            <legend className="desktop-toolbar-group__legend">{t("queue.viewPresets")}</legend>
             <div className="desktop-toolbar-pills">
               {READER_STATUS_FILTER_OPTIONS.map((option) => {
                 const active = option.value === statusFilter
@@ -170,7 +172,7 @@ export function QueuePane({
           </fieldset>
 
           <fieldset className="desktop-toolbar-group">
-            <legend className="desktop-toolbar-group__legend">Sort mode</legend>
+            <legend className="desktop-toolbar-group__legend">{t("queue.sortMode")}</legend>
             <div className="desktop-toolbar-pills">
               <Button
                 aria-pressed={sortMode === "newest"}
@@ -181,7 +183,7 @@ export function QueuePane({
                 size="sm"
                 tone={sortMode === "newest" ? "neutral" : "ghost"}
               >
-                Sort: newest
+                {t("queue.sortNewest")}
               </Button>
               <Button
                 aria-pressed={sortMode === "oldest"}
@@ -192,7 +194,7 @@ export function QueuePane({
                 size="sm"
                 tone={sortMode === "oldest" ? "neutral" : "ghost"}
               >
-                Sort: oldest
+                {t("queue.sortOldest")}
               </Button>
             </div>
           </fieldset>
@@ -207,7 +209,7 @@ export function QueuePane({
               onClick={() => onSetDensityMode("compact")}
               type="button"
             >
-              Compact
+              {t("queue.compact")}
             </button>
             <button
               className={
@@ -218,7 +220,7 @@ export function QueuePane({
               onClick={() => onSetDensityMode("comfortable")}
               type="button"
             >
-              Comfortable
+              {t("queue.comfortable")}
             </button>
           </div>
         </div>

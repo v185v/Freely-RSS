@@ -1,4 +1,5 @@
 import { type ChangeEvent, type ReactNode, useId } from "react"
+import { useTranslation } from "react-i18next"
 
 type AppToolbarProps = {
   onSearchChange: (value: string) => void
@@ -14,6 +15,7 @@ export function AppToolbar({
   syncActive = false,
 }: AppToolbarProps) {
   const searchId = useId()
+  const { t } = useTranslation()
 
   function handleSearchChange(event: ChangeEvent<HTMLInputElement>) {
     onSearchChange(event.target.value)
@@ -26,11 +28,11 @@ export function AppToolbar({
       </div>
       <div className="app-toolbar__search">
         <input
-          aria-label="Search articles"
+          aria-label={t("toolbar.searchLabel")}
           className="app-toolbar__search-input"
           id={searchId}
           onChange={handleSearchChange}
-          placeholder="Search articles..."
+          placeholder={t("toolbar.searchPlaceholder")}
           type="search"
           value={searchValue}
         />
@@ -38,7 +40,11 @@ export function AppToolbar({
       <div className="app-toolbar__actions">
         {settingsSlot}
         {syncActive && (
-          <span aria-label="Sync active" className="app-toolbar__sync-dot" role="status" />
+          <span
+            aria-label={t("toolbar.syncActive")}
+            className="app-toolbar__sync-dot"
+            role="status"
+          />
         )}
       </div>
     </header>

@@ -1,4 +1,5 @@
 import { type CSSProperties, type ReactNode, type Ref, useRef } from "react"
+import { useTranslation } from "react-i18next"
 
 import type { FeedDto } from "@freelyrss/shared-types"
 import { Button, ListRow, ListSection, SplitPane, Surface } from "@freelyrss/ui"
@@ -109,6 +110,7 @@ export function SourcePane({
 }: SourcePaneProps) {
   const importTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const exportTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const { t } = useTranslation()
 
   return (
     <SplitPane
@@ -122,7 +124,7 @@ export function SourcePane({
     >
       <Surface className="desktop-pane__surface desktop-pane__surface--nav">
         <div className="desktop-pane__header">
-          <h2 id={headingId}>Sources</h2>
+          <h2 id={headingId}>{t("source.title")}</h2>
         </div>
 
         <div className="desktop-pane__scroll">
@@ -162,11 +164,11 @@ export function SourcePane({
                   size="sm"
                   tone="ghost"
                 >
-                  Collapse groups
+                  {t("source.collapseGroups")}
                 </Button>
               </div>
             }
-            title="Subscription tree"
+            title={t("source.subscriptionTree")}
           >
             <ul className="desktop-tree">
               {subscriptionRows.map((row) => (
@@ -178,7 +180,11 @@ export function SourcePane({
                   {row.kind === "folder" && row.hasChildren ? (
                     <button
                       aria-expanded={!row.isCollapsed}
-                      aria-label={row.isCollapsed ? `Expand ${row.title}` : `Collapse ${row.title}`}
+                      aria-label={
+                        row.isCollapsed
+                          ? t("source.expandFolder", { name: row.title })
+                          : t("source.collapseFolder", { name: row.title })
+                      }
                       className="desktop-tree__toggle"
                       onClick={() => onToggleFolderCollapsed(row.id)}
                       type="button"
@@ -251,13 +257,13 @@ export function SourcePane({
 
         <div className="desktop-pane__footer">
           <Button size="sm" tone="ghost">
-            Add source
+            {t("source.addSource")}
           </Button>
           <Button onClick={() => importTextareaRef.current?.focus()} size="sm" tone="neutral">
-            Import OPML
+            {t("source.importOpml")}
           </Button>
           <Button onClick={() => exportTextareaRef.current?.focus()} size="sm" tone="ghost">
-            Export OPML
+            {t("source.exportOpml")}
           </Button>
         </div>
       </Surface>

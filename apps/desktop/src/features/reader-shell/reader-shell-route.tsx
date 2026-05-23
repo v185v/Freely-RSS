@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react"
+import { useTranslation } from "react-i18next"
 
 import { Surface } from "@freelyrss/ui"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
@@ -110,6 +111,7 @@ function formatTaskBytes(value: number) {
 }
 
 export function ReaderShellRoute() {
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const navigate = useNavigate({ from: "/" })
   const routeState = useSearch({ from: "/" })
@@ -718,15 +720,15 @@ export function ReaderShellRoute() {
   }, [handleGlobalShortcut])
 
   if (shellDataQuery.isPending) {
-    return <div className="desktop-loading">Loading...</div>
+    return <div className="desktop-loading">{t("app.loading")}</div>
   }
 
   if (shellDataQuery.isError) {
     return (
       <main className="desktop-shell">
         <Surface className="desktop-empty-state desktop-empty-state--reader">
-          <p className="desktop-empty-state__eyebrow">Query failed</p>
-          <h3>Mock reader shell data could not be loaded.</h3>
+          <p className="desktop-empty-state__eyebrow">{t("app.queryFailed")}</p>
+          <h3>{t("app.queryFailedDetail")}</h3>
           <p>{shellDataQuery.error.message}</p>
         </Surface>
       </main>
@@ -1065,7 +1067,7 @@ export function ReaderShellRoute() {
 
   return (
     <main className="desktop-shell">
-      <nav aria-label="Skip links" className="desktop-skip-links">
+      <nav aria-label={t("skipLinks.label")} className="desktop-skip-links">
         <a
           className="desktop-skip-link"
           href={`#${READER_LANDMARK_IDS.navigation}`}
@@ -1074,7 +1076,7 @@ export function ReaderShellRoute() {
             focusTarget("navigation")
           }}
         >
-          Skip to primary navigation
+          {t("skipLinks.navigation")}
         </a>
         <a
           className="desktop-skip-link"
@@ -1084,7 +1086,7 @@ export function ReaderShellRoute() {
             focusTarget("source")
           }}
         >
-          Skip to sources
+          {t("skipLinks.sources")}
         </a>
         <a
           className="desktop-skip-link"
@@ -1094,7 +1096,7 @@ export function ReaderShellRoute() {
             focusTarget("queue")
           }}
         >
-          Skip to article queue
+          {t("skipLinks.queue")}
         </a>
         <a
           className="desktop-skip-link"
@@ -1104,7 +1106,7 @@ export function ReaderShellRoute() {
             focusTarget("reader")
           }}
         >
-          Skip to reading panel
+          {t("skipLinks.reader")}
         </a>
       </nav>
 
@@ -1224,7 +1226,7 @@ export function ReaderShellRoute() {
           paneRef={sourcePaneRef}
           quickViewSection={resolvedShellData.quickViewSection}
           smartFolderSection={{
-            title: "Smart folders",
+            title: t("source.smartFolders"),
             rows: resolvedShellData.smartFolders.map((folder) => ({
               id: folder.id,
               kind: "view",
