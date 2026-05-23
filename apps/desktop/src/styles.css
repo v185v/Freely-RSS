@@ -43,6 +43,7 @@ body,
 /* === Override @freelyrss/ui library styles inside desktop shell === */
 .desktop-shell .fr-split-pane {
   gap: 0;
+  height: 100%;
 }
 
 .desktop-shell .fr-surface {
@@ -306,6 +307,48 @@ body,
   padding: 8px 12px;
   border-top: 1px solid var(--fr-border);
   flex-shrink: 0;
+}
+
+.desktop-pane__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--fr-border);
+  flex-shrink: 0;
+  background: var(--fr-panel-soft);
+}
+
+.desktop-pane__panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.desktop-pane__panel-close {
+  background: none;
+  border: none;
+  color: var(--fr-text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 4px;
+}
+
+.desktop-pane__panel-close:hover {
+  color: var(--fr-text-strong);
+}
+
+.desktop-pane__panel-textarea {
+  width: 100%;
+  min-height: 80px;
+  border: 1px solid var(--fr-border);
+  border-radius: 6px;
+  background: var(--fr-input-bg);
+  color: var(--fr-text-strong);
+  padding: 8px;
+  font-size: 12px;
+  resize: vertical;
 }
 
 .desktop-pane__toolbar {

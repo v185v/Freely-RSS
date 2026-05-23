@@ -31,7 +31,12 @@
   "source": {
     "title": "Sources",
     "addSource": "Add source",
+    "addConfirm": "Add",
+    "feedUrlLabel": "Feed URL",
+    "feedUrlPlaceholder": "Enter RSS/Atom feed URL",
     "importOpml": "Import OPML",
+    "importPlaceholder": "Paste OPML content...",
+    "importConfirm": "Import",
     "exportOpml": "Export OPML",
     "collapseGroups": "Collapse groups",
     "subscriptionTree": "Subscription tree",

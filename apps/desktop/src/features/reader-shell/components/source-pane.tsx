@@ -1,8 +1,8 @@
-import { type CSSProperties, type Ref, useRef } from "react"
+import { type CSSProperties, type Ref, useState } from "react"
 import { useTranslation } from "react-i18next"
 
 import type { FeedDto } from "@freelyrss/shared-types"
-import { Button, ListRow, ListSection, SplitPane, Surface } from "@freelyrss/ui"
+import { Button, ListRow, ListSection, SplitPane, Surface, TextInput } from "@freelyrss/ui"
 
 import type { SourceRow, SubscriptionTreeRow } from "../types"
 
@@ -11,7 +11,9 @@ type SourcePaneProps = {
   canCollapseFolders: boolean
   describedBy?: string
   headingId: string
+  onAddFeed: (url: string) => void
   onCollapseAllFolders: () => void
+  onImportOpml: (opmlText: string) => void
   onSelectSource: (sourceId: string) => void
   onToggleFolderCollapsed: (folderId: string) => void
   paneId: string
@@ -32,7 +34,9 @@ export function SourcePane({
   canCollapseFolders,
   describedBy,
   headingId,
+  onAddFeed,
   onCollapseAllFolders,
+  onImportOpml,
   onSelectSource,
   onToggleFolderCollapsed,
   paneId,
@@ -42,6 +46,9 @@ export function SourcePane({
   subscriptionRows,
 }: SourcePaneProps) {
   const { t } = useTranslation()
+  const [panel, setPanel] = useState<"add" | "import" | null>(null)
+  const [feedUrl, setFeedUrl] = useState("")
+  const [opmlText, setOpmlText] = useState("")
 
   return (
     <SplitPane
@@ -144,9 +151,85 @@ export function SourcePane({
           </ListSection>
         </div>
 
+        {panel === "add" && (
+          <div className="desktop-pane__panel">
+            <div className="desktop-pane__panel-header">
+              <strong>{t("source.addSource")}</strong>
+              <button
+                className="desktop-pane__panel-close"
+                onClick={() => setPanel(null)}
+                type="button"
+              >
+                ×
+              </button>
+            </div>
+            <TextInput
+              label={t("source.feedUrlLabel")}
+              onChange={(e) => setFeedUrl(e.target.value)}
+              placeholder={t("source.feedUrlPlaceholder")}
+              value={feedUrl}
+            />
+            <Button
+              onClick={() => {
+                if (feedUrl.trim()) {
+                  onAddFeed(feedUrl.trim())
+                  setFeedUrl("")
+                  setPanel(null)
+                }
+              }}
+              size="sm"
+              tone="neutral"
+            >
+              {t("source.addConfirm")}
+            </Button>
+          </div>
+        )}
+
+        {panel === "import" && (
+          <div className="desktop-pane__panel">
+            <div className="desktop-pane__panel-header">
+              <strong>{t("source.importOpml")}</strong>
+              <button
+                className="desktop-pane__panel-close"
+                onClick={() => setPanel(null)}
+                type="button"
+              >
+                ×
+              </button>
+            </div>
+            <textarea
+              className="desktop-pane__panel-textarea"
+              onChange={(e) => setOpmlText(e.target.value)}
+              placeholder={t("source.importPlaceholder")}
+              rows={6}
+              value={opmlText}
+            />
+            <Button
+              onClick={() => {
+                if (opmlText.trim()) {
+                  onImportOpml(opmlText.trim())
+                  setOpmlText("")
+                  setPanel(null)
+                }
+              }}
+              size="sm"
+              tone="neutral"
+            >
+              {t("source.importConfirm")}
+            </Button>
+          </div>
+        )}
+
         <div className="desktop-pane__footer">
-          <Button size="sm" tone="ghost">
+          <Button onClick={() => setPanel(panel === "add" ? null : "add")} size="sm" tone="ghost">
             {t("source.addSource")}
+          </Button>
+          <Button
+            onClick={() => setPanel(panel === "import" ? null : "import")}
+            size="sm"
+            tone="neutral"
+          >
+            {t("source.importOpml")}
           </Button>
         </div>
       </Surface>

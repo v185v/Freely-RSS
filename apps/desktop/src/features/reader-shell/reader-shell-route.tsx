@@ -1146,7 +1146,13 @@ export function ReaderShellRoute() {
           )}
           describedBy={READER_SHORTCUT_HINT_ID}
           headingId={READER_LANDMARK_IDS.sourceHeading}
+          onAddFeed={(url) => {
+            importOpmlMutation.mutate(
+              `<opml version="2.0"><body><outline text="${url}" type="rss" xmlUrl="${url}" /></body></opml>`,
+            )
+          }}
           onCollapseAllFolders={() => setCollapsedFolderIds(collapsibleFolderIds)}
+          onImportOpml={(opmlText) => importOpmlMutation.mutate(opmlText)}
           onSelectSource={selectSource}
           onToggleFolderCollapsed={toggleFolderCollapsed}
           paneId={READER_LANDMARK_IDS.source}

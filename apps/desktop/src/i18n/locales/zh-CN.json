@@ -31,7 +31,12 @@
   "source": {
     "title": "订阅源",
     "addSource": "添加订阅",
+    "addConfirm": "添加",
+    "feedUrlLabel": "订阅地址",
+    "feedUrlPlaceholder": "输入 RSS/Atom 订阅链接",
     "importOpml": "导入 OPML",
+    "importPlaceholder": "粘贴 OPML 内容...",
+    "importConfirm": "导入",
     "exportOpml": "导出 OPML",
     "collapseGroups": "折叠分组",
     "subscriptionTree": "订阅列表",
